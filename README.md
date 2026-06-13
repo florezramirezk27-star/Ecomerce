@@ -18,12 +18,17 @@ pnpm install
 ## Usage
 
 ```bash
-pnpm start
+pnpm dev:api
+pnpm dev:web
 ```
 
 ## Scripts
 
-- `pnpm test` — Run tests
+- `pnpm dev:api` - Start the NestJS API on port 3001
+- `pnpm dev:web` - Start the Next.js app on port 3000
+- `pnpm build` - Build API and web apps
+- `pnpm test` - Run API tests
+- `pnpm lint` - Run web lint
 
 ## License
 
