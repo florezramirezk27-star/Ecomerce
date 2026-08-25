@@ -23,7 +23,7 @@ async function bootstrap() {
 
   app.use(helmet());
 
-  const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+  const allowedOrigins = (process.env.CORS_ORIGIN || 'https://ecomerce-delta-three.vercel.app')
     .split(',')
     .map((o) => o.trim());
 
