@@ -12,14 +12,14 @@ function extractOrigin(url: string): string {
 
 const clientOrigin = extractOrigin(CLIENT_API);
 const wsOrigin = extractOrigin(WS_URL);
-const wsScheme = wsOrigin.startsWith("https") ? "wss" : "ws";
 const wsHost = wsOrigin.replace(/^https?:\/\//, "");
 
 const connectSrc = [
   "'self'",
   clientOrigin,
   wsOrigin,
-  `${wsScheme}://${wsHost}`,
+  `ws://${wsHost}`,
+  `wss://${wsHost}`,
 ]
   .filter((v, i, a) => a.indexOf(v) === i)
   .join(" ");
