@@ -57,14 +57,22 @@ export class UsersService {
   findByEmail(email: string) {
     return this.prisma.user.findUnique({
       where: { email },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password: true,
+        role: true,
+        googleId: true,
+        resetToken: true,
+        resetTokenExpiry: true,
+        failedLoginAttempts: true,
+        lockedUntil: true,
+      },
     });
   }
 
-  create(data: {
-    name: string;
-    email: string;
-    password: string;
-  }) {
+  create(data: { name: string; email: string; password: string }) {
     return this.prisma.user.create({
       data,
     });
@@ -77,6 +85,8 @@ export class UsersService {
       password?: string;
       resetToken?: string | null;
       resetTokenExpiry?: Date | null;
+      failedLoginAttempts?: number;
+      lockedUntil?: Date | null;
     },
   ) {
     return this.prisma.user.update({
@@ -94,6 +104,15 @@ export class UsersService {
   findByResetToken(token: string) {
     return this.prisma.user.findUnique({
       where: { resetToken: token },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password: true,
+        role: true,
+        resetToken: true,
+        resetTokenExpiry: true,
+      },
     });
   }
 

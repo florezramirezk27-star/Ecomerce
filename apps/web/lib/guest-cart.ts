@@ -3,6 +3,7 @@ export interface GuestCartItem {
   name: string;
   price: string | number;
   image: string;
+  slug: string;
   quantity: number;
 }
 

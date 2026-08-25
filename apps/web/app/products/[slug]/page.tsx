@@ -3,21 +3,23 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { API_URL, apiFetch } from "@/lib/api";
-import { getToken } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
+import { isAuthenticated } from "@/lib/auth";
 import { addToGuestCart } from "@/lib/guest-cart";
-import CustomCodeRenderer from "@/components/CustomCodeRenderer";
+import CandleInfographic from "@/components/CandleInfographic";
+import CandleArtisanalInfographic from "@/components/CandleArtisanalInfographic";
+import CountdownTimer from "@/components/CountdownTimer";
 
 interface Product {
   id: string;
   name: string;
+  slug: string;
   description: string;
   price: string | number;
   stock: number;
   image: string;
   gallery: string[];
   video?: string;
-  customCode?: string;
   category?: {
     id: string;
     name: string;
@@ -43,7 +45,7 @@ function getVimeoEmbed(url: string) {
 }
 
 export default function ProductPage() {
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,7 +74,7 @@ export default function ProductPage() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await apiFetch(`/products/${id}`);
+        const data = await apiFetch(`/products/${slug}`);
         setProduct(data);
         setError(null);
       } catch {
@@ -81,18 +83,17 @@ export default function ProductPage() {
         setLoading(false);
       }
     })();
-  }, [id]);
+  }, [slug]);
 
   const handleAddToCart = async () => {
-    const token = getToken();
-
-    if (!token) {
+    if (!isAuthenticated()) {
       if (!product) return;
       addToGuestCart({
         productId: product.id,
         name: product.name,
         price: product.price,
         image: product.image,
+        slug: product.slug,
       });
       setCartMessage({
         type: "success",
@@ -104,40 +105,26 @@ export default function ProductPage() {
 
     setCartLoading(true);
     try {
-      const res = await fetch(
-        `${API_URL}/cart/add`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            productId: product?.id,
-            quantity: 1,
-          }),
-        },
-      );
+      await apiFetch("/cart/add", {
+        method: "POST",
+        body: JSON.stringify({
+          productId: product?.id,
+          quantity: 1,
+        }),
+      });
 
-      if (res.ok) {
-        setCartMessage({
-          type: "success",
-          text: "✓ Producto agregado al carrito",
-        });
-        setTimeout(() => setCartMessage(null), 3000);
-      } else {
-        const errorData = await res.json();
-        setCartMessage({
-          type: "error",
-          text:
-            errorData.message ||
-            "Error al agregar al carrito",
-        });
-      }
-    } catch {
+      setCartMessage({
+        type: "success",
+        text: "✓ Producto agregado al carrito",
+      });
+      setTimeout(() => setCartMessage(null), 3000);
+    } catch (err) {
       setCartMessage({
         type: "error",
-        text: "Error de conexión. Intenta de nuevo.",
+        text:
+          err instanceof Error
+            ? err.message
+            : "Error al agregar al carrito",
       });
     } finally {
       setCartLoading(false);
@@ -192,7 +179,22 @@ export default function ProductPage() {
     minimumFractionDigits: 0,
   }) + " COP";
 
-  const videoEmbedUrl = product.video
+  function formatDateRange(startDays: number, endDays: number) {
+  const start = new Date();
+  start.setDate(start.getDate() + startDays);
+  const end = new Date();
+  end.setDate(end.getDate() + endDays);
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+  const dayOpts: Intl.DateTimeFormatOptions = { weekday: "short" };
+  const startStr = start.toLocaleDateString("es-CO", dayOpts) + " " + start.toLocaleDateString("es-CO", opts);
+  const endStr = end.toLocaleDateString("es-CO", opts);
+  if (start.getMonth() === end.getMonth()) {
+    return `${start.toLocaleDateString("es-CO", dayOpts)} ${start.getDate()} - ${end.getDate()} ${end.toLocaleDateString("es-CO", { month: "short" })}`;
+  }
+  return `${startStr} - ${endStr}`;
+}
+
+const videoEmbedUrl = product.video
     ? getYouTubeEmbed(product.video) || getVimeoEmbed(product.video)
     : null;
 
@@ -233,10 +235,10 @@ export default function ProductPage() {
         </button>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-          <div className="space-y-4">
-            <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200">
+          <div className="space-y-4 h-full">
+            <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 h-full">
               {showVideo && videoEmbedUrl ? (
-                <div className="aspect-video">
+                <div className="aspect-video h-full">
                   <iframe
                     src={videoEmbedUrl}
                     className="w-full h-full"
@@ -249,7 +251,7 @@ export default function ProductPage() {
                   src={allImages[selectedImage] || product.image}
                   alt={product.name}
                   onError={handleImgError}
-                  className="w-full h-full object-cover max-h-[500px]"
+                  className="w-full h-full object-cover"
                 />
               )}
             </div>
@@ -310,7 +312,8 @@ export default function ProductPage() {
             )}
           </div>
 
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col justify-between gap-6">
+            <div className="flex flex-col gap-6">
             {product.category && (
               <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full w-fit">
                 {product.category.name}
@@ -332,30 +335,42 @@ export default function ProductPage() {
               {priceFormatted}
             </div>
 
-            <div className="bg-orange-50 rounded-lg p-4 border border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-600">
+            <CountdownTimer />
+
+            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-sm text-gray-600 font-medium">
                   Disponibilidad
                 </span>
                 <span
-                  className={`text-sm font-semibold ${
-                    inStock
-                      ? "text-green-600"
-                      : "text-red-600"
+                  className={`text-sm font-bold ${
+                    !inStock
+                      ? "text-red-600"
+                      : product.stock <= 10
+                        ? "text-red-500"
+                        : product.stock <= 20
+                          ? "text-orange-500"
+                          : "text-green-600"
                   }`}
                 >
-                  {inStock
-                    ? `${product.stock} en stock`
-                    : "Agotado"}
+                  {!inStock
+                    ? "Agotado"
+                    : product.stock <= 10
+                      ? `¡Solo quedan ${product.stock} unidades disponibles!`
+                      : `${product.stock} en stock`}
                 </span>
               </div>
               {inStock && (
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-gray-100 rounded-full h-1.5">
                   <div
-                    className="bg-green-500 h-2 rounded-full transition-all"
-                    style={{
-                      width: `${stockPercent}%`,
-                    }}
+                    className={`h-1.5 rounded-full transition-all duration-500 ${
+                      product.stock <= 10
+                        ? "bg-red-500"
+                        : product.stock <= 20
+                          ? "bg-orange-400"
+                          : "bg-green-500"
+                    }`}
+                    style={{ width: `${stockPercent}%` }}
                   />
                 </div>
               )}
@@ -401,30 +416,47 @@ export default function ProductPage() {
               )}
             </button>
 
-            <div className="border-t border-gray-200 pt-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                Información adicional
+            <div className="border-t border-gray-200 pt-5">
+              <h3 className="text-xs font-semibold text-gray-900 mb-4 uppercase tracking-wider">
+                Lo que necesitas saber
               </h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Envío gratis en compras mayores a $100.000
-                </li>
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Garantía de satisfacción
-                </li>
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Compra segura 100%
-                </li>
-              </ul>
+              <div className="relative flex items-start justify-between">
+                <div className="absolute top-4 left-[calc(16.66%+12px)] right-[calc(16.66%+12px)] h-0.5 bg-gray-200" />
+
+                <div className="relative flex flex-col items-center text-center gap-2 z-10 w-1/3">
+                  <span className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 shadow-md shadow-blue-200 flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+                    </svg>
+                  </span>
+                  <span className="text-sm font-bold text-gray-800 leading-tight">Despacho rápido</span>
+                  <span className="text-xs text-gray-500 leading-tight">en 24 horas</span>
+                  <span className="text-xs font-semibold text-orange-500 leading-tight">{formatDateRange(1, 2)}</span>
+                </div>
+
+                <div className="relative flex flex-col items-center text-center gap-2 z-10 w-1/3">
+                  <span className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 shadow-md shadow-green-200 flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                    </svg>
+                  </span>
+                  <span className="text-sm font-bold text-gray-800 leading-tight">Envío gratis</span>
+                  <span className="text-xs text-gray-500 leading-tight">a todo Colombia</span>
+                  <span className="text-xs font-semibold text-orange-500 leading-tight">{formatDateRange(3, 5)}</span>
+                </div>
+
+                <div className="relative flex flex-col items-center text-center gap-2 z-10 w-1/3">
+                  <span className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 shadow-md shadow-purple-200 flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                  </span>
+                  <span className="text-sm font-bold text-gray-800 leading-tight">Pago seguro</span>
+                  <span className="text-xs text-gray-500 leading-tight">contra entrega</span>
+                  <span className="text-xs font-semibold text-orange-500 leading-tight">{formatDateRange(5, 7)}</span>
+                </div>
+              </div>
+            </div>
             </div>
 
           </div>
@@ -438,7 +470,7 @@ export default function ProductPage() {
             {product.similarProducts.map((sp) => (
               <Link
                 key={sp.id}
-                href={`/products/${sp.id}`}
+                href={`/products/${sp.slug}`}
                 className="group bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all hover:-translate-y-1"
               >
                 <div className="aspect-square bg-gray-100 overflow-hidden">
@@ -461,13 +493,9 @@ export default function ProductPage() {
         </div>
       )}
 
-      {product.customCode && (
-        <div className="max-w-7xl mx-auto px-6 pb-12 flex justify-center">
-          <div className="w-full">
-            <CustomCodeRenderer html={product.customCode} />
-          </div>
-        </div>
-      )}
+      {product.name === "Set de Velas Aromáticas" && <CandleInfographic />}
+      {product.name === "Set de Velas Aromáticas" && <CandleArtisanalInfographic />}
+
     </main>
   );
 }

@@ -1,23 +1,37 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
+import "@fontsource/anton";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Banner from "@/components/Banner";
+import { KronioChat } from "@/components/chat";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+const FALLBACK_ICON = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%232563eb"/><text x="16" y="24" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="22" fill="white">K</text></svg>';
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const API_URL = process.env.API_URL || "http://localhost:3001";
 
-export const metadata: Metadata = {
-  title: "Kronio Market",
-  description: "Kronio Market",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  let icon = FALLBACK_ICON;
+  try {
+    const res = await fetch(`${API_URL}/settings/logo`, {
+      signal: AbortSignal.timeout(3000),
+      next: { revalidate: 60 },
+    });
+    const data = await res.json();
+    if (data.logo) icon = data.logo;
+  } catch {}
+
+  return {
+    title: "Kronio Market",
+    description: "Kronio Market",
+    icons: { icon },
+  };
+}
 
 export default function RootLayout({
   children,
@@ -27,17 +41,13 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}
     >
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      </head>
       <body className="min-h-full flex flex-col">
         <Navbar />
         <Banner />
         <div className="flex-1">{children}</div>
+        <KronioChat />
       </body>
     </html>
   );

@@ -3,14 +3,19 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import ProductCarousel from "@/components/ProductCarousel";
-import ToonHubHero from "@/components/ToonHubHero";
+import PromoGrid from "@/components/PromoGrid";
+import VideoHero from "@/components/VideoHero";
 import Footer from "@/components/Footer";
 
 interface ProductSummary {
   id: string;
   name: string;
+  slug: string;
   price: string | number;
+  oldPrice?: string | number | null;
   image: string;
+  stock: number;
+  lowStockThreshold?: number;
   gallery?: string[];
   description?: string;
   category?: {
@@ -39,8 +44,13 @@ export default function Home() {
       try {
         const data = await (apiFetch("/products") as Promise<ProductSummary[]>);
         setProducts(data);
-      } catch {
-        setError("No se pudieron cargar los productos.");
+      } catch (err) {
+        console.error("Error al cargar productos:", err);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "No se pudieron cargar los productos.",
+        );
       } finally {
         setLoading(false);
       }
@@ -50,6 +60,9 @@ export default function Home() {
 
   const recommended = products.slice(0, 8);
   const promotions = shuffle(products).slice(0, 8);
+  const homeProducts = products.filter(
+    (p) => p.category?.slug === "hogar-y-decoracion",
+  );
 
   if (loading) {
     return (
@@ -61,7 +74,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-orange-50">
-      <ToonHubHero />
+      <VideoHero />
       <div className="max-w-7xl mx-auto px-6 py-12 space-y-12">
         {error ? (
           <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 text-center">
@@ -77,11 +90,15 @@ export default function Home() {
             </section>
 
             {promotions.length > 0 && (
+              <PromoGrid products={promotions} />
+            )}
+
+            {homeProducts.length > 0 && (
               <section>
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                  Productos en Promoción
+                  Productos del Hogar
                 </h2>
-                <ProductCarousel products={promotions} />
+                <ProductCarousel products={homeProducts} />
               </section>
             )}
 

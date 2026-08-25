@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Nosotros | Kronio Market",
@@ -258,12 +259,12 @@ export default function AboutPage() {
             &Uacute;nete a miles de clientes satisfechos. Descubre productos de calidad con
             la confianza que solo Kronio Market te ofrece.
           </p>
-          <a
+          <Link
             href="/products"
             className="inline-block bg-white text-blue-700 font-bold px-8 py-3.5 rounded-xl hover:bg-blue-50 transition shadow-lg hover:shadow-xl"
           >
             Ver productos
-          </a>
+          </Link>
         </div>
       </section>
     </main>

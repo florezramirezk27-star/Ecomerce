@@ -302,19 +302,6 @@ export default function ImageEditor({ image, onSave, onCancel }: ImageEditorProp
     </div>
   );
 
-  const TabButton = ({ tab, label }: { tab: typeof activeTab; label: string }) => (
-    <button
-      onClick={() => setActiveTab(tab)}
-      className={`px-5 py-2.5 text-sm font-medium transition border-b-2 ${
-        activeTab === tab
-          ? "text-blue-600 border-blue-600"
-          : "text-gray-500 border-transparent hover:text-gray-700"
-      }`}
-    >
-      {label}
-    </button>
-  );
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-4xl max-h-[95vh] flex flex-col shadow-2xl">
@@ -339,9 +326,23 @@ export default function ImageEditor({ image, onSave, onCancel }: ImageEditorProp
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200 shrink-0">
-          <TabButton tab="ajustes" label="Ajustes" />
-          <TabButton tab="filtros" label="Filtros" />
-          <TabButton tab="efectos" label="Efectos" />
+          {([
+            ['ajustes', 'Ajustes'],
+            ['filtros', 'Filtros'],
+            ['efectos', 'Efectos'],
+          ] as const).map(([tab, label]) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-5 py-2.5 text-sm font-medium transition border-b-2 ${
+                activeTab === tab
+                  ? "text-blue-600 border-blue-600"
+                  : "text-gray-500 border-transparent hover:text-gray-700"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Cropper area */}

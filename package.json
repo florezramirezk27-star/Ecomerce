@@ -1,45 +1,41 @@
 {
-  "name": "Ecommerce",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "dev:api": "pnpm --dir api start:dev",
-    "dev:web": "pnpm --dir apps/web dev",
-    "api": "pnpm --dir api start:dev",
-    "web": "pnpm --dir apps/web dev",
-    "build": "pnpm --dir api build && pnpm --dir apps/web build",
-    "test": "pnpm --dir api test",
-    "lint": "pnpm --dir apps/web lint",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "prisma": {
-    "seed": "ts-node prisma/seed.ts"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.5.0",
-      "onFail": "download"
+    "name": "Ecommerce",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "dev": "pnpm kill:ports && concurrently -n api,web -c blue,green \"pnpm --dir api start:dev\" \"pnpm --dir apps/web dev\"",
+        "kill:ports": "powershell -NoProfile -Command \"Get-NetTCPConnection -LocalPort 3000,3001,3002 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\" & exit /b 0",
+        "dev:api": "pnpm --dir api start:dev",
+        "dev:web": "pnpm --dir apps/web dev",
+        "api": "pnpm --dir api start:dev",
+        "web": "pnpm --dir apps/web dev",
+        "build": "pnpm --dir api build && pnpm --dir apps/web build",
+        "test": "pnpm --dir api test",
+        "lint": "pnpm --dir apps/web lint",
+        "prisma:generate": "prisma generate",
+        "prisma:migrate": "prisma migrate dev"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "prisma": {
+        "seed": "ts-node prisma/seed.ts"
+    },
+    "type": "module",
+    "dependencies": {
+        "@nestjs/passport": "^11.0.5",
+        "@nestjs/swagger": "^11.4.4",
+        "@prisma/client": "^6.19.3",
+        "passport": "^0.7.0",
+        "passport-jwt": "^4.0.1",
+        "swagger-ui-express": "^5.0.1"
+    },
+    "devDependencies": {
+        "@types/passport-jwt": "^4.0.1",
+        "concurrently": "^10.0.5",
+        "dotenv": "^17.4.2",
+        "prisma": "^6.19.3",
+        "ts-node": "^10.9.2"
     }
-  },
-  "type": "module",
-  "dependencies": {
-    "@nestjs/passport": "^11.0.5",
-    "@nestjs/swagger": "^11.4.4",
-    "@prisma/client": "^6.19.3",
-    "passport": "^0.7.0",
-    "passport-jwt": "^4.0.1",
-    "swagger-ui-express": "^5.0.1"
-  },
-  "devDependencies": {
-    "@types/passport-jwt": "^4.0.1",
-    "dotenv": "^17.4.2",
-    "prisma": "^6.19.3",
-    "ts-node": "^10.9.2"
-  }
 }

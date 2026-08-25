@@ -112,17 +112,11 @@ export function isAdmin() {
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:3001';
+  '/api/proxy';
 
 export const getAuthHeader = (body?: BodyInit) => {
-  const token =
-    typeof window !== 'undefined'
-      ? localStorage.getItem('token')
-      : null;
-
   return {
     ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-    ...(token && { Authorization: `Bearer ${token}` }),
   };
 };
 
@@ -145,14 +139,48 @@ export const formatDate = (date: string) => {
   }).format(new Date(date));
 };
 
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 2,
+): Promise<Response> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const response = await fetch(url, options);
+      return response;
+    } catch (error) {
+      if (i === retries) throw error;
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, i)));
+    }
+  }
+  throw new Error('Unreachable');
+}
+
+function getCsrfToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)csrf-token=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export const apiFetch = async (
   endpoint: string,
   options?: RequestInit,
 ) => {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const method = (options?.method || 'GET').toUpperCase();
+  const csrfHeaders: Record<string, string> = {};
+
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      csrfHeaders['X-CSRF-Token'] = csrfToken;
+    }
+  }
+
+  const response = await fetchWithRetry(`${API_BASE}${endpoint}`, {
       ...options,
       headers: {
       ...getAuthHeader(options?.body ?? undefined),
+      ...csrfHeaders,
       ...options?.headers,
     },
   });

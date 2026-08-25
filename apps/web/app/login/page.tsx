@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "@/lib/api";
@@ -12,13 +12,11 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (searchParams.get("error") === "google_auth_failed") {
-      setError("Error al iniciar sesión con Google. Intenta de nuevo.");
-    }
-  }, [searchParams?.toString()]);
+  const [error, setError] = useState(
+    searchParams?.get("error") === "google_auth_failed"
+      ? "Error al iniciar sesión con Google. Intenta de nuevo."
+      : ""
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,6 +27,7 @@ function LoginForm() {
       res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       });
     } catch {
@@ -44,9 +43,12 @@ function LoginForm() {
 
     const data = await res.json();
 
-    setAuth(data.access_token, data.user);
+    setAuth(data.user);
 
-    if (data.user.role === "ADMIN") {
+    const redirect = searchParams.get("redirect");
+    if (redirect && data.user.role === "ADMIN") {
+      router.push(redirect);
+    } else if (data.user.role === "ADMIN") {
       router.push("/admin");
     } else {
       router.push("/");
@@ -104,7 +106,7 @@ function LoginForm() {
         </div>
 
         <a
-          href={`${process.env.NEXT_PUBLIC_API_URL}/auth/google`}
+          href={`${API_URL}/auth/google`}
           className="flex items-center justify-center gap-2 border border-gray-300 p-2 rounded hover:bg-gray-50 transition"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">

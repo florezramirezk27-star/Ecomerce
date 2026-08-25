@@ -10,17 +10,18 @@ import {
 } from '@nestjs/common';
 
 import { CategoriesService } from './categories.service';
-import { CreateCategoryDto } from './dto/create-category.dto';
-import { UpdateCategoryDto } from './dto/update-category.dto';
+import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import {
+  createCategorySchema,
+  updateCategorySchema,
+} from '../../common/schemas';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('categories')
 export class CategoriesController {
-  constructor(
-    private readonly categoriesService: CategoriesService,
-  ) {}
+  constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
   findAll() {
@@ -35,7 +36,7 @@ export class CategoriesController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  create(@Body() dto: CreateCategoryDto) {
+  create(@Body(new ZodValidationPipe(createCategorySchema)) dto: any) {
     return this.categoriesService.create(dto);
   }
 
@@ -44,7 +45,7 @@ export class CategoriesController {
   @Roles('ADMIN')
   update(
     @Param('id') id: string,
-    @Body() dto: UpdateCategoryDto,
+    @Body(new ZodValidationPipe(updateCategorySchema)) dto: any,
   ) {
     return this.categoriesService.update(id, dto);
   }

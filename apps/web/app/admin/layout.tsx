@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { serverLogout } from '@/lib/auth';
+import { isAuthenticated, serverLogout } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
 
 function getAdminUserFromStorage() {
   if (typeof window === 'undefined') return null;
@@ -17,6 +18,16 @@ function getAdminUserFromStorage() {
   }
 }
 
+async function verifyAdminWithServer(): Promise<boolean> {
+  try {
+    if (!isAuthenticated()) return false;
+    const data = await apiFetch('/auth/profile');
+    return data.role === 'ADMIN';
+  } catch {
+    return false;
+  }
+}
+
 const menuItems = [
   { label: 'Dashboard', href: '/admin', icon: '📊' },
   { label: 'Productos', href: '/admin/products', icon: '📦' },
@@ -25,6 +36,7 @@ const menuItems = [
   { label: 'Órdenes', href: '/admin/orders', icon: '📋' },
   { label: 'Logo', href: '/admin/logo', icon: '🖼️' },
   { label: 'Seguridad', href: '/admin/security', icon: '🔐' },
+  { label: 'Dropi', href: '/admin/dropi', icon: '📦' },
 ];
 
 export default function AdminLayout({
@@ -37,16 +49,48 @@ export default function AdminLayout({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [adminUser, setAdminUser] = useState(getAdminUserFromStorage);
-  const [hydrated, setHydrated] = useState(false);
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const redirecting = useRef(false);
 
   useEffect(() => {
-    setHydrated(true);
-  }, []);
+    async function checkAdmin() {
+      const localUser = getAdminUserFromStorage();
+      if (!localUser) {
+        if (!redirecting.current) {
+          redirecting.current = true;
+          router.replace('/login');
+        }
+        return;
+      }
+
+      const isServerAdmin = await verifyAdminWithServer();
+      if (!isServerAdmin) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        if (!redirecting.current) {
+          redirecting.current = true;
+          router.replace('/login');
+        }
+        return;
+      }
+
+      setAdminUser(localUser);
+    }
+
+    checkAdmin();
+  }, [router]);
 
   useEffect(() => {
     function handleAuthChange() {
-      setAdminUser(getAdminUserFromStorage());
+      const user = getAdminUserFromStorage();
+      if (!user && !redirecting.current) {
+        redirecting.current = true;
+        router.replace('/login');
+      }
     }
 
     window.addEventListener('storage', handleAuthChange);
@@ -55,15 +99,7 @@ export default function AdminLayout({
       window.removeEventListener('storage', handleAuthChange);
       window.removeEventListener('auth-change', handleAuthChange);
     };
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    if (!adminUser && !redirecting.current) {
-      redirecting.current = true;
-      router.replace('/login');
-    }
-  }, [adminUser, router, hydrated]);
+  }, [router]);
 
   useEffect(() => {
     if (mobileOpen) {

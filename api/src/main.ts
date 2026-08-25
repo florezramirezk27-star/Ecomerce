@@ -5,13 +5,21 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { ExpressAdapter } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import express from 'express';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const server = express();
+  server.use(express.json({ limit: '1mb' }));
+  server.use(express.urlencoded({ limit: '1mb', extended: true }));
+  server.use(cookieParser());
+
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
 
   app.use(helmet());
 
@@ -44,16 +52,9 @@ async function bootstrap() {
   );
 
   if (process.env.NODE_ENV !== 'production') {
-    const document = SwaggerModule.createDocument(
-      app,
-      config,
-    );
+    const document = SwaggerModule.createDocument(app, config);
 
-    SwaggerModule.setup(
-      'api',
-      app,
-      document,
-    );
+    SwaggerModule.setup('api', app, document);
   }
 
   const port = Number(process.env.PORT) || 3001;

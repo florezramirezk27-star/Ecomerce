@@ -6,9 +6,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
 export class ProductsService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAll(
     search?: string,
@@ -17,8 +15,13 @@ export class ProductsService {
     page?: number,
     limit?: number,
     onSale?: boolean,
+    includeInactive = false,
   ) {
     const where: any = {};
+
+    if (!includeInactive) {
+      where.active = true;
+    }
 
     if (search) {
       where.OR = [
@@ -91,20 +94,31 @@ export class ProductsService {
     };
   }
 
-  async findOne(id: string) {
-    const product = await this.prisma.product.findUnique({
-      where: { id },
-      include: {
-        category: true,
-      },
+  async findOne(idOrSlug: string, includeInactive = false) {
+    const where: any = {};
+    if (!includeInactive) {
+      where.active = true;
+    }
+
+    // Try by ID first, then by slug
+    let product = await this.prisma.product.findFirst({
+      where: { ...where, id: idOrSlug },
+      include: { category: true },
     });
+
+    if (!product) {
+      product = await this.prisma.product.findFirst({
+        where: { ...where, slug: idOrSlug },
+        include: { category: true },
+      });
+    }
 
     if (!product) return null;
 
     const similar = await this.prisma.product.findMany({
       where: {
         categoryId: product.categoryId,
-        id: { not: id },
+        id: { not: product.id },
         active: true,
       },
       take: 8,

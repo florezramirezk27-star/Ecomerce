@@ -4,7 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 
 import { UsersService } from '../users/users.service';
@@ -12,16 +12,24 @@ import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+
 function parseExpiresIn(value: string): number {
   const match = value.match(/^(\d+)([smhd])$/);
   if (!match) return 7 * 86400000;
   const num = parseInt(match[1], 10);
   switch (match[2]) {
-    case 's': return num * 1000;
-    case 'm': return num * 60000;
-    case 'h': return num * 3600000;
-    case 'd': return num * 86400000;
-    default: return 7 * 86400000;
+    case 's':
+      return num * 1000;
+    case 'm':
+      return num * 60000;
+    case 'h':
+      return num * 3600000;
+    case 'd':
+      return num * 86400000;
+    default:
+      return 7 * 86400000;
   }
 }
 
@@ -37,19 +45,13 @@ export class AuthService {
   async register(registerDto: RegisterDto) {
     const { name, email, password } = registerDto;
 
-    const existingUser =
-      await this.usersService.findByEmail(email);
+    const existingUser = await this.usersService.findByEmail(email);
 
     if (existingUser) {
-      throw new BadRequestException(
-        'Email already exists',
-      );
+      throw new BadRequestException('Email already exists');
     }
 
-    const hashedPassword = await bcrypt.hash(
-      password,
-      10,
-    );
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await this.usersService.create({
       name,
@@ -64,7 +66,9 @@ export class AuthService {
     };
   }
 
-  private async createSession(userId: string): Promise<{ id: string; token: string; expiresAt: Date }> {
+  private async createSession(
+    userId: string,
+  ): Promise<{ id: string; token: string; expiresAt: Date }> {
     const expiresInMs = parseExpiresIn(process.env.JWT_EXPIRES_IN || '7d');
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + expiresInMs);
@@ -80,20 +84,45 @@ export class AuthService {
     const user = await this.usersService.findByEmail(email);
 
     if (!user || !user.password) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const minutesLeft = Math.ceil(
+        (user.lockedUntil.getTime() - Date.now()) / 60000,
+      );
       throw new UnauthorizedException(
-        'Invalid credentials',
+        `Cuenta bloqueada. Intenta de nuevo en ${minutesLeft} minuto(s).`,
       );
     }
 
-    const isPasswordValid = await bcrypt.compare(
-      password,
-      user.password,
-    );
+    const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException(
-        'Invalid credentials',
-      );
+      const newAttempts = user.failedLoginAttempts + 1;
+      const updateData: any = { failedLoginAttempts: newAttempts };
+
+      if (newAttempts >= MAX_FAILED_ATTEMPTS) {
+        updateData.lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+        updateData.failedLoginAttempts = 0;
+      }
+
+      await this.usersService.update(user.id, updateData);
+
+      if (newAttempts >= MAX_FAILED_ATTEMPTS) {
+        throw new UnauthorizedException(
+          'Cuenta bloqueada por múltiples intentos fallidos. Intenta de nuevo en 15 minutos.',
+        );
+      }
+
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await this.usersService.update(user.id, {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      });
     }
 
     const session = await this.createSession(user.id);
@@ -141,6 +170,31 @@ export class AuthService {
     }
   }
 
+  private readonly exchangeCodes = new Map<
+    string,
+    { token: string; user: any; expiresAt: number }
+  >();
+
+  generateExchangeCode(token: string, user: any): string {
+    const code = randomUUID();
+    this.exchangeCodes.set(code, {
+      token,
+      user,
+      expiresAt: Date.now() + 60_000,
+    });
+    return code;
+  }
+
+  exchangeCode(code: string): { access_token: string; user: any } | null {
+    const entry = this.exchangeCodes.get(code);
+    if (!entry || entry.expiresAt < Date.now()) {
+      this.exchangeCodes.delete(code);
+      return null;
+    }
+    this.exchangeCodes.delete(code);
+    return { access_token: entry.token, user: entry.user };
+  }
+
   async googleLogin(googleProfile: {
     email: string;
     name: string;
@@ -151,8 +205,9 @@ export class AuthService {
     });
 
     if (!user) {
-      const existingUser =
-        await this.usersService.findByEmail(googleProfile.email);
+      const existingUser = await this.usersService.findByEmail(
+        googleProfile.email,
+      );
       if (existingUser) {
         user = await this.prisma.user.update({
           where: { id: existingUser.id },
@@ -161,10 +216,8 @@ export class AuthService {
       } else {
         const adminEmails = (process.env.ADMIN_GOOGLE_EMAIL || '')
           .split(',')
-          .map(e => e.trim().toLowerCase());
-        const isAdmin = adminEmails.includes(
-          googleProfile.email.toLowerCase(),
-        );
+          .map((e) => e.trim().toLowerCase());
+        const isAdmin = adminEmails.includes(googleProfile.email.toLowerCase());
 
         user = await this.prisma.user.create({
           data: {
@@ -179,7 +232,7 @@ export class AuthService {
       user.role !== 'ADMIN' &&
       (process.env.ADMIN_GOOGLE_EMAIL || '')
         .split(',')
-        .map(e => e.trim().toLowerCase())
+        .map((e) => e.trim().toLowerCase())
         .includes(googleProfile.email.toLowerCase())
     ) {
       user = await this.prisma.user.update({
@@ -212,7 +265,9 @@ export class AuthService {
     const user = await this.usersService.findByEmail(email);
 
     if (!user) {
-      return { message: 'Si el correo existe, recibirás un enlace de recuperación' };
+      return {
+        message: 'Si el correo existe, recibirás un enlace de recuperación',
+      };
     }
 
     const token = randomBytes(32).toString('hex');
@@ -231,20 +286,16 @@ export class AuthService {
       resetLink,
     );
 
-    return { message: 'Si el correo existe, recibirás un enlace de recuperación' };
+    return {
+      message: 'Si el correo existe, recibirás un enlace de recuperación',
+    };
   }
 
   async resetPassword(token: string, newPassword: string) {
     const user = await this.usersService.findByResetToken(token);
 
-    if (
-      !user ||
-      !user.resetTokenExpiry ||
-      user.resetTokenExpiry < new Date()
-    ) {
-      throw new BadRequestException(
-        'Token inválido o expirado',
-      );
+    if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
+      throw new BadRequestException('Token inválido o expirado');
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);

@@ -25,9 +25,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       message =
         typeof res === 'string'
           ? res
-          : (res as Record<string, unknown>)?.message as string || message;
+          : ((res as Record<string, unknown>)?.message as string) || message;
     } else {
-      this.logger.error('Error no manejado', exception instanceof Error ? exception.stack : '');
+      this.logger.error(
+        'Error no manejado',
+        exception instanceof Error ? exception.stack : '',
+      );
     }
 
     response.status(status).json({

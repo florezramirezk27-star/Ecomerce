@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API_URL } from "@/lib/api";
+import { API_URL, apiFetch } from "@/lib/api";
 import { uploadImage } from "@/lib/cloudinary";
 
 interface CategoryOption {
@@ -24,8 +24,7 @@ export default function ProductForm() {
   });
 
   useEffect(() => {
-    fetch(`${API_URL}/categories`)
-      .then((res) => res.json())
+    apiFetch('/categories')
       .then(setCategories);
   }, []);
 
@@ -42,34 +41,20 @@ export default function ProductForm() {
       );
     }
 
-    const token =
-      localStorage.getItem("token");
-
-    const response = await fetch(
-      `${API_URL}/products`,
-      {
+    try {
+      await apiFetch("/products", {
         method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json",
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           ...form,
           image: imageUrl,
         }),
-      },
-    );
-
-    const data =
-      await response.json();
-
-    if (response.ok) {
+      });
       alert("Producto creado");
-    } else {
+    } catch (err) {
       alert(
-        data.message ||
-          "Error al crear",
+        err instanceof Error
+          ? err.message
+          : "Error al crear",
       );
     }
   }

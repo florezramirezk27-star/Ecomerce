@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { getToken, getUser, serverLogout } from "@/lib/auth";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { getUser, serverLogout } from "@/lib/auth";
 import { API_URL } from "@/lib/api";
 
 interface Category {
@@ -12,15 +13,67 @@ interface Category {
   _count?: { products: number };
 }
 
+let cachedUser: ReturnType<typeof getUser> | null = null;
+let lastRaw: string | null = null;
+
 function getCurrentUser() {
   if (typeof window === "undefined") return null;
-  const token = getToken();
-  if (!token) return null;
-  return getUser();
+  const raw = localStorage.getItem("user");
+  if (raw === lastRaw) return cachedUser;
+  lastRaw = raw;
+  if (!raw) { cachedUser = null; return null; }
+  try { cachedUser = JSON.parse(raw); } catch { cachedUser = null; }
+  return cachedUser;
 }
 
 async function logout() {
   await serverLogout();
+}
+
+function LogoutConfirmModal({
+  open,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={onCancel}>
+      <div
+        className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+            <svg className="h-6 w-6 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">¿Cerrar sesión?</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            ¿Estás seguro de que quieres cerrar sesión? Deberás iniciar sesión nuevamente para acceder a tu cuenta.
+          </p>
+        </div>
+        <div className="mt-5 flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-700"
+          >
+            Sí, cerrar sesión
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CategoryDropdown({
@@ -56,29 +109,25 @@ function CategoryDropdown({
 }
 
 export default function Navbar() {
-  const [user, setUser] = useState<ReturnType<typeof getCurrentUser>>(null);
-  const [hydrated, setHydrated] = useState(false);
+  const user = useSyncExternalStore(
+    (callback) => {
+      window.addEventListener("storage", callback);
+      window.addEventListener("auth-change", callback);
+      return () => {
+        window.removeEventListener("storage", callback);
+        window.removeEventListener("auth-change", callback);
+      };
+    },
+    () => getCurrentUser(),
+    () => null,
+  );
   const [logo, setLogo] = useState<string | null>(null);
   const [catOpen, setCatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [pendingLogoutCb, setPendingLogoutCb] = useState<(() => void) | null>(null);
   const catRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setHydrated(true);
-    setUser(getCurrentUser());
-
-    function handleAuthChange() {
-      setUser(getCurrentUser());
-    }
-
-    window.addEventListener("storage", handleAuthChange);
-    window.addEventListener("auth-change", handleAuthChange);
-    return () => {
-      window.removeEventListener("storage", handleAuthChange);
-      window.removeEventListener("auth-change", handleAuthChange);
-    };
-  }, []);
 
   useEffect(() => {
     fetch(`${API_URL}/categories`)
@@ -86,6 +135,8 @@ export default function Navbar() {
       .then(setCategories)
       .catch(() => {});
   }, []);
+
+  const pathname = usePathname();
 
   useEffect(() => {
     function fetchLogo() {
@@ -100,6 +151,17 @@ export default function Navbar() {
     window.addEventListener("logo-change", fetchLogo);
     return () => window.removeEventListener("logo-change", fetchLogo);
   }, []);
+
+  useEffect(() => {
+    if (!logo) return;
+    let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.href = logo;
+  }, [logo, pathname]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -119,6 +181,23 @@ export default function Navbar() {
     }
     return () => { document.body.style.overflow = ""; };
   }, [menuOpen]);
+
+  const handleLogoutClick = (cb?: () => void) => {
+    setPendingLogoutCb(() => cb || null);
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await logout();
+    if (pendingLogoutCb) pendingLogoutCb();
+    setPendingLogoutCb(null);
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
+    setPendingLogoutCb(null);
+  };
 
   return (
     <nav className="flex items-center justify-between px-4 md:px-10 py-4 border-b relative z-40">
@@ -171,15 +250,20 @@ export default function Navbar() {
         </Link>
 
         {user?.role === "ADMIN" && (
-          <Link href="/admin" className="text-sm font-semibold text-blue-600 hover:underline">
-            Panel Admin
-          </Link>
+          <>
+            <Link href="/admin" className="text-sm font-semibold text-blue-600 hover:underline">
+              Panel Admin
+            </Link>
+            <Link href="/dropi" className="hover:underline">
+              Dropi
+            </Link>
+          </>
         )}
 
         {user ? (
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-500">{user.name}</span>
-            <button onClick={logout} className="text-sm text-red-500 hover:underline">
+            <button onClick={() => handleLogoutClick()} className="text-sm text-red-500 hover:underline">
               Cerrar sesión
             </button>
           </div>
@@ -272,15 +356,20 @@ export default function Navbar() {
         </Link>
 
         {user?.role === "ADMIN" && (
-          <Link href="/admin" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-blue-600 hover:underline">
-            Panel Admin
-          </Link>
+          <>
+            <Link href="/admin" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-blue-600 hover:underline">
+              Panel Admin
+            </Link>
+            <Link href="/dropi" onClick={() => setMenuOpen(false)} className="hover:underline">
+              Dropi
+            </Link>
+          </>
         )}
 
         {user ? (
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-500">{user.name}</span>
-            <button onClick={async () => { await logout(); setMenuOpen(false); }} className="text-sm text-red-500 hover:underline">
+            <button onClick={() => handleLogoutClick(() => setMenuOpen(false))} className="text-sm text-red-500 hover:underline">
               Cerrar sesión
             </button>
           </div>
@@ -291,6 +380,12 @@ export default function Navbar() {
           </>
         )}
       </div>
+
+      <LogoutConfirmModal
+        open={showLogoutConfirm}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
     </nav>
   );
 }

@@ -32,7 +32,16 @@ export class DashboardService {
       ORDER BY stock ASC
     `;
 
-    const [dailyRevenueResult, monthlyRevenueResult, totalRevenueResult, totalOrders, pendingOrders, totalUsers, topProductGroups, recentOrders] = await Promise.all([
+    const [
+      dailyRevenueResult,
+      monthlyRevenueResult,
+      totalRevenueResult,
+      totalOrders,
+      pendingOrders,
+      totalUsers,
+      topProductGroups,
+      recentOrders,
+    ] = await Promise.all([
       this.prisma.order.aggregate({
         _sum: {
           total: true,
@@ -99,9 +108,7 @@ export class DashboardService {
       }),
     ]);
 
-    const topProductIds = topProductGroups.map(
-      (group) => group.productId,
-    );
+    const topProductIds = topProductGroups.map((group) => group.productId);
 
     const products = await this.prisma.product.findMany({
       where: {

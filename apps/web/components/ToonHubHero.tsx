@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
 const IMAGES = [
@@ -21,7 +22,7 @@ function getRoleIndex(activeIndex: number, role: 'center' | 'left' | 'right' | '
 
 export default function ToonHubHero() {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const isAnimatingRef = useRef(false);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -31,6 +32,13 @@ export default function ToonHubHero() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
+  const navigate = useCallback((dir: 'next' | 'prev') => {
+    if (isAnimatingRef.current) return;
+    isAnimatingRef.current = true;
+    setActiveIndex(prev => dir === 'next' ? (prev + 1) % 4 : (prev + 3) % 4);
+    setTimeout(() => { isAnimatingRef.current = false; }, 650);
+  }, []);
+
   useEffect(() => {
     IMAGES.forEach(img => {
       const i = new Image();
@@ -38,12 +46,10 @@ export default function ToonHubHero() {
     });
   }, []);
 
-  const navigate = useCallback((dir: 'next' | 'prev') => {
-    if (isAnimating) return;
-    setIsAnimating(true);
-    setActiveIndex(prev => dir === 'next' ? (prev + 1) % 4 : (prev + 3) % 4);
-    setTimeout(() => setIsAnimating(false), 650);
-  }, [isAnimating]);
+  useEffect(() => {
+    const timer = setInterval(() => navigate('next'), 5000);
+    return () => clearInterval(timer);
+  }, [navigate]);
 
   const getItemStyle = (role: 'center' | 'left' | 'right' | 'back'): React.CSSProperties => {
     const base: React.CSSProperties = {
@@ -224,7 +230,7 @@ export default function ToonHubHero() {
           </div>
         </div>
 
-        <a
+        <Link
           href="/products"
           className="absolute bottom-6 right-4 sm:bottom-20 sm:right-10 flex items-center gap-2 no-underline transition-opacity duration-200"
           style={{
@@ -243,7 +249,7 @@ export default function ToonHubHero() {
         >
           COMPRAR YA
           <ArrowRight strokeWidth={2.25} color="white" className="w-5 h-5 sm:w-8 sm:h-8" />
-        </a>
+        </Link>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { PrismaService } from './prisma/prisma.service';
+import { RedisService } from './common/redis/redis.service';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -14,6 +15,10 @@ describe('AppController', () => {
           useValue: {
             $queryRaw: jest.fn(),
           },
+        },
+        {
+          provide: RedisService,
+          useValue: { ping: jest.fn().mockResolvedValue(false) },
         },
       ],
     }).compile();

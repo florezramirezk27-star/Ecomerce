@@ -44,6 +44,115 @@ export class MailService {
     }
   }
 
+  async sendAdminOrderNotification(
+    adminEmail: string,
+    customerName: string,
+    customerEmail: string | null,
+    orderId: string,
+    items: OrderItemInfo[],
+    total: number,
+    shipping: ShippingInfo,
+    dropiStatus?: string,
+  ) {
+    const itemsHtml = items
+      .map(
+        (i) =>
+          `<tr>
+            <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px">${i.name}</td>
+            <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px;text-align:center">${i.quantity}</td>
+            <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px;text-align:right">$${i.price.toLocaleString('es-CO')}</td>
+            <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px;text-align:right;font-weight:bold">$${(i.price * i.quantity).toLocaleString('es-CO')}</td>
+          </tr>`,
+      )
+      .join('\n');
+
+    const dropiBanner = dropiStatus
+      ? `<div style="margin-top:24px;padding:16px;background:#fef3c7;border-radius:8px;border:1px solid #fde68a">
+          <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6">
+            <strong>📦 Dropi:</strong> ${dropiStatus}
+          </p>
+        </div>`
+      : '';
+
+    await this.sendHtml({
+      to: adminEmail,
+      subject: `🛒 Nuevo pedido #${orderId.slice(0, 8)} — Kronio Market`,
+      tag: 'ADMIN ORDER NOTIFICATION',
+      html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0">
+  <div style="max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
+    <div style="background:#18181b;padding:32px 24px;text-align:center">
+      <h1 style="color:#fff;margin:0;font-size:24px;letter-spacing:1px">NUEVO PEDIDO</h1>
+      <p style="color:#a1a1aa;margin:6px 0 0;font-size:13px">#${orderId}</p>
+    </div>
+    <div style="padding:32px 24px">
+      <div style="background:#f4f4f5;border-radius:8px;padding:16px;margin:20px 0">
+        <table style="width:100%;font-size:13px;color:#52525b">
+          <tr>
+            <td style="padding:4px 0">Cliente</td>
+            <td style="padding:4px 0;text-align:right;font-weight:bold;color:#18181b">${customerName}</td>
+          </tr>
+          <tr>
+            <td style="padding:4px 0">Email</td>
+            <td style="padding:4px 0;text-align:right;font-weight:bold;color:#18181b">${customerEmail || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding:4px 0">Método de pago</td>
+            <td style="padding:4px 0;text-align:right;font-weight:bold;color:#16a34a">Pago contra entrega</td>
+          </tr>
+        </table>
+      </div>
+
+      <h3 style="font-size:15px;color:#18181b;margin:24px 0 10px;font-weight:700">Productos</h3>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f4f4f5">
+            <th style="padding:10px 16px;text-align:left;font-size:12px;color:#71717a;text-transform:uppercase">Producto</th>
+            <th style="padding:10px 16px;text-align:center;font-size:12px;color:#71717a;text-transform:uppercase">Cant</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;color:#71717a;text-transform:uppercase">Precio</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;color:#71717a;text-transform:uppercase">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHtml}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" style="padding:14px 16px;text-align:right;font-size:14px;color:#333;font-weight:bold">Total:</td>
+            <td style="padding:14px 16px;text-align:right;font-size:18px;color:#2563eb;font-weight:bold">$${total.toLocaleString('es-CO')}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e4e4e7">
+        <h3 style="margin:0 0 10px;font-size:14px;color:#18181b;font-weight:700">Dirección de envío</h3>
+        <p style="margin:0;font-size:13px;color:#52525b;line-height:1.6">
+          ${shipping.name}<br>
+          ${shipping.phone}<br>
+          ${shipping.email ? `${shipping.email}<br>` : ''}
+          ${shipping.address}<br>
+          ${shipping.city}, ${shipping.state}${shipping.zip ? ` — ${shipping.zip}` : ''}
+        </p>
+        ${shipping.notes ? `<p style="margin:8px 0 0;font-size:12px;color:#71717a;font-style:italic">Notas: ${shipping.notes}</p>` : ''}
+      </div>
+
+      ${dropiBanner}
+
+      <p style="color:#666;font-size:13px;margin-top:24px;border-top:1px solid #e4e4e7;padding-top:16px">
+        Inicia sesión en el panel de administración para gestionar este pedido.
+      </p>
+    </div>
+    <div style="background:#f4f4f5;padding:16px 24px;text-align:center;font-size:11px;color:#a1a1aa">
+      Kronio Market — Notificación automática de pedidos
+    </div>
+  </div>
+</body>
+</html>`,
+    });
+  }
+
   private async send(options: {
     to: string;
     subject: string;
@@ -59,7 +168,9 @@ export class MailService {
           text: options.text,
         });
       } catch (err) {
-        this.logger.error(`Error sending ${options.tag} email: ${err instanceof Error ? err.message : err}`);
+        this.logger.error(
+          `Error sending ${options.tag} email: ${err instanceof Error ? err.message : err}`,
+        );
       }
     }
 
@@ -81,18 +192,16 @@ export class MailService {
           html: options.html,
         });
       } catch (err) {
-        this.logger.error(`Error sending ${options.tag} email: ${err instanceof Error ? err.message : err}`);
+        this.logger.error(
+          `Error sending ${options.tag} email: ${err instanceof Error ? err.message : err}`,
+        );
       }
     }
 
     this.logger.log(`[${options.tag}] To: ${options.to} | ${options.subject}`);
   }
 
-  async sendPasswordResetEmail(
-    to: string,
-    name: string,
-    resetLink: string,
-  ) {
+  async sendPasswordResetEmail(to: string, name: string, resetLink: string) {
     await this.send({
       to,
       subject: 'Recuperación de contraseña',
@@ -106,17 +215,12 @@ export class MailService {
     });
   }
 
-  async sendVerificationCode(
-    to: string,
-    name: string,
-    code: string,
-  ) {
+  async sendVerificationCode(to: string, name: string, code: string) {
     await this.sendHtml({
       to,
       subject: 'Código de verificación - Kronio Market',
       tag: 'VERIFICATION CODE',
-      html:
-        `<!DOCTYPE html>
+      html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0">

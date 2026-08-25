@@ -6,6 +6,7 @@ import { useRef } from "react";
 interface Product {
   id: string;
   name: string;
+  slug: string;
   price: string | number;
   image: string;
   gallery?: string[];
@@ -61,7 +62,7 @@ export default function ProductCarousel({
         {products.map((product) => (
           <Link
             key={product.id}
-            href={`/products/${product.id}`}
+            href={`/products/${product.slug}`}
             className="group/card bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-lg hover:border-blue-200 transition-all duration-200 flex flex-col min-w-[220px] max-w-[220px] shrink-0"
           >
             <div className="aspect-[4/3] overflow-hidden bg-gray-100 relative">

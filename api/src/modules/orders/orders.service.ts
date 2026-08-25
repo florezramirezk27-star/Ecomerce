@@ -7,6 +7,7 @@ import {
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { DropiService } from '../dropi/dropi.service';
 import { CheckoutDto } from './dto/checkout.dto';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -22,9 +23,20 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
+    private readonly dropiService: DropiService,
   ) {}
 
   async checkout(userId: string, dto: CheckoutDto) {
+    if (dto.idempotencyKey) {
+      const existing = await this.prisma.order.findUnique({
+        where: { idempotencyKey: dto.idempotencyKey },
+        include: { items: true },
+      });
+      if (existing) {
+        return existing;
+      }
+    }
+
     const cart = await this.prisma.cart.findUnique({
       where: { userId },
       include: {
@@ -37,9 +49,7 @@ export class OrdersService {
     });
 
     if (!cart || cart.items.length === 0) {
-      throw new BadRequestException(
-        'Cart is empty',
-      );
+      throw new BadRequestException('Cart is empty');
     }
 
     const order = await this.prisma.$transaction(async (tx) => {
@@ -50,36 +60,30 @@ export class OrdersService {
 
       const productMap = new Map(products.map((p) => [p.id, p]));
 
-      const total = cart.items.reduce(
-        (sum, item) => {
-          const product = productMap.get(item.productId);
+      const total = cart.items.reduce((sum, item) => {
+        const product = productMap.get(item.productId);
 
-          if (!product || !product.active) {
-            throw new BadRequestException(
-              `El producto ${item.product.name} no está disponible`,
-            );
-          }
-
-          if (item.quantity > product.stock) {
-            throw new BadRequestException(
-              `No hay suficiente stock para ${item.product.name}`,
-            );
-          }
-
-          return (
-            sum +
-            Number(item.product.price) *
-              item.quantity
+        if (!product || !product.active) {
+          throw new BadRequestException(
+            `El producto ${item.product.name} no está disponible`,
           );
-        },
-        0,
-      );
+        }
+
+        if (item.quantity > product.stock) {
+          throw new BadRequestException(
+            `No hay suficiente stock para ${item.product.name}`,
+          );
+        }
+
+        return sum + Number(item.product.price) * item.quantity;
+      }, 0);
 
       const order = await tx.order.create({
         data: {
           userId,
           total,
           paymentMethod: 'CASH_ON_DELIVERY',
+          idempotencyKey: dto.idempotencyKey || null,
 
           shippingName: dto.shippingName,
           shippingPhone: dto.shippingPhone,
@@ -161,6 +165,62 @@ export class OrdersService {
       );
     }
 
+    const dropiItems = cart.items.filter((i) => i.product.dropiProductId);
+    let dropiStatus: string | undefined;
+
+    if (dropiItems.length > 0) {
+      try {
+        const result = await this.dropiService.createOrder({
+          items: dropiItems.map((i) => ({
+            dropiProductId: i.product.dropiProductId!,
+            quantity: i.quantity,
+            price: Number(i.product.price),
+            name: i.product.name,
+          })),
+          shipping: {
+            name: dto.shippingName,
+            phone: dto.shippingPhone,
+            email: dto.shippingEmail || undefined,
+            address: dto.shippingAddress,
+            city: dto.shippingCity,
+            state: dto.shippingState,
+            notes: dto.notes || undefined,
+          },
+        });
+        dropiStatus = result.message;
+      } catch (err: any) {
+        dropiStatus = `Dropi error: ${err.message}`;
+      }
+    }
+
+    const adminEmail =
+      process.env.ADMIN_EMAIL || process.env.ADMIN_GOOGLE_EMAIL || '';
+    if (adminEmail) {
+      this.mailService.sendAdminOrderNotification(
+        adminEmail,
+        user?.name || dto.shippingName,
+        user?.email || dto.shippingEmail || null,
+        order.id,
+        cart.items.map((item) => ({
+          name: item.product.name,
+          quantity: item.quantity,
+          price: Number(item.product.price),
+        })),
+        Number(order.total),
+        {
+          name: dto.shippingName,
+          phone: dto.shippingPhone,
+          email: dto.shippingEmail,
+          address: dto.shippingAddress,
+          city: dto.shippingCity,
+          state: dto.shippingState,
+          zip: dto.shippingZip,
+          notes: dto.notes,
+        },
+        dropiStatus,
+      );
+    }
+
     return order;
   }
 
@@ -228,10 +288,7 @@ export class OrdersService {
     };
   }
 
-  async updateStatus(
-    id: string,
-    status: string,
-  ) {
+  async updateStatus(id: string, status: string) {
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: {
@@ -271,6 +328,14 @@ export class OrdersService {
           data: {
             status: status as any,
           },
+          include: {
+            user: true,
+            items: {
+              include: {
+                product: true,
+              },
+            },
+          },
         });
       });
     } else {
@@ -297,6 +362,19 @@ export class OrdersService {
         order.id,
         status,
       );
+    }
+
+    if (status === 'CANCELLED') {
+      const adminEmail =
+        process.env.ADMIN_EMAIL || process.env.ADMIN_GOOGLE_EMAIL || '';
+      if (adminEmail) {
+        this.mailService.sendOrderStatusEmail(
+          adminEmail,
+          'Admin',
+          order.id,
+          status,
+        );
+      }
     }
 
     return updatedOrder;

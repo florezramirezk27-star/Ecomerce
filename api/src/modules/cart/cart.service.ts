@@ -3,19 +3,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class CartService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async addToCart(
-    userId: string,
-    productId: string,
-    quantity: number,
-  ) {
+  async addToCart(userId: string, productId: string, quantity: number) {
     if (quantity > 100) {
-      throw new BadRequestException(
-        'Cantidad inválida',
-      );
+      throw new BadRequestException('Cantidad inválida');
     }
 
     let cart = await this.prisma.cart.findUnique({
@@ -46,19 +38,15 @@ export class CartService {
       throw new BadRequestException('Stock insuficiente');
     }
 
-    const existingItem =
-      await this.prisma.cartItem.findFirst({
-        where: {
-          cartId: cart.id,
-          productId,
-        },
-      });
+    const existingItem = await this.prisma.cartItem.findFirst({
+      where: {
+        cartId: cart.id,
+        productId,
+      },
+    });
 
     if (existingItem) {
-      if (
-        existingItem.quantity + quantity >
-        product.stock
-      ) {
+      if (existingItem.quantity + quantity > product.stock) {
         throw new BadRequestException('Stock insuficiente');
       }
 
@@ -67,8 +55,7 @@ export class CartService {
           id: existingItem.id,
         },
         data: {
-          quantity:
-            existingItem.quantity + quantity,
+          quantity: existingItem.quantity + quantity,
         },
       });
     }

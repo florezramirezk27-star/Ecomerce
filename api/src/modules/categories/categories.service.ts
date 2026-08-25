@@ -5,15 +5,15 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Injectable()
 export class CategoriesService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   findAll() {
     return this.prisma.category.findMany({
       include: {
         _count: {
-          select: { products: true },
+          select: {
+            products: { where: { active: true } },
+          },
         },
       },
       orderBy: {
@@ -26,9 +26,11 @@ export class CategoriesService {
     return this.prisma.category.findUnique({
       where: { id },
       include: {
-        products: true,
+        products: { where: { active: true } },
         _count: {
-          select: { products: true },
+          select: {
+            products: { where: { active: true } },
+          },
         },
       },
     });

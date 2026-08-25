@@ -2,6 +2,10 @@ import { IsString, IsOptional, MinLength, IsEmail } from 'class-validator';
 
 export class CheckoutDto {
   @IsString()
+  @IsOptional()
+  idempotencyKey?: string;
+
+  @IsString()
   @MinLength(1)
   shippingName: string;
 

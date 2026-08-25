@@ -28,10 +28,7 @@ export class UploadService {
     const cloudSecret = process.env.CLOUDINARY_API_SECRET;
     const cloudUrl = process.env.CLOUDINARY_URL;
 
-    this.useCloudinary = !!(
-      cloudUrl ||
-      (cloudName && cloudKey && cloudSecret)
-    );
+    this.useCloudinary = !!(cloudUrl || (cloudName && cloudKey && cloudSecret));
 
     if (this.useCloudinary) {
       const cloudinaryConfig: Record<string, string | boolean> = {
@@ -86,9 +83,7 @@ export class UploadService {
     );
   }
 
-  private uploadToCloudinary(
-    file: UploadedImageFile,
-  ): Promise<string> {
+  private uploadToCloudinary(file: UploadedImageFile): Promise<string> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
@@ -120,18 +115,14 @@ export class UploadService {
     });
   }
 
-  private async uploadToS3(
-    file: UploadedImageFile,
-  ): Promise<string> {
+  private async uploadToS3(file: UploadedImageFile): Promise<string> {
     if (!this.s3Client || !this.bucketName || !this.awsRegion) {
       throw new InternalServerErrorException(
         'S3 no está configurado correctamente.',
       );
     }
 
-    const sanitizedFilename = file.originalname
-      .trim()
-      .replace(/\s+/g, '_');
+    const sanitizedFilename = file.originalname.trim().replace(/\s+/g, '_');
     const key = `products/${Date.now()}-${randomUUID()}-${sanitizedFilename}`;
 
     await this.s3Client.send(

@@ -18,7 +18,6 @@ export default function EditProductPage() {
     image: '',
     video: '',
     categoryId: '',
-    customCode: '',
   });
   const [categories, setCategories] = useState<Category[]>([]);
   const [error, setError] = useState('');
@@ -47,7 +46,6 @@ export default function EditProductPage() {
           image: product.image || '',
           video: product.video || '',
           categoryId: product.categoryId,
-          customCode: product.customCode || '',
         });
         setExistingGallery(product.gallery || []);
       } catch (err) {
@@ -316,26 +314,7 @@ export default function EditProductPage() {
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">
-            Código HTML / CSS personalizado
-          </label>
-          <textarea
-            value={form.customCode}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                customCode: e.target.value,
-              })
-            }
-            rows={8}
-            placeholder="<style>/* Tus estilos aquí */</style>"
-            className="border p-2 w-full rounded font-mono text-sm"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Este código se renderizará en la página del producto.
-          </p>
-        </div>
+
 
         <div>
           <label className="block text-sm font-semibold text-gray-900 mb-2">

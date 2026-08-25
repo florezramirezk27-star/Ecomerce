@@ -16,6 +16,11 @@ import { UploadModule } from './modules/uploads/upload.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { MailModule } from './modules/mail/mail.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { DropiModule } from './modules/dropi/dropi.module';
+import { ChatModule } from './modules/chat/chat.module';
+import { AIModule } from './modules/ai/ai.module';
+import { CsrfGuard } from './common/guards/csrf.guard';
+import { RedisModule } from './common/redis/redis.module';
 
 @Module({
   imports: [
@@ -23,10 +28,13 @@ import { SettingsModule } from './modules/settings/settings.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 60,
-    }]),
+    RedisModule,
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
     PrismaModule,
     UsersModule,
     AuthModule,
@@ -38,6 +46,9 @@ import { SettingsModule } from './modules/settings/settings.module';
     DashboardModule,
     MailModule,
     SettingsModule,
+    DropiModule,
+    ChatModule,
+    AIModule,
   ],
   controllers: [AppController],
   providers: [
@@ -45,6 +56,10 @@ import { SettingsModule } from './modules/settings/settings.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
     },
   ],
 })

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { getToken } from "@/lib/auth";
-import { API_URL } from "@/lib/api";
+import { isAuthenticated } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
 
 interface OrderItem {
   id: string;
@@ -38,26 +38,16 @@ export default function OrdersPage() {
   }, [page]);
 
   async function loadOrders() {
-    const token = getToken();
-    if (!token) {
+    if (!isAuthenticated()) {
       setLoading(false);
       return;
     }
 
     try {
-      const res = await fetch(
-        `${API_URL}/orders/my-orders?page=${page}&limit=20`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
+      const data = await apiFetch(
+        `/orders/my-orders?page=${page}&limit=20`,
       );
 
-      if (!res.ok)
-        throw new Error("Error loading orders");
-
-      const data = await res.json();
       if (data.items) {
         setOrders(data.items);
         setTotalPages(data.totalPages);
@@ -141,7 +131,7 @@ export default function OrdersPage() {
     );
   }
 
-  if (!getToken()) {
+  if (!isAuthenticated()) {
     return (
       <main className="min-h-screen bg-orange-50 p-6">
         <div className="max-w-4xl mx-auto">

@@ -1,10 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { SettingsService } from './settings.service';
@@ -15,9 +9,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 @ApiTags('Settings')
 @Controller('settings')
 export class SettingsController {
-  constructor(
-    private readonly settingsService: SettingsService,
-  ) {}
+  constructor(private readonly settingsService: SettingsService) {}
 
   @Get('logo')
   getLogo() {

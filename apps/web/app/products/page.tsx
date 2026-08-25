@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 
+export const dynamic = 'force-dynamic';
+
 interface ProductSummary {
   id: string;
   name: string;
   price: string | number;
   stock: number;
   image: string;
+  slug: string;
   category?: { id: string; name: string };
 }
 
@@ -93,7 +96,7 @@ export default async function ProductsPage({
             {products.map((product) => (
               <Link
                 key={product.id}
-                href={`/products/${product.id}`}
+                href={`/products/${product.slug}`}
                 className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 hover:border-gray-200 flex flex-col"
               >
                 <div className="relative overflow-hidden aspect-[4/3] bg-gray-100">

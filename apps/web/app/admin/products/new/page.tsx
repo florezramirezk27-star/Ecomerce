@@ -23,7 +23,6 @@ export default function NewProductPage() {
     image: '',
     video: '',
     categoryId: '',
-    customCode: '',
   });
 
   useEffect(() => {
@@ -328,29 +327,6 @@ export default function NewProductPage() {
               />
               <p className="text-xs text-gray-500 mt-1">
                 Soporta YouTube, Vimeo, o URL directa de video
-              </p>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Personalización (opcional)
-            </h3>
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Código HTML / CSS personalizado
-              </label>
-              <textarea
-                value={formData.customCode}
-                onChange={(e) =>
-                  setFormData({ ...formData, customCode: e.target.value })
-                }
-                rows={8}
-                placeholder="<style>/* Tus estilos aquí */</style>"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Este código se renderizará en la página del producto. Puedes usar HTML, CSS y JS.
               </p>
             </div>
           </div>

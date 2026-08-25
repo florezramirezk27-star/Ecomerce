@@ -241,7 +241,7 @@ export default function ProductSearchPage() {
                       {formatPrice(product.price)}
                     </p>
                     <Link
-                      href={`/products/${product.id}`}
+                      href={`/products/${product.slug}`}
                       className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
                     >
                       Ver producto

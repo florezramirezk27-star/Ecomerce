@@ -1,14 +1,53 @@
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:3001';
+const isServer = typeof window === 'undefined';
+
+export const API_URL = isServer
+  ? (process.env.API_URL || 'http://localhost:3001')
+  : (process.env.NEXT_PUBLIC_API_URL || '/api/proxy');
+
+function getCsrfToken(): string | null {
+  if (isServer) return null;
+  const matches = [
+    ...document.cookie.matchAll(/(?:^|;\s*)csrf-token=([^;]*)/g),
+  ];
+  if (matches.length === 0) return null;
+  return decodeURIComponent(matches[matches.length - 1][1]);
+}
+
+async function ensureCsrfCookie(): Promise<void> {
+  if (getCsrfToken()) return;
+  try {
+    await fetch(`${API_URL}/products`, {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+  } catch {}
+}
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 2,
+): Promise<Response> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const response = await fetch(url, options);
+      return response;
+    } catch (error) {
+      if (i === retries) throw error;
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, i)));
+    }
+  }
+  throw new Error('Unreachable');
+}
 
 export async function apiFetch(
   endpoint: string,
   options?: RequestInit,
 ) {
   const body = options?.body;
+  const method = (options?.method || 'GET').toUpperCase();
   const isFormData = body instanceof FormData;
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string> || {}),
@@ -18,20 +57,50 @@ export async function apiFetch(
     headers['Content-Type'] = 'application/json';
   }
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  const isSafeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(method);
+
+  if (!isSafeMethod) {
+    await ensureCsrfCookie();
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
   }
 
-  const response = await fetch(
+  let response = await fetchWithRetry(
     `${API_URL}${endpoint}`,
     {
       ...options,
       headers,
+      credentials: 'include',
     },
   );
 
+  if (
+    !isSafeMethod &&
+    response.status === 403
+  ) {
+    const errBody = await response
+      .clone()
+      .json()
+      .catch(() => ({}));
+    if (typeof errBody.message === 'string' && errBody.message.includes('CSRF')) {
+      await ensureCsrfCookie();
+      const fresh = getCsrfToken();
+      if (fresh) headers['X-CSRF-Token'] = fresh;
+      response = await fetchWithRetry(
+        `${API_URL}${endpoint}`,
+        {
+          ...options,
+          headers,
+          credentials: 'include',
+        },
+      );
+    }
+  }
+
   if (response.status === 401) {
-    if (typeof window !== 'undefined') {
+    if (!isServer) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
@@ -43,7 +112,10 @@ export async function apiFetch(
   }
 
   if (!response.ok) {
-    throw new Error('Error en API');
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      error.message || `Error en API (${response.status})`,
+    );
   }
 
   return response.json();

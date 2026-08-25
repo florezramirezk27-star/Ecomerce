@@ -11,3 +11,4 @@ coverage/
 .cache/
 
 /generated/prisma
+opencode.json

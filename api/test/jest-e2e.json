@@ -5,5 +5,9 @@
   "testRegex": ".e2e-spec.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@ai-sdk/openai$": "<rootDir>/../src/__mocks__/@ai-sdk/openai.ts",
+    "^ai$": "<rootDir>/../src/__mocks__/ai.ts"
   }
 }

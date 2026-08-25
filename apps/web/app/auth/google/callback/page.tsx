@@ -1,29 +1,36 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { setAuth } from '@/lib/auth';
-import { API_URL } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 
 function CallbackContent() {
   const router = useRouter();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    const userStr = params.get('user');
+    const code = params.get('code');
 
-    if (token && userStr) {
+    if (!code) {
+      router.replace('/login?error=google_auth_failed');
+      return;
+    }
+
+    (async () => {
       try {
-        const user = JSON.parse(decodeURIComponent(userStr));
-        setAuth(token, user);
-        router.replace(user.role === 'ADMIN' ? '/admin' : '/');
+        const result = await apiFetch('/auth/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+
+        setAuth(result.user);
+        router.replace(result.user.role === 'ADMIN' ? '/admin' : '/');
       } catch {
         router.replace('/login?error=google_auth_failed');
       }
-    } else {
-      router.replace('/login?error=google_auth_failed');
-    }
+    })();
   }, [router]);
 
   return null;

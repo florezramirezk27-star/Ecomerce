@@ -265,10 +265,10 @@ export default function AdminOrdersPage() {
                   <div className="border-t border-gray-200 p-6 space-y-6">
                     <div>
                       <h4 className="font-bold text-gray-900 mb-4">
-                        Productos ({order.items.length})
+                        Productos ({order.items?.length ?? 0})
                       </h4>
                       <div className="space-y-3">
-                        {order.items.map((item) => (
+                        {(order.items ?? []).map((item) => (
                           <div
                             key={item.id}
                             className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg"
