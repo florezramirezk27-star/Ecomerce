@@ -3,20 +3,17 @@ import type { NextConfig } from "next";
 const isProd = process.env.NODE_ENV === "production";
 
 const SERVER_API = process.env.API_URL || "http://localhost:3001";
-const CLIENT_API = process.env.NEXT_PUBLIC_API_URL || "/api/proxy";
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:3001";
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "https://ecomerce-vslf.onrender.com";
 
 function extractOrigin(url: string): string {
   try { return new URL(url).origin; } catch { return url; }
 }
 
-const clientOrigin = extractOrigin(CLIENT_API);
 const wsOrigin = extractOrigin(WS_URL);
 const wsHost = wsOrigin.replace(/^https?:\/\//, "");
 
 const connectSrc = [
   "'self'",
-  clientOrigin,
   wsOrigin,
   `ws://${wsHost}`,
   `wss://${wsHost}`,
@@ -35,6 +32,7 @@ const csp = [
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
+  "media-src 'self' https://www.pexels.com https://videos.pexels.com",
 ].join("; ");
 
 const securityHeaders = [
