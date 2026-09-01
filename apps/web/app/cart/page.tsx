@@ -185,6 +185,7 @@ export default function CartPage() {
       shippingZip: "",
       notes: "",
     });
+    setMessage(null);
     setShowCheckout(true);
   };
 
@@ -271,7 +272,7 @@ export default function CartPage() {
     <main className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
-        {message && (
+        {message && !showCheckout && (
           <div className={`mb-6 p-4 rounded-xl text-sm font-medium flex items-center gap-3 ${
             message.type === "success"
               ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
@@ -575,6 +576,29 @@ export default function CartPage() {
                   </svg>
                 </button>
               </div>
+
+              {message && (
+                <div className={`mx-6 mt-5 mb-0 p-4 rounded-xl text-sm font-medium flex items-center gap-3 ${
+                  message.type === "success"
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    : "bg-red-50 text-red-700 border border-red-200"
+                }`}>
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                    message.type === "success" ? "bg-emerald-200" : "bg-red-200"
+                  }`}>
+                    {message.type === "success" ? (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    )}
+                  </span>
+                  {message.text}
+                </div>
+              )}
 
               <div className="px-6 py-5 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
