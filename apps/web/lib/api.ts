@@ -4,6 +4,16 @@ export const API_URL = isServer
   ? (process.env.API_URL || 'http://localhost:3001')
   : (process.env.NEXT_PUBLIC_API_URL || '/api/proxy');
 
+export function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('token');
+}
+
+export function setToken(token: string) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('token', token);
+}
+
 const CSRF_COOKIE_NAMES = ['__Host-csrf-token', 'csrf-token'];
 
 function getCsrfToken(): string | null {
@@ -64,11 +74,15 @@ async function performRefresh(): Promise<boolean> {
   try {
     await ensureCsrfCookie();
     const csrfToken = getCsrfToken();
+    const token = getToken();
+
+    if (!token) return false;
 
     const response = await fetchWithRetry(`${API_URL}/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
         ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
       },
       credentials: 'include',
@@ -78,6 +92,10 @@ async function performRefresh(): Promise<boolean> {
     if (!response.ok) return false;
 
     const data = await response.json();
+
+    if (data.access_token) {
+      setToken(data.access_token);
+    }
 
     if (data.user && !isServer) {
       localStorage.setItem('user', JSON.stringify(data.user));
@@ -114,6 +132,11 @@ export async function apiFetch(
 
   if (!isFormData) {
     headers['Content-Type'] = 'application/json';
+  }
+
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   const isSafeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(method);

@@ -1,4 +1,6 @@
-import { apiFetch } from "./api";
+import { apiFetch, getToken, setToken } from "./api";
+
+export { getToken, setToken };
 
 function notify() {
   if (typeof window !== "undefined") {
@@ -32,8 +34,10 @@ export function isAuthenticated(): boolean {
   return localStorage.getItem("user") !== null;
 }
 
-export function setAuth(user: { role: string }) {
-  localStorage.removeItem("token");
+export function setAuth(user: { role: string }, token?: string) {
+  if (token) {
+    localStorage.setItem("token", token);
+  }
   localStorage.setItem("user", JSON.stringify(user));
   notify();
 }

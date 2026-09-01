@@ -25,7 +25,7 @@ function CallbackContent() {
           body: JSON.stringify({ code }),
         });
 
-        setAuth(result.user);
+        setAuth(result.user, result.access_token);
         router.replace(result.user.role === 'ADMIN' ? '/admin' : '/');
       } catch {
         router.replace('/login?error=google_auth_failed');

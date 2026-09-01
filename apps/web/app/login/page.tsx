@@ -45,7 +45,7 @@ function LoginForm() {
 
     const data = await res.json();
 
-    setAuth(data.user);
+    setAuth(data.user, data.access_token);
 
     const redirect = searchParams.get("redirect");
     if (redirect && data.user.role === "ADMIN") {

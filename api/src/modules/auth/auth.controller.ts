@@ -104,7 +104,10 @@ export class AuthController {
     );
     this.setTokenCookie(res, result.access_token);
     setCsrfCookie(res, createCsrfToken());
-    return { user: result.user };
+    return {
+      user: result.user,
+      access_token: result.access_token,
+    };
   }
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -164,7 +167,10 @@ export class AuthController {
 
     this.setTokenCookie(res, result.access_token);
 
-    return { user: result.user };
+    return {
+      user: result.user,
+      access_token: result.access_token,
+    };
   }
 
   @Get('google')
@@ -204,7 +210,10 @@ export class AuthController {
     }
     this.setTokenCookie(res, result.access_token);
     setCsrfCookie(res, createCsrfToken());
-    return { user: result.user };
+    return {
+      user: result.user,
+      access_token: result.access_token,
+    };
   }
 
   @ApiBearerAuth()

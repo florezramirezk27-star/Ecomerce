@@ -31,6 +31,8 @@ const CSRF_EXCLUDED_PATHS = new Set([
   '/auth/google',
   '/auth/google/callback',
   '/auth/exchange',
+  '/auth/refresh',
+  '/auth/logout',
   '/chat/message',
   '/chat/history',
 ]);
