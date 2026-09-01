@@ -30,10 +30,11 @@ export class StockPriceTool implements AgentTool<StockPriceIn, StockPriceOut> {
       where.id = args.productId;
     } else if (args.slug) {
       where.slug = args.slug;
-    } else if (args.query) {
+    } else if (args.query && args.query.trim()) {
+      const q = args.query.trim();
       where.OR = [
-        { name: { contains: args.query, mode: 'insensitive' } },
-        { description: { contains: args.query, mode: 'insensitive' } },
+        { name: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
       ];
     }
 
@@ -54,7 +55,7 @@ export class StockPriceTool implements AgentTool<StockPriceIn, StockPriceOut> {
         oldPrice: p.oldPrice ? Number(p.oldPrice) : null,
         stock: p.stock,
         image: p.image,
-        categoryName: p.category.name,
+        categoryName: p.category?.name || 'General',
       })),
     };
   }

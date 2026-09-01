@@ -46,46 +46,58 @@ export class ChatController {
       );
     }
 
-    const context = await this.chatService.getOrCreateSession(
-      dto.sessionId,
-      userId,
-      userId ? undefined : dto.guestId,
-      userId ? undefined : dto.guestSecret,
-    );
-
-    await this.chatService.persistMessage(context.sessionId, 'user', message);
-
-    await this.aiService.updateConversationState(
-      context.sessionId,
-      context.intent || 'GENERAL',
-      message,
-    );
-
-    const result = await this.aiService.processMessage(
-      message,
-      context.messages,
-      {
-        sessionId: context.sessionId,
+    try {
+      const context = await this.chatService.getOrCreateSession(
+        dto.sessionId,
         userId,
-        isAdmin,
-      },
-    );
+        userId ? undefined : dto.guestId,
+        userId ? undefined : dto.guestSecret,
+      );
 
-    await this.chatService.persistMessage(
-      context.sessionId,
-      'assistant',
-      result.text,
-    );
+      await this.chatService.persistMessage(context.sessionId, 'user', message);
 
-    return {
-      sessionId: context.sessionId,
-      response: result.text,
-      ui: result.ui || undefined,
-      toolCalls: result.toolCalls,
-      ...(context.newGuestSecret
-        ? { guestSecret: context.newGuestSecret }
-        : {}),
-    };
+      await this.aiService
+        .updateConversationState(
+          context.sessionId,
+          context.intent || 'GENERAL',
+          message,
+        )
+        .catch(() => {});
+
+      const result = await this.aiService.processMessage(
+        message,
+        context.messages,
+        {
+          sessionId: context.sessionId,
+          userId,
+          isAdmin,
+        },
+      );
+
+      await this.chatService.persistMessage(
+        context.sessionId,
+        'assistant',
+        result.text,
+      );
+
+      return {
+        sessionId: context.sessionId,
+        response: result.text,
+        ui: result.ui || undefined,
+        toolCalls: result.toolCalls,
+        ...(context.newGuestSecret
+          ? { guestSecret: context.newGuestSecret }
+          : {}),
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        error?.message || 'Error al procesar el mensaje en el chat',
+        error?.status || 500,
+      );
+    }
   }
 
   @Get('history')

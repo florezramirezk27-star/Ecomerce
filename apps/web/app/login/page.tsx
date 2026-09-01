@@ -4,6 +4,8 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "@/lib/api";
+
+const CLIENT_API_URL = process.env.NEXT_PUBLIC_API_URL || "/api/proxy";
 import { setAuth } from "@/lib/auth";
 
 function LoginForm() {
@@ -106,7 +108,7 @@ function LoginForm() {
         </div>
 
         <a
-          href={`${API_URL}/auth/google`}
+          href={`${CLIENT_API_URL}/auth/google`}
           className="flex items-center justify-center gap-2 border border-gray-300 p-2 rounded hover:bg-gray-50 transition"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">

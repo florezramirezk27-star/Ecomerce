@@ -69,6 +69,51 @@ export class CartService {
     });
   }
 
+  async getCartTotal(userId: string) {
+    const cart = await this.prisma.cart.findUnique({
+      where: { userId },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+      },
+    });
+
+    if (!cart) {
+      return {
+        cartId: null,
+        total: 0,
+        items: [],
+      };
+    }
+
+    const items = cart.items.map((item) => {
+      const price = Number(item.product.price);
+      const quantity = item.quantity;
+
+      return {
+        productId: item.product.id,
+        name: item.product.name,
+        price,
+        quantity,
+        subtotal: price * quantity,
+      };
+    });
+
+    const total = items.reduce(
+      (sum, item) => sum + item.subtotal,
+      0,
+    );
+
+    return {
+      cartId: cart.id,
+      total,
+      items,
+    };
+  }
+
   async getCart(userId: string) {
     return this.prisma.cart.findUnique({
       where: { userId },

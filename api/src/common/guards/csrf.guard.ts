@@ -4,8 +4,15 @@ import {
   Injectable,
   ForbiddenException,
 } from '@nestjs/common';
-import { randomBytes, timingSafeEqual } from 'crypto';
+import { timingSafeEqual } from 'crypto';
 import { Response, Request } from 'express';
+
+import {
+  CSRF_COOKIE_NAME,
+  createCsrfToken,
+  isValidCsrfToken,
+  setCsrfCookie,
+} from '../csrf';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -40,25 +47,18 @@ export class CsrfGuard implements CanActivate {
     }
 
     if (SAFE_METHODS.has(req.method)) {
-      let csrfToken = req.cookies?.['csrf-token'];
-      if (!csrfToken) {
-        csrfToken = randomBytes(32).toString('hex');
-        res.cookie('csrf-token', csrfToken, {
-          httpOnly: false,
-          sameSite: 'lax',
-          path: '/',
-          secure: process.env.NODE_ENV === 'production',
-        });
+      if (!req.cookies?.[CSRF_COOKIE_NAME]) {
+        setCsrfCookie(res, createCsrfToken());
       }
       return true;
     }
 
-    const cookieToken = req.cookies?.['csrf-token'];
+    const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
     const headerToken = req.headers['x-csrf-token'] as string | undefined;
 
     if (
-      !cookieToken ||
-      !headerToken ||
+      !isValidCsrfToken(cookieToken) ||
+      !isValidCsrfToken(headerToken) ||
       !safeCompare(cookieToken, headerToken)
     ) {
       throw new ForbiddenException('CSRF token inválido');

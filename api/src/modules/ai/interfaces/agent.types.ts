@@ -48,7 +48,7 @@ export const StockPriceOutput = z.object({
 export type StockPriceOutput = z.infer<typeof StockPriceOutput>;
 
 export const TrackingInput = z.object({
-  guideId: z.string().min(1),
+  guideId: z.string().optional(),
   orderId: z.string().optional(),
 });
 export type TrackingInput = z.infer<typeof TrackingInput>;
@@ -62,29 +62,10 @@ export const TrackingOutput = z.object({
 });
 export type TrackingOutput = z.infer<typeof TrackingOutput>;
 
-export const DiscountInput = z.object({
-  sessionId: z.string(),
-  userId: z.string().optional(),
-  cartTotal: z.number().optional(),
-});
-export type DiscountInput = z.infer<typeof DiscountInput>;
-
-export const DiscountOutput = z.object({
-  success: z.boolean(),
-  code: z.string().optional(),
-  discountValue: z.number().optional(),
-  discountType: z.string().optional(),
-  expiresAt: z.string().optional(),
-  message: z.string().optional(),
-  error: z.string().optional(),
-});
-export type DiscountOutput = z.infer<typeof DiscountOutput>;
-
 export interface GenerativeUI {
   type:
     | 'product_card'
     | 'product_carousel'
-    | 'coupon'
     | 'quick_replies'
     | 'tracking_update'
     | 'order_summary';

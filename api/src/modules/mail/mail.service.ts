@@ -18,6 +18,25 @@ interface ShippingInfo {
   notes?: string | null;
 }
 
+function htmlToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<tr[^>]*>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/h[1-6]>/gi, '\n\n')
+    .replace(/<\/td>/gi, ' | ')
+    .replace(/<\/th>/gi, ' | ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -76,7 +95,7 @@ export class MailService {
 
     await this.sendHtml({
       to: adminEmail,
-      subject: `🛒 Nuevo pedido #${orderId.slice(0, 8)} — Kronio Market`,
+      subject: `Nuevo pedido #${orderId.slice(0, 8)} — Kronio Market`,
       tag: 'ADMIN ORDER NOTIFICATION',
       html: `<!DOCTYPE html>
 <html>
@@ -189,6 +208,7 @@ export class MailService {
           from: process.env.SMTP_FROM || 'noreply@ecommerce.com',
           to: options.to,
           subject: options.subject,
+          text: htmlToText(options.html),
           html: options.html,
         });
       } catch (err) {

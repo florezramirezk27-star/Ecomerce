@@ -1,5 +1,7 @@
 // Admin shared types and utilities
 
+import { refreshSession } from './api';
+
 export interface User {
   id: string;
   name: string;
@@ -158,8 +160,28 @@ async function fetchWithRetry(
 
 function getCsrfToken(): string | null {
   if (typeof window === 'undefined') return null;
-  const match = document.cookie.match(/(?:^|;\s*)csrf-token=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : null;
+  for (const name of ['__Host-csrf-token', 'csrf-token']) {
+    const matches = [
+      ...document.cookie.matchAll(
+        new RegExp(`(?:^|;\\s*)${name}=([^;]*)`, 'g'),
+      ),
+    ];
+    if (matches.length > 0) {
+      return decodeURIComponent(matches[matches.length - 1][1]);
+    }
+  }
+  return null;
+}
+
+async function ensureCsrfCookie(): Promise<void> {
+  if (getCsrfToken()) return;
+  try {
+    await fetch(`${API_BASE}/auth`, {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+  } catch {}
 }
 
 export const apiFetch = async (
@@ -170,20 +192,46 @@ export const apiFetch = async (
   const csrfHeaders: Record<string, string> = {};
 
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    await ensureCsrfCookie();
     const csrfToken = getCsrfToken();
     if (csrfToken) {
       csrfHeaders['X-CSRF-Token'] = csrfToken;
     }
   }
 
-  const response = await fetchWithRetry(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers: {
-      ...getAuthHeader(options?.body ?? undefined),
-      ...csrfHeaders,
-      ...options?.headers,
-    },
+  const buildHeaders = () => ({
+    ...getAuthHeader(options?.body ?? undefined),
+    ...csrfHeaders,
+    ...options?.headers,
   });
+
+  let response = await fetchWithRetry(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers: buildHeaders(),
+  });
+
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && response.status === 403) {
+    const errBody = await response.clone().json().catch(() => ({}));
+    if (typeof errBody.message === 'string' && errBody.message.includes('CSRF')) {
+      await ensureCsrfCookie();
+      const fresh = getCsrfToken();
+      if (fresh) csrfHeaders['X-CSRF-Token'] = fresh;
+      response = await fetchWithRetry(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers: buildHeaders(),
+      });
+    }
+  }
+
+  if (response.status === 401 && (await refreshSession())) {
+    const freshCsrf = getCsrfToken();
+    if (freshCsrf) csrfHeaders['X-CSRF-Token'] = freshCsrf;
+    response = await fetchWithRetry(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers: buildHeaders(),
+      credentials: 'include',
+    });
+  }
 
   if (response.status === 401) {
     if (typeof window !== 'undefined') {

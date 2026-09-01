@@ -28,7 +28,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
           );
         }
 
-        const expiresIn = config.get('JWT_EXPIRES_IN') || '7d';
+        const expiresIn = config.get('JWT_ACCESS_EXPIRES_IN') || '1h';
 
         return {
           secret: jwtSecret,

@@ -10,28 +10,11 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { sessionLifetimeMs } from '../../common/token-expiry';
 import { RegisterDto } from './dto/register.dto';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
-
-function parseExpiresIn(value: string): number {
-  const match = value.match(/^(\d+)([smhd])$/);
-  if (!match) return 7 * 86400000;
-  const num = parseInt(match[1], 10);
-  switch (match[2]) {
-    case 's':
-      return num * 1000;
-    case 'm':
-      return num * 60000;
-    case 'h':
-      return num * 3600000;
-    case 'd':
-      return num * 86400000;
-    default:
-      return 7 * 86400000;
-  }
-}
 
 @Injectable()
 export class AuthService {
@@ -69,7 +52,7 @@ export class AuthService {
   private async createSession(
     userId: string,
   ): Promise<{ id: string; token: string; expiresAt: Date }> {
-    const expiresInMs = parseExpiresIn(process.env.JWT_EXPIRES_IN || '7d');
+    const expiresInMs = sessionLifetimeMs();
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + expiresInMs);
 
@@ -78,6 +61,51 @@ export class AuthService {
     });
 
     return session;
+  }
+
+  async refreshSession(userId: string, currentSessionId: string) {
+    const session = await this.prisma.session.findUnique({
+      where: { id: currentSessionId },
+    });
+
+    if (
+      !session ||
+      session.userId !== userId ||
+      session.expiresAt < new Date()
+    ) {
+      throw new UnauthorizedException('Sesión expirada o inválida');
+    }
+
+    const newSession = await this.createSession(userId);
+
+    await this.prisma.session.deleteMany({
+      where: { id: session.id, userId },
+    });
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      sessionId: newSession.id,
+    };
+
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    };
   }
 
   async login(email: string, password: string) {

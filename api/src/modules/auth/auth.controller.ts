@@ -8,12 +8,14 @@ import {
   Req,
   Request,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import type { Response } from 'express';
+import { JwtService } from '@nestjs/jwt';
+import type { Request as ExpressRequest, Response } from 'express';
 
 import { z } from 'zod';
 
@@ -21,6 +23,8 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { WsTicketStore } from '../../common/ws-ticket.store';
+import { accessTokenLifetimeMs } from '../../common/token-expiry';
+import { createCsrfToken, setCsrfCookie } from '../../common/csrf';
 import {
   loginSchema,
   registerSchema,
@@ -28,27 +32,16 @@ import {
   resetPasswordSchema,
 } from '../../common/schemas';
 
-function parseExpiresInToMs(value: string): number {
-  const match = value.match(/^(\d+)([smhd])$/);
-  if (!match) return 7 * 86400000;
-  const num = parseInt(match[1], 10);
-  switch (match[2]) {
-    case 's':
-      return num * 1000;
-    case 'm':
-      return num * 60000;
-    case 'h':
-      return num * 3600000;
-    case 'd':
-      return num * 86400000;
-    default:
-      return 7 * 86400000;
-  }
+function accessTokenMs(): number {
+  return accessTokenLifetimeMs();
 }
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   @Get()
   test() {
@@ -59,8 +52,7 @@ export class AuthController {
 
   private setTokenCookie(res: Response, token: string) {
     const isProduction = process.env.NODE_ENV === 'production';
-    const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
-    const maxAge = parseExpiresInToMs(expiresIn);
+    const maxAge = accessTokenMs();
     res.cookie('token', token, {
       httpOnly: true,
       secure: isProduction,
@@ -89,8 +81,11 @@ export class AuthController {
       email: string;
       password: string;
     },
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.register(registerDto);
+    const result = await this.authService.register(registerDto);
+    setCsrfCookie(res, createCsrfToken());
+    return result;
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -108,9 +103,11 @@ export class AuthController {
       loginDto.password,
     );
     this.setTokenCookie(res, result.access_token);
+    setCsrfCookie(res, createCsrfToken());
     return { user: result.user };
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('forgot-password')
   forgotPassword(
     @Body(new ZodValidationPipe(forgotPasswordSchema)) dto: { email: string },
@@ -118,6 +115,7 @@ export class AuthController {
     return this.authService.forgotPassword(dto.email);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('reset-password')
   resetPassword(
     @Body(new ZodValidationPipe(resetPasswordSchema))
@@ -127,6 +125,46 @@ export class AuthController {
     },
   ) {
     return this.authService.resetPassword(dto.token, dto.password);
+  }
+
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @Post('refresh')
+  @HttpCode(200)
+  async refresh(
+    @Req() req: ExpressRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    let token: string | undefined;
+
+    if (req.headers.authorization?.startsWith('Bearer ')) {
+      token = req.headers.authorization.slice(7);
+    } else {
+      token = req.cookies?.['token'] as string | undefined;
+    }
+
+    if (!token) {
+      throw new UnauthorizedException('Token no encontrado');
+    }
+
+    let payload: { sub: string; sessionId?: string };
+    try {
+      payload = this.jwtService.verify(token, { ignoreExpiration: true });
+    } catch {
+      throw new UnauthorizedException('Token inválido');
+    }
+
+    if (!payload.sub || !payload.sessionId) {
+      throw new UnauthorizedException('Sesión inválida');
+    }
+
+    const result = await this.authService.refreshSession(
+      payload.sub,
+      payload.sessionId,
+    );
+
+    this.setTokenCookie(res, result.access_token);
+
+    return { user: result.user };
   }
 
   @Get('google')
@@ -165,6 +203,7 @@ export class AuthController {
       throw new HttpException('Código inválido o expirado', 400);
     }
     this.setTokenCookie(res, result.access_token);
+    setCsrfCookie(res, createCsrfToken());
     return { user: result.user };
   }
 

@@ -25,15 +25,6 @@ interface ProductSummary {
   };
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 export default function Home() {
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +33,14 @@ export default function Home() {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await (apiFetch("/products") as Promise<ProductSummary[]>);
+        const [data, saleProducts] = await Promise.all([
+          apiFetch("/products") as Promise<ProductSummary[]>,
+          apiFetch("/products?onSale=true") as Promise<ProductSummary[]>,
+        ]);
+
+        console.log("🔥 TODOS:", data);
+        console.log("🔥 OFERTAS:", saleProducts);
+
         setProducts(data);
       } catch (err) {
         console.error("Error al cargar productos:", err);
@@ -59,7 +57,20 @@ export default function Home() {
   }, []);
 
   const recommended = products.slice(0, 8);
-  const promotions = shuffle(products).slice(0, 8);
+  const promotions = products
+    .filter(
+      (p) =>
+        p.oldPrice !== null &&
+        p.oldPrice !== undefined &&
+        Number(p.oldPrice) > Number(p.price),
+    )
+    .sort(
+      (a, b) =>
+        Number(b.oldPrice) -
+        Number(b.price) -
+        (Number(a.oldPrice) - Number(a.price)),
+    )
+    .slice(0, 8);
   const homeProducts = products.filter(
     (p) => p.category?.slug === "hogar-y-decoracion",
   );

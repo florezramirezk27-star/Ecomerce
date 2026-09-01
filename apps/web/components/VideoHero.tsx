@@ -19,7 +19,6 @@ export default function VideoHero() {
         className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
           loaded ? "opacity-100" : "opacity-0"
         }`}
-        poster="https://images.pexels.com/videos/8306452/free-video-8306452.jpg?fit=crop&w=1920&h=1080&auto=compress&cs=tinysrgb"
       >
         <source
           src="https://www.pexels.com/download/video/8306452/"
