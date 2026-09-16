@@ -36,6 +36,7 @@ export class DropiAuthService implements OnModuleInit, OnModuleDestroy {
   private twoFactorSecret: string;
   private isLoggingIn = false;
   private reloginInterval: NodeJS.Timeout | null = null;
+  private apiTokenFailed = false;
 
   constructor(
     private readonly client: DropiClient,
@@ -214,20 +215,25 @@ export class DropiAuthService implements OnModuleInit, OnModuleDestroy {
 
   async getToken(): Promise<string> {
     if (this.activeToken) return this.activeToken;
-    if (this.apiToken) return this.apiToken;
+    if (this.apiToken && !this.apiTokenFailed) return this.apiToken;
     await this.login();
     return this.activeToken;
   }
 
   invalidateToken() {
-    if (!this.apiToken) {
-      this.activeToken = '';
+    if (this.apiToken) {
+      this.apiTokenFailed = true;
+      this.logger.warn(
+        'Dropi: API token del panel rechazado — se usará login BFF (email/contraseña + 2FA) para renovar',
+      );
     }
+    this.activeToken = '';
   }
 
   getStatus(): { connected: boolean; email: string } {
     return {
-      connected: !!this.activeToken || !!this.apiToken,
+      connected:
+        !!this.activeToken || (!!this.apiToken && !this.apiTokenFailed),
       email: this.email,
     };
   }

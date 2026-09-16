@@ -81,10 +81,16 @@ export class DropiProductsService {
 
     if (statusCode === 401) {
       this.logger.warn(
-        'Dropi token expired during catalog fetch, re-logging in...',
+        'Dropi token expirado/inválido durante catálogo, renovando token...',
       );
       this.auth.invalidateToken();
       const newToken = await this.auth.getToken();
+
+      if (!newToken) {
+        throw new Error(
+          'No se pudo renovar el token de Dropi: login BFF falló (credenciales/2FA inválidas o Dropi no disponible)',
+        );
+      }
 
       const retryResult = await this.client.request(
         '/bff/catalog/products/v4/index',
@@ -95,12 +101,12 @@ export class DropiProductsService {
       );
 
       if (retryResult.statusCode === 401) {
-        throw new Error('Dropi token renew failed during catalog fetch');
+        throw new Error(
+          'Dropi rechazó el token renovado: sesión inválida o cuenta deshabilitada',
+        );
       }
 
-      return this.normalizeCatalogEnvelope(
-        this.tryParse(retryResult.data),
-      );
+      return this.normalizeCatalogEnvelope(this.tryParse(retryResult.data));
     }
 
     return this.normalizeCatalogEnvelope(this.tryParse(data));
@@ -288,9 +294,7 @@ export class DropiProductsService {
     }
   }
 
-  private collectMedia(
-    items: DropiMediaItem[] | null | undefined,
-  ): string[] {
+  private collectMedia(items: DropiMediaItem[] | null | undefined): string[] {
     if (!Array.isArray(items)) return [];
     const urls: string[] = [];
     for (const it of items) {

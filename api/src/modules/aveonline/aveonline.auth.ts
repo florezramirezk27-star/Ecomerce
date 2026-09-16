@@ -27,6 +27,12 @@ export class AveonlineAuthService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    if (!this.email || !this.password) {
+      this.logger.warn(
+        'Aveonline no usado: AVEONLINE_USER/AVEONLINE_PASS vacíos, login automático omitido',
+      );
+      return;
+    }
     await this.login();
   }
 
@@ -35,6 +41,12 @@ export class AveonlineAuthService implements OnModuleInit, OnModuleDestroy {
   }
 
   async login(): Promise<void> {
+    if (!this.email || !this.password) {
+      this.logger.warn(
+        'Aveonline sin credenciales configuradas; login omitido',
+      );
+      return;
+    }
     if (this.isLoggingIn) return;
     this.isLoggingIn = true;
 
