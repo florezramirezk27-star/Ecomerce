@@ -196,8 +196,7 @@ export class DropiOrdersService {
         dropiOrderId: null,
         dropiGuideId: null,
         carrier: null,
-        status:
-          'Falta configuración de Dropi (proveedor/bodega/transportadora)',
+        status: `Falta configuración de Dropi (${this.lastMissingFields.join(', ')})`,
         rawResponse: null,
       };
     }
@@ -330,6 +329,8 @@ export class DropiOrdersService {
     );
   }
 
+  private lastMissingFields: string[] = [];
+
   private async enrichItemContext(
     item: DropiOrderItemInput,
   ): Promise<DropiOrderItemInput> {
@@ -399,11 +400,13 @@ export class DropiOrdersService {
     if (!shipping.state) missing.push('state');
 
     if (missing.length > 0) {
+      this.lastMissingFields = missing;
       this.logger.warn(
         `Dropi FINAL_ORDER incompleto, faltan: ${missing.join(', ')}`,
       );
       return null;
     }
+    this.lastMissingFields = [];
 
     const nameParts = (shipping.name || '').trim().split(/\s+/);
     const name = nameParts.shift() || 'Cliente';
