@@ -14,5 +14,6 @@ export { checkoutSchema } from './orders/checkout.schema';
 export { updateOrderStatusSchema } from './orders/update-order-status.schema';
 
 export { addToCartSchema } from './cart/add-to-cart.schema';
+export { updateCartItemSchema } from './cart/update-cart-item.schema';
 
 export { updateUserSchema } from './users/update-user.schema';

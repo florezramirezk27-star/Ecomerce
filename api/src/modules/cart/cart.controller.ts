@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -12,7 +13,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CartService } from './cart.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { addToCartSchema } from '../../common/schemas';
+import { addToCartSchema, updateCartItemSchema } from '../../common/schemas';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Cart')
@@ -39,5 +40,15 @@ export class CartController {
   @Delete(':id')
   removeItem(@Req() req, @Param('id') id: string) {
     return this.cartService.removeItem(req.user.id, id);
+  }
+
+  @Patch(':id')
+  updateItem(
+    @Req() req,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateCartItemSchema))
+    dto: { quantity: number },
+  ) {
+    return this.cartService.updateQuantity(req.user.id, id, dto.quantity);
   }
 }

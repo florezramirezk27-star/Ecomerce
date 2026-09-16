@@ -57,6 +57,7 @@ export default function ProductPage() {
     text: string;
   } | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [quantity, setQuantity] = useState(1);
 
   const fallbackImg =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600' fill='%23f3f4f6'%3E%3Crect width='600' height='600'/%3E%3Ctext x='50%25' y='50%25' fill='%239ca3af' font-size='18' text-anchor='middle' dy='.3em'%3ESin imagen%3C/text%3E%3C/svg%3E";
@@ -76,6 +77,7 @@ export default function ProductPage() {
       try {
         const data = await apiFetch(`/products/${slug}`);
         setProduct(data);
+        setQuantity(1);
         setError(null);
       } catch {
         setError("No pudimos cargar el producto. Intenta más tarde.");
@@ -94,10 +96,11 @@ export default function ProductPage() {
         price: product.price,
         image: product.image,
         slug: product.slug,
+        quantity,
       });
       setCartMessage({
         type: "success",
-        text: "✓ Producto agregado al carrito",
+        text: `✓ ${quantity} ${quantity === 1 ? "unidad" : "unidades"} agregadas al carrito`,
       });
       setTimeout(() => setCartMessage(null), 3000);
       return;
@@ -109,13 +112,13 @@ export default function ProductPage() {
         method: "POST",
         body: JSON.stringify({
           productId: product?.id,
-          quantity: 1,
+          quantity,
         }),
       });
 
       setCartMessage({
         type: "success",
-        text: "✓ Producto agregado al carrito",
+        text: `✓ ${quantity} ${quantity === 1 ? "unidad" : "unidades"} agregadas al carrito`,
       });
       setTimeout(() => setCartMessage(null), 3000);
     } catch (err) {
@@ -418,6 +421,37 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
                   />
                 </div>
               )}
+            </div>
+
+            <div className="flex items-center justify-between bg-white rounded-xl p-3 border border-gray-200 shadow-sm">
+              <span className="text-sm text-gray-600 font-medium">
+                Cantidad
+              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  disabled={!inStock}
+                  className="w-9 h-9 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-40 flex items-center justify-center text-lg font-bold text-gray-700 transition"
+                  aria-label="Disminuir cantidad"
+                >
+                  −
+                </button>
+                <span className="w-10 text-center text-lg font-bold text-gray-900">
+                  {quantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuantity((q) => Math.min(product.stock, q + 1))
+                  }
+                  disabled={!inStock || quantity >= product.stock}
+                  className="w-9 h-9 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-40 flex items-center justify-center text-lg font-bold text-gray-700 transition"
+                  aria-label="Aumentar cantidad"
+                >
+                  +
+                </button>
+              </div>
             </div>
 
             {cartMessage && (

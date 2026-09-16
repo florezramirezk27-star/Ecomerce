@@ -148,4 +148,43 @@ export class CartService {
       where: { id: cartItemId },
     });
   }
+
+  async updateQuantity(userId: string, cartItemId: string, quantity: number) {
+    if (quantity > 100) {
+      throw new BadRequestException('Cantidad inválida');
+    }
+
+    const cart = await this.prisma.cart.findUnique({
+      where: { userId },
+    });
+
+    if (!cart) {
+      throw new BadRequestException('Carrito no encontrado');
+    }
+
+    const item = await this.prisma.cartItem.findFirst({
+      where: {
+        id: cartItemId,
+        cartId: cart.id,
+      },
+      include: { product: true },
+    });
+
+    if (!item) {
+      throw new BadRequestException('Producto no encontrado en el carrito');
+    }
+
+    if (!item.product.active) {
+      throw new BadRequestException('Producto no disponible');
+    }
+
+    if (quantity > item.product.stock) {
+      throw new BadRequestException('Stock insuficiente');
+    }
+
+    return this.prisma.cartItem.update({
+      where: { id: cartItemId },
+      data: { quantity },
+    });
+  }
 }

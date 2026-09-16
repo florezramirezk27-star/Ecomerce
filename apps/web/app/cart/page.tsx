@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isAuthenticated } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
-import { getGuestCart, removeFromGuestCart, type GuestCartItem } from "@/lib/guest-cart";
+import { getGuestCart, removeFromGuestCart, updateGuestCartQuantity, type GuestCartItem } from "@/lib/guest-cart";
 
 interface CartItem {
   id: string;
@@ -16,6 +16,7 @@ interface CartItem {
     price: string | number;
     image: string;
     slug: string;
+    stock?: number;
   };
 }
 
@@ -59,6 +60,8 @@ function guestToCartItem(item: GuestCartItem, index: number): CartItem {
     },
   };
 }
+
+const MAX_QUANTITY = 99;
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "Pendiente",
@@ -152,6 +155,52 @@ export default function CartPage() {
       setTimeout(() => setMessage(null), 2000);
     } catch {
       setMessage({ type: "error", text: "Error al remover producto" });
+    }
+  };
+
+  const handleUpdateQuantity = async (cartItemId: string, delta: number) => {
+    if (!isAuthenticated()) {
+      const idx = parseInt(cartItemId.replace("guest-", ""), 10);
+      const guestItems = getGuestCart();
+      const guestItem = guestItems[idx];
+      if (!guestItem) return;
+      const next = Math.min(
+        MAX_QUANTITY,
+        Math.max(1, guestItem.quantity + delta),
+      );
+      updateGuestCartQuantity(guestItem.productId, next);
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === cartItemId ? { ...item, quantity: next } : item,
+        ),
+      );
+      return;
+    }
+
+    const item = items.find((i) => i.id === cartItemId);
+    if (!item) return;
+    const stock = item.product.stock ?? MAX_QUANTITY;
+    const next = Math.min(stock, Math.max(1, item.quantity + delta));
+    if (next === item.quantity) return;
+
+    try {
+      await apiFetch(`/cart/${cartItemId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ quantity: next }),
+      });
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === cartItemId ? { ...i, quantity: next } : i,
+        ),
+      );
+    } catch (err) {
+      setMessage({
+        type: "error",
+        text:
+          err instanceof Error
+            ? err.message
+            : "Error al actualizar cantidad",
+      });
     }
   };
 
@@ -338,9 +387,25 @@ export default function CartPage() {
                         {item.product.name}
                       </Link>
                       <p className="text-xs sm:text-sm text-gray-400 mt-0.5">{formatPrice(item.product.price)} c/u</p>
-                      <p className="text-xs text-gray-500 mt-1.5">
-                        Cantidad: <span className="font-semibold text-gray-700">{item.quantity}</span>
-                      </p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <button
+                          onClick={() => handleUpdateQuantity(item.id, -1)}
+                          className="w-7 h-7 rounded-md border border-gray-300 bg-white hover:bg-gray-100 flex items-center justify-center text-gray-700 text-sm font-bold transition disabled:opacity-40"
+                          aria-label="Disminuir cantidad"
+                        >
+                          −
+                        </button>
+                        <span className="min-w-7 text-center text-xs font-semibold text-gray-700">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => handleUpdateQuantity(item.id, 1)}
+                          className="w-7 h-7 rounded-md border border-gray-300 bg-white hover:bg-gray-100 flex items-center justify-center text-gray-700 text-sm font-bold transition disabled:opacity-40"
+                          aria-label="Aumentar cantidad"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex flex-col items-end justify-center gap-1 shrink-0">

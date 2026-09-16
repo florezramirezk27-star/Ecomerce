@@ -74,20 +74,21 @@ export class DropiService {
     const result = await this.orders.createOrder(data);
 
     if (orderId && result.results?.length) {
-      const first = result.results[0];
+      const firstOk = result.results.find((r) => r.dropiOrderId);
       const guideId =
-        first.dropiGuideId ||
+        firstOk?.dropiGuideId ||
         result.results.find((r) => r.dropiGuideId)?.dropiGuideId ||
         null;
 
       await this.tracking.upsertTracking(orderId, {
-        dropiOrderId: first.dropiOrderId || null,
+        dropiOrderId:
+          firstOk?.dropiOrderId || result.results[0]?.dropiOrderId || null,
         dropiGuideId: guideId,
-        carrier: first.carrier || 'Dropi',
-        status: first.status || (result.success ? 'CREATED' : 'ERROR'),
+        carrier: firstOk?.carrier || result.results[0]?.carrier || 'Dropi',
+        status: result.message || (result.success ? 'CREATED' : 'ERROR'),
         lastEvent: result.success
           ? 'Orden creada en Dropi'
-          : 'Error al crear orden en Dropi',
+          : 'Error al crear orden(es) en Dropi',
         rawResponse: result.results,
       });
     }

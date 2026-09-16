@@ -170,7 +170,22 @@ export class DropiOrdersService {
     shipping: DropiOrderShippingInput,
     token: string,
   ): Promise<DropiOrderResult> {
-    const enriched = await this.enrichItemContext(item);
+    let enriched: DropiOrderItemInput;
+    try {
+      enriched = await this.enrichItemContext(item);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'unknown error';
+      this.logger.error(
+        `Dropi: falló resolver contexto de ${item.name} (${item.dropiProductId}): ${message}`,
+      );
+      return {
+        dropiOrderId: null,
+        dropiGuideId: null,
+        carrier: null,
+        status: `Error al resolver producto en Dropi (${item.name}): ${message}`,
+        rawResponse: null,
+      };
+    }
 
     const minPrice =
       enriched.suggestedPrice && enriched.suggestedPrice > 0
@@ -282,9 +297,7 @@ export class DropiOrdersService {
     return parsed;
   }
 
-  private parseCancelResponse(
-    res: DropiHttpResponse,
-  ): DropiCancelResult {
+  private parseCancelResponse(res: DropiHttpResponse): DropiCancelResult {
     let body: any = {};
     try {
       body = JSON.parse(res.data);
@@ -297,8 +310,7 @@ export class DropiOrdersService {
       body.isSuccess !== false;
     return {
       success: ok,
-      error:
-        body.message || body.status_reason || body.error || undefined,
+      error: body.message || body.status_reason || body.error || undefined,
       rawResponse: body,
     };
   }
@@ -408,6 +420,8 @@ export class DropiOrdersService {
     }
     this.lastMissingFields = [];
 
+    const state = this.normalizeDepartment(shipping.state || '');
+
     const nameParts = (shipping.name || '').trim().split(/\s+/);
     const name = nameParts.shift() || 'Cliente';
     const surname = nameParts.join(' ') || '';
@@ -443,7 +457,7 @@ export class DropiOrdersService {
       shalom_data: null,
       shipping_amount: shippingAmount,
       shop_id: null,
-      state: shipping.state,
+      state,
       supplier_id: supplierId,
       type: 'FINAL_ORDER',
       type_service: 'normal',
@@ -451,6 +465,108 @@ export class DropiOrdersService {
       warehouses_selected_id: warehouseId,
       zip_code: shipping.zip ?? null,
     };
+  }
+
+  private normalizeDepartment(input: string): string {
+    const trimmed = input.trim();
+    if (!trimmed) return trimmed;
+
+    const departments = [
+      'AMAZONAS',
+      'ANTIOQUIA',
+      'ARAUCA',
+      'ATLANTICO',
+      'BOLIVAR',
+      'BOYACA',
+      'CALDAS',
+      'CAQUETA',
+      'CASANARE',
+      'CAUCA',
+      'CESAR',
+      'CHOCO',
+      'CORDOBA',
+      'CUNDINAMARCA',
+      'GUAINIA',
+      'GUAVIARE',
+      'HUILA',
+      'LA GUAJIRA',
+      'MAGDALENA',
+      'META',
+      'NARINO',
+      'NORTE DE SANTANDER',
+      'PUTUMAYO',
+      'QUINDIO',
+      'RISARALDA',
+      'SAN ANDRES Y PROVIDENCIA',
+      'SANTANDER',
+      'SUCRE',
+      'TOLIMA',
+      'VALLE DEL CAUCA',
+      'VAUPES',
+      'VICHADA',
+      'BOGOTA',
+      'BOGOTA D.C.',
+    ];
+
+    const normalize = (s: string): string =>
+      s
+        .toLowerCase()
+        .replace(/[áàâä]/g, 'a')
+        .replace(/[éèêë]/g, 'e')
+        .replace(/[íìîï]/g, 'i')
+        .replace(/[óòôö]/g, 'o')
+        .replace(/[úùûü]/g, 'u')
+        .replace(/[ñ]/g, 'n')
+        .replace(/[^a-z0-9 ]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const normalized = normalize(trimmed);
+    if (!normalized) return trimmed;
+
+    const exact = departments.find((d) => normalize(d) === normalized);
+    if (exact) return exact;
+
+    let best: string | null = null;
+    let bestScore = Infinity;
+    for (const d of departments) {
+      const score = this.levenshtein(normalized, normalize(d));
+      if (score < bestScore) {
+        bestScore = score;
+        best = d;
+      }
+    }
+
+    if (best && bestScore <= Math.max(2, Math.floor(normalized.length / 3))) {
+      this.logger.log(
+        `Dropi: departamento "${trimmed}" normalizado a "${best}"`,
+      );
+      return best;
+    }
+
+    return trimmed;
+  }
+
+  private levenshtein(a: string, b: string): number {
+    const m = a.length;
+    const n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+    const dp: number[] = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) {
+      let prev = dp[0];
+      dp[0] = i;
+      for (let j = 1; j <= n; j++) {
+        const tmp = dp[j];
+        dp[j] = Math.min(
+          dp[j] + 1,
+          dp[j - 1] + 1,
+          prev + (a[i - 1] === b[j - 1] ? 0 : 1),
+        );
+        prev = tmp;
+      }
+    }
+    return dp[n];
   }
 
   private extractOrderId(parsed: DropiBffOrderResponse | null): string | null {

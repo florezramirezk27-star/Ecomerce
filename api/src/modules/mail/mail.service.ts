@@ -43,6 +43,26 @@ export class MailService {
   private transporter: nodemailer.Transporter | null = null;
 
   constructor() {
+    const clean = (v?: string): string | undefined => {
+      if (!v) return v;
+      let s = v.trim();
+      if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+        s = s.slice(1, -1).trim();
+      }
+      return s;
+    };
+
+    for (const key of [
+      'SMTP_HOST',
+      'SMTP_PORT',
+      'SMTP_USER',
+      'SMTP_PASS',
+      'SMTP_FROM',
+    ]) {
+      const v = process.env[key];
+      if (v) process.env[key] = clean(v);
+    }
+
     const host = process.env.SMTP_HOST;
     const port = process.env.SMTP_PORT;
     const user = process.env.SMTP_USER;

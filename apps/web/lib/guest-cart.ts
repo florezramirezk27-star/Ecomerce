@@ -47,6 +47,18 @@ export function removeFromGuestCart(
   return cart;
 }
 
+export function updateGuestCartQuantity(
+  productId: string,
+  quantity: number,
+): GuestCartItem[] {
+  const cart = getGuestCart().map((i) =>
+    i.productId === productId ? { ...i, quantity } : i,
+  );
+  localStorage.setItem(GUEST_CART_KEY, JSON.stringify(cart));
+  window.dispatchEvent(new Event("cart-change"));
+  return cart;
+}
+
 export function clearGuestCart() {
   localStorage.removeItem(GUEST_CART_KEY);
   window.dispatchEvent(new Event("cart-change"));
