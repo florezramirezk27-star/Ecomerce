@@ -50,14 +50,18 @@ interface DropiProduct {
   description: string | null;
 }
 
-const DROPI_CDN = 'https://api.dropi.co/';
+const DROPI_CDN = process.env.NEXT_PUBLIC_DROPI_CDN || 'https://d39ru7awumhhs2.cloudfront.net/';
+
+function dropiImageUrl(raw?: string | null): string | null {
+  if (!raw) return null;
+  if (/^https?:\/\//.test(raw)) return raw;
+  return `${DROPI_CDN}${raw}`;
+}
 
 function getImageUrl(product: DropiProduct): string | null {
   const main =
     product.gallery?.find((g) => g.main) || product.gallery?.[0];
-  if (main?.url) return `${DROPI_CDN}${main.url}`;
-  if (main?.urlS3) return `${DROPI_CDN}${main.urlS3}`;
-  return null;
+  return dropiImageUrl(main?.url || main?.urlS3);
 }
 
 function formatCOP(price: number) {
@@ -373,7 +377,7 @@ export default function DropiCatalogPage() {
                 <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden">
                   {(() => {
                     const mainImg = selectedProduct.gallery?.find(g => g.main) || selectedProduct.gallery?.[0];
-                    const src = mainImg?.url ? `${DROPI_CDN}${mainImg.url}` : mainImg?.urlS3 ? `${DROPI_CDN}${mainImg.urlS3}` : null;
+                    const src = dropiImageUrl(mainImg?.url || mainImg?.urlS3);
                     return src ? (
                       <img src={src} alt={selectedProduct.name} className="w-full h-full object-cover"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -389,7 +393,7 @@ export default function DropiCatalogPage() {
                 {selectedProduct.gallery && selectedProduct.gallery.length > 1 && (
                   <div className="flex gap-2 overflow-x-auto pb-2">
                     {selectedProduct.gallery.map((g, i) => {
-                      const thumbSrc = g.url ? `${DROPI_CDN}${g.url}` : g.urlS3 ? `${DROPI_CDN}${g.urlS3}` : null;
+                      const thumbSrc = dropiImageUrl(g.url || g.urlS3);
                       return thumbSrc ? (
                         <div key={i} className="w-16 h-16 rounded-lg overflow-hidden border shrink-0 bg-gray-100">
                           <img src={thumbSrc} alt="" className="w-full h-full object-cover"
@@ -513,7 +517,7 @@ export default function DropiCatalogPage() {
                     <p className="text-sm text-gray-600">Imágenes del producto ({selectedProduct.gallery.length})</p>
                     <div className="flex gap-2 overflow-x-auto pb-2">
                       {selectedProduct.gallery.map((g, i) => {
-                        const src = g.url ? `${DROPI_CDN}${g.url}` : g.urlS3 ? `${DROPI_CDN}${g.urlS3}` : null;
+                        const src = dropiImageUrl(g.url || g.urlS3);
                         return src ? (
                           <div key={i} className="w-20 h-20 rounded-lg overflow-hidden border shrink-0 bg-gray-100">
                             <img src={src} alt="" className="w-full h-full object-cover"

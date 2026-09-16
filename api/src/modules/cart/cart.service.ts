@@ -102,10 +102,7 @@ export class CartService {
       };
     });
 
-    const total = items.reduce(
-      (sum, item) => sum + item.subtotal,
-      0,
-    );
+    const total = items.reduce((sum, item) => sum + item.subtotal, 0);
 
     return {
       cartId: cart.id,

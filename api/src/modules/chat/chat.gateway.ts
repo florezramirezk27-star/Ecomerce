@@ -56,8 +56,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.data.authReady = (async () => {
       client.data.user = await this.resolveUser(ticket);
       client.data.guestSecret = client.handshake.auth?.guestSecret as
-        | string
-        | undefined;
+        string | undefined;
     })();
 
     await client.data.authReady;

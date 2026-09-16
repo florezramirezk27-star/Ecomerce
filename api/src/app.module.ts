@@ -17,6 +17,8 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { MailModule } from './modules/mail/mail.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { DropiModule } from './modules/dropi/dropi.module';
+import { DropiIntegrationModule } from './modules/dropi-integration/dropi-integration.module';
+import { AveonlineModule } from './modules/aveonline/aveonline.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { AIModule } from './modules/ai/ai.module';
 import { CsrfGuard } from './common/guards/csrf.guard';
@@ -47,6 +49,8 @@ import { RedisModule } from './common/redis/redis.module';
     MailModule,
     SettingsModule,
     DropiModule,
+    DropiIntegrationModule,
+    AveonlineModule,
     ChatModule,
     AIModule,
   ],

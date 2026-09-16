@@ -20,6 +20,7 @@ interface Product {
   image: string;
   gallery: string[];
   video?: string;
+  videos?: string[];
   category?: {
     id: string;
     name: string;
@@ -55,8 +56,7 @@ export default function ProductPage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
-  const [selectedImage, setSelectedImage] = useState(0);
-  const [showVideo, setShowVideo] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   const fallbackImg =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600' fill='%23f3f4f6'%3E%3Crect width='600' height='600'/%3E%3Ctext x='50%25' y='50%25' fill='%239ca3af' font-size='18' text-anchor='middle' dy='.3em'%3ESin imagen%3C/text%3E%3C/svg%3E";
@@ -194,9 +194,35 @@ export default function ProductPage() {
   return `${startStr} - ${endStr}`;
 }
 
-const videoEmbedUrl = product.video
-    ? getYouTubeEmbed(product.video) || getVimeoEmbed(product.video)
-    : null;
+type MediaItem =
+  | { kind: "image"; src: string }
+  | { kind: "video"; src: string; embed: string | null };
+
+const mediaItems: MediaItem[] = [];
+if (product) {
+  for (const src of [product.image, ...(product.gallery || [])].filter(
+    Boolean,
+  )) {
+    if (!mediaItems.some((m) => m.src === src)) {
+      mediaItems.push({ kind: "image", src });
+    }
+  }
+  const videoSources = [
+    ...(product.videos || []),
+    ...(product.video ? [product.video] : []),
+  ].filter(Boolean);
+  for (const src of videoSources) {
+    if (!mediaItems.some((m) => m.src === src)) {
+      mediaItems.push({
+        kind: "video",
+        src,
+        embed: getYouTubeEmbed(src) || getVimeoEmbed(src),
+      });
+    }
+  }
+}
+
+const selectedMedia = mediaItems[selectedIndex] ?? null;
 
   return (
     <main className="min-h-screen bg-orange-50">
@@ -236,19 +262,32 @@ const videoEmbedUrl = product.video
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           <div className="space-y-4 h-full">
-            <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 h-full">
-              {showVideo && videoEmbedUrl ? (
-                <div className="aspect-video h-full">
-                  <iframe
-                    src={videoEmbedUrl}
-                    className="w-full h-full"
-                    allowFullScreen
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+<div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 h-full">
+              {selectedMedia?.kind === "video" ? (
+                selectedMedia.embed ? (
+                  <div className="aspect-video h-full">
+                    <iframe
+                      src={selectedMedia.embed}
+                      className="w-full h-full"
+                      allowFullScreen
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    />
+                  </div>
+                ) : (
+                  <video
+                    key={selectedMedia.src}
+                    src={selectedMedia.src}
+                    controls
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-full h-full object-contain bg-black"
                   />
-                </div>
+                )
               ) : (
                 <img
-                  src={allImages[selectedImage] || product.image}
+                  src={selectedMedia?.src || product.image}
                   alt={product.name}
                   onError={handleImgError}
                   className="w-full h-full object-cover"
@@ -256,61 +295,66 @@ const videoEmbedUrl = product.video
               )}
             </div>
 
-            {allImages.length > 1 && (
+            {mediaItems.length > 1 && (
               <div className="flex gap-2 overflow-x-auto pb-2">
-                {allImages.map((url, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => {
-                      setSelectedImage(i);
-                      setShowVideo(false);
-                    }}
-                    className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
-                      selectedImage === i && !showVideo
-                        ? "border-blue-500 ring-2 ring-blue-200"
-                        : "border-gray-200 hover:border-gray-400"
-                    }`}
-                  >
-                    <img
-                      src={url}
-                      alt={`${product.name} ${i + 1}`}
-                      onError={handleImgError}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
-                {videoEmbedUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setShowVideo(true)}
-                    className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 bg-gray-900 flex items-center justify-center transition-all ${
-                      showVideo
-                        ? "border-blue-500 ring-2 ring-blue-200"
-                        : "border-gray-200 hover:border-gray-400"
-                    }`}
-                  >
-                    <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </button>
+                {mediaItems.map((item, i) =>
+                  item.kind === "video" ? (
+                    <button
+                      key={item.src}
+                      type="button"
+                      onClick={() => setSelectedIndex(i)}
+                      className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 bg-gray-900 flex items-center justify-center transition-all ${
+                        selectedIndex === i
+                          ? "border-blue-500 ring-2 ring-blue-200"
+                          : "border-gray-200 hover:border-gray-400"
+                      }`}
+                    >
+                      <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <button
+                      key={item.src}
+                      type="button"
+                      onClick={() => setSelectedIndex(i)}
+                      className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                        selectedIndex === i
+                          ? "border-blue-500 ring-2 ring-blue-200"
+                          : "border-gray-200 hover:border-gray-400"
+                      }`}
+                    >
+                      <img
+                        src={item.src}
+                        alt={`${product.name} ${i + 1}`}
+                        onError={handleImgError}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ),
                 )}
               </div>
             )}
 
-            {videoEmbedUrl && !showVideo && allImages.length <= 1 && (
-              <button
-                type="button"
-                onClick={() => setShowVideo(true)}
-                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-semibold"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-                Ver video del producto
-              </button>
-            )}
-          </div>
+            {mediaItems.some((m) => m.kind === "video") &&
+              allImages.length <= 1 &&
+              selectedMedia?.kind !== "video" && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedIndex(
+                      mediaItems.findIndex((m) => m.kind === "video"),
+                    )
+                  }
+                  className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-semibold"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                  Ver video del producto
+                </button>
+              )}
+            </div>
 
           <div className="flex flex-col justify-between gap-6">
             <div className="flex flex-col gap-6">

@@ -18,7 +18,10 @@ describe('AppController (e2e)', () => {
       controllers: [AppController],
       providers: [
         { provide: PrismaService, useValue: prismaMock },
-        { provide: RedisService, useValue: { ping: jest.fn().mockResolvedValue(false) } },
+        {
+          provide: RedisService,
+          useValue: { ping: jest.fn().mockResolvedValue(false) },
+        },
       ],
     }).compile();
 

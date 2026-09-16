@@ -22,6 +22,8 @@ export default function AdminDropiPage() {
   const [status, setStatus] = useState<{ connected: boolean; email: string } | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [reconnecting, setReconnecting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
     setStatusLoading(true);
@@ -65,6 +67,26 @@ export default function AdminDropiPage() {
     } finally {
       setReconnecting(false);
       setStatusLoading(false);
+    }
+  };
+
+  const handleSyncStock = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const summary = await apiFetch('/dropi/sync-stock', { method: 'POST' });
+      setSyncMessage(
+        `Sincronizados ${summary.updated} de ${summary.checked} productos importados.`,
+      );
+      apiFetch('/products?limit=10')
+        .then((data) =>
+          setProducts(Array.isArray(data) ? data : data.items || []),
+        )
+        .catch(() => {});
+    } catch {
+      setSyncMessage('Error al sincronizar stock con Dropi.');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -130,6 +152,22 @@ export default function AdminDropiPage() {
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
           Productos importados recientemente
         </h2>
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={handleSyncStock}
+            disabled={syncing}
+            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow"
+          >
+            {syncing ? 'Sincronizando...' : 'Sincronizar stock y precios'}
+          </button>
+          {syncMessage && (
+            <span
+              className={`text-sm ${syncMessage.startsWith('Error') ? 'text-red-600' : 'text-gray-600'}`}
+            >
+              {syncMessage}
+            </span>
+          )}
+        </div>
         {loading ? (
           <div className="text-center py-8">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

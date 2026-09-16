@@ -44,7 +44,11 @@ export class CsrfGuard implements CanActivate {
     const res = context.switchToHttp().getResponse<Response>();
     const path = req.path;
 
-    if (CSRF_EXCLUDED_PATHS.has(path) || path.startsWith('/chat/')) {
+    if (
+      CSRF_EXCLUDED_PATHS.has(path) ||
+      path.startsWith('/chat/') ||
+      path.startsWith('/wp-json/')
+    ) {
       return true;
     }
 

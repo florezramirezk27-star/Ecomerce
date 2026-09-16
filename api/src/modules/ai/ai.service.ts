@@ -7,7 +7,11 @@ import { StockPriceTool } from './tools/stock-price.tool';
 import { TrackingTool } from './tools/tracking.tool';
 import { RAGService } from './rag/rag.service';
 import { PromptInjectionGuard } from './guardrails/prompt-injection.guard';
-import { ToolContext, GenerativeUI, AIStreamMessage } from './interfaces/agent.types';
+import {
+  ToolContext,
+  GenerativeUI,
+  AIStreamMessage,
+} from './interfaces/agent.types';
 
 interface AgentConfig {
   sessionId: string;
@@ -49,9 +53,12 @@ export class AIService {
     private readonly ragService: RAGService,
     private readonly promptInjectionGuard: PromptInjectionGuard,
   ) {
-    const apiKey = this.configService.get<string>('GOOGLE_GENERATIVE_AI_API_KEY');
+    const apiKey = this.configService.get<string>(
+      'GOOGLE_GENERATIVE_AI_API_KEY',
+    );
     this.hasApiKey = !!apiKey;
-    const modelName = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.5-flash';
+    const modelName =
+      this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.5-flash';
     this.model = google(modelName);
 
     this.systemPrompt = `Eres "KronioBot", un agente de ventas inteligente de Kronio Market, una tienda online colombiana.

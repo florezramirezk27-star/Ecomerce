@@ -52,6 +52,29 @@ export class OrdersService {
       throw new BadRequestException('Cart is empty');
     }
 
+    const dropiCartItems = cart.items.filter((i) => i.product.dropiProductId);
+    if (dropiCartItems.length > 0) {
+      const stockCheck = await this.dropiService.validateStock(
+        dropiCartItems.map((i) => ({
+          dropiProductId: i.product.dropiProductId!,
+          quantity: i.quantity,
+          name: i.product.name,
+        })),
+      );
+
+      if (!stockCheck.ok) {
+        const insufficient = stockCheck.insufficient
+          .map(
+            (s) =>
+              `${s.name} (solicitado: ${s.requested}, disponible en Dropi: ${s.available})`,
+          )
+          .join(', ');
+        throw new BadRequestException(
+          `Stock insuficiente en proveedor para: ${insufficient}`,
+        );
+      }
+    }
+
     const order = await this.prisma.$transaction(async (tx) => {
       const productIds = cart.items.map((i) => i.productId);
       const products = await tx.product.findMany({
@@ -170,23 +193,26 @@ export class OrdersService {
 
     if (dropiItems.length > 0) {
       try {
-        const result = await this.dropiService.createOrder({
-          items: dropiItems.map((i) => ({
-            dropiProductId: i.product.dropiProductId!,
-            quantity: i.quantity,
-            price: Number(i.product.price),
-            name: i.product.name,
-          })),
-          shipping: {
-            name: dto.shippingName,
-            phone: dto.shippingPhone,
-            email: dto.shippingEmail || undefined,
-            address: dto.shippingAddress,
-            city: dto.shippingCity,
-            state: dto.shippingState,
-            notes: dto.notes || undefined,
+        const result = await this.dropiService.createOrder(
+          {
+            items: dropiItems.map((i) => ({
+              dropiProductId: i.product.dropiProductId!,
+              quantity: i.quantity,
+              price: Number(i.product.price),
+              name: i.product.name,
+            })),
+            shipping: {
+              name: dto.shippingName,
+              phone: dto.shippingPhone,
+              email: dto.shippingEmail || undefined,
+              address: dto.shippingAddress,
+              city: dto.shippingCity,
+              state: dto.shippingState,
+              notes: dto.notes || undefined,
+            },
           },
-        });
+          order.id,
+        );
         dropiStatus = result.message;
       } catch (err: any) {
         dropiStatus = `Dropi error: ${err.message}`;
@@ -311,6 +337,41 @@ export class OrdersService {
     let updatedOrder;
 
     if (status === 'CANCELLED') {
+      const tracking = await this.prisma.orderTracking.findUnique({
+        where: { orderId: id },
+      });
+      const dropiOrderId = tracking?.dropiOrderId;
+
+      let dropiCancel: Awaited<ReturnType<DropiService['cancelOrder']>> | null =
+        null;
+      if (dropiOrderId) {
+        try {
+          dropiCancel = await this.dropiService.cancelOrder(
+            Number(dropiOrderId),
+          );
+        } catch (e: any) {
+          dropiCancel = {
+            success: false,
+            error: e.message || 'Error al cancelar en Dropi',
+            rawResponse: null,
+          };
+        }
+        if (tracking) {
+          await this.prisma.orderTracking.update({
+            where: { orderId: id },
+            data: {
+              status: dropiCancel.success
+                ? 'CANCELLED'
+                : tracking.status || dropiCancel.error,
+              lastEvent: dropiCancel.success
+                ? 'Cancelada en Dropi'
+                : `Error al cancelar en Dropi: ${dropiCancel.error || ''}`,
+              checkedAt: new Date(),
+            },
+          });
+        }
+      }
+
       updatedOrder = await this.prisma.$transaction(async (tx) => {
         for (const item of order.items) {
           await tx.product.update({

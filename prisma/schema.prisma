@@ -89,13 +89,16 @@ model Product {
   description String?
   price       Decimal   @db.Decimal(10,2)
   oldPrice    Decimal?  @db.Decimal(10,2)
-  customCode      String?
-  dropiProductId  Int?
+  customCode          String?
+  dropiProductId      Int?
+  aveonlineProviderId Int?
+  aveonlineProductRef String?
   stock               Int
   lowStockThreshold   Int       @default(5)
   image       String?
   gallery     String[]
   video       String?
+  videos      String[]
   active      Boolean   @default(true)
 
   categoryId  String
@@ -168,6 +171,9 @@ model CartItem {
 model Order {
   id        String       @id @default(cuid())
 
+  // Dropi/WooCommerce requiere IDs de pedido numéricos enteros
+  numericId Int          @unique @default(autoincrement())
+
   userId    String
   user      User         @relation(fields: [userId], references: [id])
 
@@ -214,7 +220,12 @@ model OrderTracking {
   id            String   @id @default(cuid())
   orderId       String   @unique
   order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  dropiOrderId  String?
   dropiGuideId  String?
+  trackingUrl   String?
+  guidePdfUrl   String?
+  aveonlineOrderId String?
+  aveonlineGuideId String?
   carrier       String?
   status        String   @default("PENDING")
   lastEvent     String?

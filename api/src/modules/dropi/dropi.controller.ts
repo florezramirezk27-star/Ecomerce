@@ -3,10 +3,12 @@ import {
   Controller,
   Get,
   HttpException,
+  Param,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { DropiQuoteParams } from './dropi.types';
 import { DropiService } from './dropi.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -70,6 +72,68 @@ export class DropiController {
         error instanceof Error ? error.message : 'Error al importar';
       throw new HttpException(message, 500);
     }
+  }
+
+  @Get('tracking/:orderId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async getTracking(
+    @Param('orderId') orderId: string,
+    @Query('updateOrder') updateOrder?: string,
+  ) {
+    try {
+      if (updateOrder === 'true') {
+        return await this.dropiService.syncOrderStatus(orderId);
+      }
+      const data = await this.dropiService.trackByOrderId(orderId);
+      if (!data) {
+        throw new HttpException(
+          'No se encontró guía de rastreo para esta orden',
+          404,
+        );
+      }
+      return data;
+    } catch (error: unknown) {
+      if (error instanceof HttpException) throw error;
+      const message =
+        error instanceof Error ? error.message : 'Error al rastrear';
+      throw new HttpException(message, 500);
+    }
+  }
+
+  @Post('sync-orders')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async syncOrders() {
+    return this.dropiService.syncAllPendingOrders();
+  }
+
+  @Post('sync-stock')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async syncStock(@Body('dropiProductIds') ids?: number[]) {
+    return this.dropiService.syncStock(Array.isArray(ids) ? ids : undefined);
+  }
+
+  @Post('orders')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async createOrder(@Body() payload: Record<string, unknown>) {
+    return this.dropiService.createFinalOrder(payload);
+  }
+
+  @Post('orders/quote')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async quoteShipping(@Body() params: Record<string, unknown>) {
+    return this.dropiService.quoteShipping(
+      params as unknown as DropiQuoteParams,
+    );
+  }
+
+  @Post('webhook')
+  async webhook(@Body() payload: any) {
+    return this.dropiService.handleWebhook(payload);
   }
 
   @Post('relogin')

@@ -23,7 +23,9 @@ describe('Integration (e2e)', () => {
         onModuleInit: jest.fn(),
         onModuleDestroy: jest.fn(),
         login: jest.fn(),
-        createOrder: jest.fn().mockResolvedValue({ success: true, message: 'mocked' }),
+        createOrder: jest
+          .fn()
+          .mockResolvedValue({ success: true, message: 'mocked' }),
         getStatus: jest.fn().mockResolvedValue({ connected: false, email: '' }),
         relogin: jest.fn(),
         forceRelogin: jest.fn(),
@@ -36,14 +38,18 @@ describe('Integration (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     await app.init();
     http = app.getHttpServer();
     prisma = app.get(PrismaService);
   }, 30000);
 
   afterAll(async () => {
-    await prisma.user.deleteMany({ where: { email: TEST_EMAIL } }).catch(() => {});
+    await prisma.user
+      .deleteMany({ where: { email: TEST_EMAIL } })
+      .catch(() => {});
     await prisma.$disconnect().catch(() => {});
     http?.close();
     await app.close().catch(() => {});
@@ -73,7 +79,9 @@ describe('Integration (e2e)', () => {
       expect(res.body).not.toHaveProperty('password');
       expect(res.body).not.toHaveProperty('passwordHash');
 
-      const dbUser = await prisma.user.findUnique({ where: { email: TEST_EMAIL } });
+      const dbUser = await prisma.user.findUnique({
+        where: { email: TEST_EMAIL },
+      });
       expect(dbUser).not.toBeNull();
       expect(dbUser!.name).toBe('E2E Test');
       expect(dbUser!.role).toBe('CUSTOMER');
@@ -110,16 +118,14 @@ describe('Integration (e2e)', () => {
     });
 
     it('GET /auth/profile fails without auth cookie', async () => {
-      await request(http)
-        .get('/auth/profile')
-        .expect(401);
+      await request(http).get('/auth/profile').expect(401);
     });
   });
 
   describe('Public catalog with real DB', () => {
     it('GET /products returns array with active flag', async () => {
       const res = await request(http).get('/products').expect(200);
-      const items = Array.isArray(res.body) ? res.body : (res.body.items || []);
+      const items = Array.isArray(res.body) ? res.body : res.body.items || [];
       expect(Array.isArray(items)).toBe(true);
       for (const item of items) {
         expect(item.active).toBe(true);
@@ -132,9 +138,7 @@ describe('Integration (e2e)', () => {
     });
 
     it('GET /products/[slug] returns 404 for nonexistent slug', async () => {
-      await request(http)
-        .get('/products/nonexistent-slug-xyz')
-        .expect(404);
+      await request(http).get('/products/nonexistent-slug-xyz').expect(404);
     });
   });
 });
