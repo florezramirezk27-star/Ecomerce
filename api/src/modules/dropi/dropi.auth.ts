@@ -34,7 +34,7 @@ export class DropiAuthService implements OnModuleInit, OnModuleDestroy {
   private apiToken: string;
   private whiteBrandId: number;
   private twoFactorSecret: string;
-  private isLoggingIn = false;
+  private loginPromise: Promise<void> | null = null;
   private reloginInterval: NodeJS.Timeout | null = null;
   private apiTokenFailed = false;
 
@@ -57,8 +57,14 @@ export class DropiAuthService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Dropi autenticado con API token del panel');
       return;
     }
-    await this.login();
     this.startAutoRelogin();
+    this.login().catch((error) => {
+      this.logger.error(
+        `Dropi login en background falló: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
   }
 
   onModuleDestroy() {
@@ -138,9 +144,19 @@ export class DropiAuthService implements OnModuleInit, OnModuleDestroy {
   }
 
   async login(): Promise<void> {
-    if (this.isLoggingIn) return;
-    this.isLoggingIn = true;
+    if (this.activeToken) return;
+    if (this.loginPromise) return this.loginPromise;
 
+    const promise = this.performLogin();
+    this.loginPromise = promise;
+    try {
+      await promise;
+    } finally {
+      this.loginPromise = null;
+    }
+  }
+
+  private async performLogin(): Promise<void> {
     const maxRetries = 3;
     let retryCount = 0;
 
@@ -191,7 +207,7 @@ export class DropiAuthService implements OnModuleInit, OnModuleDestroy {
 
         this.activeToken = parsed.data.token;
         this.logger.log('Dropi login successful, token acquired');
-        break;
+        return;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         retryCount++;
@@ -207,8 +223,6 @@ export class DropiAuthService implements OnModuleInit, OnModuleDestroy {
           this.logger.error('Dropi login failed after all retries');
           this.activeToken = '';
         }
-      } finally {
-        this.isLoggingIn = false;
       }
     }
   }
