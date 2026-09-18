@@ -79,6 +79,7 @@ CAPACIDADES:
 
 REGLAS PARA PRODUCTOS:
 - Si el usuario pregunta por el precio, stock o disponibilidad de un producto, DEBES utilizar consultarStockYPrecio.
+- Cuando el usuario pregunte de manera general qué productos hay en la tienda (por ejemplo: "qué productos tienes", "qué venden", "qué hay disponible", "muéstrame el catálogo"), DEBES utilizar consultarStockYPrecio SIN el parámetro query para listar el catálogo disponible.
 - Nunca inventes precios.
 - Nunca inventes stock.
 - Nunca inventes productos.
@@ -454,7 +455,7 @@ FORMATO:
     }
 
     if (
-      /\b(productos?|catálogos?|catalogos?|venden|ofrecen|tienen|busco|necesito|quiero|hay|tienes|eléctricos?|electricos?|electronicos?|artículos?|recomiendas|sugieres|muéstrame|muestrame|catálogo)\b/.test(
+      /\b(productos?|catálogos?|catalogos?|venden|vendéis|vendes|ofrecen|ofreces|tienen|tienes|busco|necesito|quiero|hay|cuáles|cuales|eléctricos?|electricos?|electronicos?|artículos?|articulos?|recomiendas|sugieres|muéstrame|muestrame|catálogo)\b/.test(
         lower,
       )
     ) {
@@ -475,9 +476,10 @@ FORMATO:
   private async searchProducts(
     query: string,
     limit = 5,
-  ): Promise<ProductResult[]> {
+  ): Promise<{ products: ProductResult[]; isGeneric: boolean }> {
     const stopWords = new Set([
       'que',
+      'como',
       'los',
       'las',
       'por',
@@ -488,13 +490,38 @@ FORMATO:
       'uno',
       'unos',
       'unas',
+      'este',
+      'esta',
+      'estos',
+      'estas',
+      'ese',
+      'esa',
+      'esa',
+      'cual',
+      'cuál',
+      'cuales',
+      'cuáles',
+      'alguna',
+      'alguno',
+      'algunas',
+      'algunos',
       'tienen',
       'tiene',
+      'tienes',
       'venden',
       'vende',
+      'vendes',
+      'vendemos',
+      'ofrecen',
+      'ofreces',
       'hay',
+      'haber',
+      'existe',
+      'existen',
       'todos',
       'todo',
+      'todas',
+      'toda',
       'producto',
       'productos',
       'catalogo',
@@ -502,6 +529,31 @@ FORMATO:
       'muestrame',
       'muéstrame',
       'muestra',
+      'muestran',
+      'tienda',
+      'tiendas',
+      'listado',
+      'lista',
+      'listas',
+      'ver',
+      'vez',
+      'pueden',
+      'puedes',
+      'podrian',
+      'podrían',
+      'podrias',
+      'podrías',
+      'recomendar',
+      'recomiendas',
+      'recomiendan',
+      'sugieres',
+      'sugieran',
+      'sugerir',
+      'algo',
+      'buscar',
+      'busque',
+      'buscas',
+      'busco',
     ]);
 
     const words = query
@@ -529,7 +581,46 @@ FORMATO:
       orderBy: { createdAt: 'desc' },
     });
 
-    return products.map((p) => ({
+    let result = products.map((p) => this.toProductResult(p));
+
+    if (searchTerms.length > 0 && result.length === 0) {
+      const fallback = await this.prisma.product.findMany({
+        where: { active: true },
+        include: { category: true },
+        take: 200,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const normalizedTerms = searchTerms.map((term) =>
+        this.normalizeText(term),
+      );
+
+      result = fallback
+        .filter((p) =>
+          normalizedTerms.some(
+            (term) =>
+              this.normalizeText(p.name).includes(term) ||
+              this.normalizeText(p.description ?? '').includes(term),
+          ),
+        )
+        .slice(0, limit)
+        .map((p) => this.toProductResult(p));
+    }
+
+    return { products: result, isGeneric: searchTerms.length === 0 };
+  }
+
+  private toProductResult(p: {
+    id: string;
+    name: string;
+    slug: string;
+    price: unknown;
+    image: string | null;
+    stock: number;
+    description?: string | null;
+    category?: { name: string } | null;
+  }): ProductResult {
+    return {
       id: p.id,
       name: p.name,
       slug: p.slug,
@@ -537,7 +628,15 @@ FORMATO:
       image: p.image,
       stock: p.stock,
       categoryName: p.category?.name || 'General',
-    }));
+    };
+  }
+
+  private normalizeText(value: string): string {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/ñ/g, 'n')
+      .toLowerCase();
   }
 
   private async buildLocalResponse(message: string): Promise<{
@@ -552,10 +651,41 @@ FORMATO:
           text: '¡Hola! 👋 Bienvenido a **Kronio Market**. Soy KronioBot, tu asistente virtual. Puedo ayudarte a encontrar productos, consultar precios, revisar tu pedido o resolver cualquier duda. ¿En qué puedo ayudarte hoy?',
         };
 
-      case 'PURCHASE':
+      case 'PURCHASE': {
+        const { products } = await this.searchProducts(message);
+        if (products.length > 0) {
+          const productList = products
+            .map(
+              (p) =>
+                `• **${p.name}** — $${p.price.toLocaleString('es-CO')} COP | ${p.stock > 0 ? '✅ Disponible' : '❌ Agotado'} | [Ver producto](/products/${p.slug})`,
+            )
+            .join('\n');
+
+          return {
+            text: `🛍️ ¡Perfecto! Encontré esto que puede encajarte:\n\n${productList}\n\n¿Quieres agregar alguno al carrito o te doy más detalles de algún producto? 😊`,
+            ui: [
+              {
+                type: 'product_carousel',
+                data: {
+                  products: products.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    slug: p.slug,
+                    price: p.price,
+                    image: p.image,
+                    stock: p.stock,
+                    categoryName: p.categoryName,
+                  })),
+                },
+              },
+            ],
+          };
+        }
+
         return {
           text: '🛍️ ¡Me encanta que quieras comprar! En Kronio Market tenemos productos de excelente calidad. Puedes navegar nuestro catálogo, agregar productos al carrito y pagar contra entrega (efectivo). Si me dices qué estás buscando, puedo recomendarte algo específico. ¿Qué necesitas?',
         };
+      }
 
       case 'SHIPPING':
         return {
@@ -568,7 +698,7 @@ FORMATO:
         };
 
       case 'PRODUCT_INFO': {
-        const products = await this.searchProducts(message);
+        const { products, isGeneric } = await this.searchProducts(message);
         if (products.length > 0) {
           const productList = products
             .map(
@@ -578,7 +708,9 @@ FORMATO:
             .join('\n');
 
           return {
-            text: `🔍 Claro, encontré estos productos en nuestro catálogo:\n\n${productList}\n\n¿Te gusta alguno? Puedo darte más detalles o ayudarte con la compra. 😊`,
+            text: isGeneric
+              ? `🛒 ¡Claro! **Este es nuestro catálogo** 😊 Estos son algunos de los productos que tenemos disponibles:\n\n${productList}\n\n¿Te interesa alguno? Puedo darte más detalles o ayudarte con la compra.`
+              : `🔍 Claro, encontré estos productos en nuestro catálogo:\n\n${productList}\n\n¿Te gusta alguno? Puedo darte más detalles o ayudarte con la compra. 😊`,
             ui: [
               {
                 type: 'product_carousel',
@@ -618,7 +750,7 @@ FORMATO:
         };
 
       case 'UNKNOWN': {
-        const products = await this.searchProducts(message);
+        const { products } = await this.searchProducts(message);
         if (products.length > 0) {
           const productList = products
             .map(
