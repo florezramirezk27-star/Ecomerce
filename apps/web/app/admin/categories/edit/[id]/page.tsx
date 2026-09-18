@@ -2,7 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 import { apiFetch } from "@/lib/admin";
+import {
+  Alert,
+  Button,
+  Card,
+  Field,
+  Input,
+  LoadingState,
+  PageHeader,
+  Textarea,
+} from "@/components/admin/ui";
 
 export default function EditCategoryPage() {
   const params = useParams<{ id: string }>();
@@ -58,90 +69,76 @@ export default function EditCategoryPage() {
   }
 
   if (loading) {
-    return <p className="text-gray-600">Cargando categoria...</p>;
+    return <LoadingState label="Cargando categoría..." />;
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-4xl font-bold text-gray-900">
-          Editar categoria
-        </h1>
-        <p className="mt-1 text-gray-600">
-          Actualiza los datos de la categoria.
-        </p>
-      </div>
+    <div className="max-w-2xl space-y-6">
+      <PageHeader
+        title="Editar Categoría"
+        subtitle="Actualiza los datos de la categoría."
+      />
 
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-          {error}
+      {error && <Alert type="error">{error}</Alert>}
+
+      <Card className="p-6">
+        <div className="mb-5 flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <Pencil className="h-4.5 w-4.5" />
+          </div>
+          <h2 className="text-base font-bold text-slate-900">
+            Información de la categoría
+          </h2>
         </div>
-      )}
 
-      <div className="max-w-2xl rounded-lg bg-white p-6 shadow-md">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-900">
-              Nombre *
-            </label>
-            <input
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <Field label="Nombre *">
+            <Input
               type="text"
               value={formData.name}
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
               required
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-900">
-              Slug *
-            </label>
-            <input
+          <Field label="Slug *">
+            <Input
               type="text"
               value={formData.slug}
               onChange={(e) =>
                 setFormData({ ...formData, slug: e.target.value })
               }
               required
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-900">
-              Descripcion
-            </label>
-            <textarea
+          <Field label="Descripción">
+            <Textarea
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
               rows={4}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-          </div>
+          </Field>
 
-          <div className="flex gap-4 pt-4">
-            <button
+          <div className="flex gap-4 pt-2">
+            <Button
+              variant="secondary"
+              className="flex-1"
               type="button"
               onClick={() => router.back()}
-              className="flex-1 rounded-lg border border-gray-300 px-6 py-3 font-semibold transition hover:bg-gray-50"
             >
               Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-            >
+            </Button>
+            <Button className="flex-1" type="submit" isLoading={saving}>
               {saving ? "Guardando..." : "Guardar cambios"}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
+      </Card>
     </div>
   );
 }

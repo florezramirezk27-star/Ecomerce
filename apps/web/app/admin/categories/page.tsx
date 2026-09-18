@@ -2,7 +2,19 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { ChevronDown, ChevronUp, Loader2, Package, Pencil, Plus, Tags, Trash2 } from 'lucide-react';
 import { apiFetch, Category } from '@/lib/admin';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  ConfirmModal,
+  EmptyState,
+  LoadingState,
+  PageHeader,
+  SearchInput,
+} from '@/components/admin/ui';
 
 interface CategoryWithProducts extends Category {
   products?: Array<{
@@ -21,6 +33,7 @@ export default function AdminCategoriesPage() {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [categoryProducts, setCategoryProducts] = useState<Record<string, CategoryWithProducts['products']>>({});
   const [loadingProducts, setLoadingProducts] = useState<string | null>(null);
@@ -72,6 +85,7 @@ export default function AdminCategoriesPage() {
 
   const handleDelete = async (id: string) => {
     try {
+      setDeleting(true);
       await apiFetch(`/categories/${id}`, {
         method: 'DELETE',
       });
@@ -81,6 +95,8 @@ export default function AdminCategoriesPage() {
       setError(
         err instanceof Error ? err.message : 'Error al eliminar categoría',
       );
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -90,123 +106,128 @@ export default function AdminCategoriesPage() {
       c.slug.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
+  const deleteCategory = deleteConfirm
+    ? categories.find((c) => c.id === deleteConfirm)
+    : null;
+  const deleteProductCount = deleteCategory?._count?.products || 0;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold text-gray-900">
-            Categorías
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Administra las categorías de productos
-          </p>
-        </div>
-        <Link
-          href="/admin/categories/new"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition shadow-md"
-        >
-          ➕ Nueva Categoría
-        </Link>
-      </div>
+      <PageHeader
+        title="Categorías"
+        subtitle="Administra las categorías de productos"
+        action={
+          <Link
+            href="/admin/categories/new"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            Nueva Categoría
+          </Link>
+        }
+      />
 
-      {error && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">
-          {error}
-        </div>
-      )}
+      {error && <Alert type="error">{error}</Alert>}
 
-      {/* Search */}
-      <div className="bg-white rounded-lg shadow-md p-4">
-        <input
-          type="text"
-          placeholder="Buscar por nombre o slug..."
+      <Card className="p-4">
+        <SearchInput
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onChange={setSearchTerm}
+          placeholder="Buscar por nombre o slug..."
+          className="max-w-md"
         />
-      </div>
+      </Card>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {loading ? (
-          <div className="col-span-full p-12 text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">Cargando categorías...</p>
-          </div>
-        ) : filteredCategories.length === 0 ? (
-          <div className="col-span-full p-12 text-center text-gray-500">
-            <p className="text-lg">No hay categorías</p>
-          </div>
-        ) : (
-          filteredCategories.map((category) => {
+      {loading ? (
+        <LoadingState label="Cargando categorías..." />
+      ) : filteredCategories.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={Tags}
+            title="No hay categorías"
+            description="Crea categorías para organizar mejor tu catálogo."
+          />
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredCategories.map((category) => {
             const isExpanded = expandedCategory === category.id;
             const products = categoryProducts[category.id];
             const isLoadingProducts = loadingProducts === category.id;
 
             return (
-              <div
-                key={category.id}
-                className="bg-white rounded-lg shadow-md hover:shadow-lg transition"
-              >
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-900">
-                        {category.name}
-                      </h3>
-                      <p className="text-sm text-gray-500 font-mono mt-1">
-                        {category.slug}
-                      </p>
+              <Card key={category.id} className="flex flex-col overflow-hidden">
+                <div className="flex-1 p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                        <Tags className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-base font-bold text-slate-900">
+                          {category.name}
+                        </h3>
+                        <p className="truncate font-mono text-xs text-slate-500">
+                          {category.slug}
+                        </p>
+                      </div>
                     </div>
-                    <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold whitespace-nowrap">
+                    <Badge tone="blue" className="shrink-0">
                       {category._count?.products || 0} productos
-                    </span>
+                    </Badge>
                   </div>
 
                   {category.description && (
-                    <p className="text-gray-600 text-sm mb-4">
+                    <p className="mt-3 line-clamp-2 text-sm text-slate-600">
                       {category.description}
                     </p>
                   )}
 
-                  <p className="text-xs text-gray-500 mb-4">
-                    Creado:{' '}
+                  <p className="mt-3 text-xs text-slate-400">
+                    Creada:{' '}
                     {new Date(category.createdAt).toLocaleDateString()}
                   </p>
 
-                  <div className="flex gap-2">
+                  <div className="mt-4 flex gap-2">
                     {(category._count?.products || 0) > 0 && (
-                      <button
+                      <Button
+                        variant="secondary"
+                        className="flex-1 px-3 py-2 text-xs"
                         onClick={() => toggleCategoryProducts(category.id)}
-                        className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition text-sm"
                       >
-                        {isExpanded ? 'Ocultar productos' : 'Ver productos'}
-                      </button>
+                        {isExpanded ? (
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        )}
+                        {isExpanded ? 'Ocultar' : 'Ver'} productos
+                      </Button>
                     )}
                     <Link
                       href={`/admin/categories/edit/${category.id}`}
-                      className="flex-1 text-center py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 font-medium transition text-sm"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-blue-700"
                     >
+                      <Pencil className="h-3.5 w-3.5" />
                       Editar
                     </Link>
                     <button
                       onClick={() => setDeleteConfirm(category.id)}
-                      className="flex-1 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 font-medium transition text-sm"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-50"
                     >
+                      <Trash2 className="h-3.5 w-3.5" />
                       Eliminar
                     </button>
                   </div>
                 </div>
 
                 {isExpanded && (
-                  <div className="border-t border-gray-200 p-6">
-                    <h4 className="font-semibold text-gray-900 mb-3">
+                  <div className="border-t border-slate-100 bg-slate-50/60 p-6">
+                    <h4 className="mb-3 text-sm font-bold text-slate-900">
                       Productos en esta categoría
                     </h4>
                     {isLoadingProducts ? (
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
                         Cargando productos...
                       </div>
                     ) : products && products.length > 0 ? (
@@ -215,109 +236,60 @@ export default function AdminCategoriesPage() {
                           <Link
                             key={product.id}
                             href={`/admin/products/edit/${product.id}`}
-                            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition border border-gray-100"
+                            className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm transition hover:border-blue-200"
                           >
                             {product.image && (
                               <img
                                 src={product.image}
                                 alt={product.name}
-                                className="w-10 h-10 rounded object-cover shrink-0"
+                                className="h-10 w-10 shrink-0 rounded-lg object-cover"
                               />
                             )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-slate-900">
                                 {product.name}
                               </p>
-                              <p className="text-xs text-gray-500">
-                                {Number(product.price).toLocaleString("es-CO")} COP
+                              <p className="text-xs text-slate-500">
+                                {Number(product.price).toLocaleString('es-CO')} COP
                               </p>
                             </div>
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                              product.stock > 0
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                            }`}>
+                            <Badge tone={product.stock > 0 ? 'green' : 'red'}>
                               {product.stock > 0 ? `${product.stock} uds` : 'Agotado'}
-                            </span>
+                            </Badge>
                           </Link>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-500">
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <Package className="h-4 w-4" />
                         No hay productos en esta categoría
-                      </p>
+                      </div>
                     )}
                   </div>
                 )}
-              </div>
+              </Card>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm && (() => {
-        const category = categories.find((c) => c.id === deleteConfirm);
-        const productCount = category?._count?.products || 0;
-        return (
-          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl">
-              <div className="flex flex-col items-center text-center mb-6">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                  <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">
-                  ¿Eliminar categoría?
-                </h3>
-                <p className="text-gray-600">
-                  {category ? (
-                    <>Estás a punto de eliminar <strong className="text-gray-900">&ldquo;{category.name}&rdquo;</strong></>
-                  ) : (
-                    '¿Estás seguro de eliminar esta categoría?'
-                  )}
-                </p>
-              </div>
-              {productCount > 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm text-yellow-700 flex items-center gap-2">
-                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Esta categoría tiene <strong>{productCount} producto{productCount !== 1 ? 's' : ''}</strong> asociado{productCount !== 1 ? 's' : ''}. No se podrá eliminar si tiene productos.
-                  </p>
-                </div>
-              )}
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-6">
-                <p className="text-sm text-red-700 flex items-center gap-2">
-                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Esta acción no se puede deshacer.
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setDeleteConfirm(null)}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition text-gray-700"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => handleDelete(deleteConfirm)}
-                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Eliminar
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      <ConfirmModal
+        open={!!deleteConfirm}
+        title="¿Eliminar categoría?"
+        description={
+          deleteCategory
+            ? `Estás a punto de eliminar "${deleteCategory.name}".${
+                deleteProductCount > 0
+                  ? ` Esta categoría tiene ${deleteProductCount} producto(s) asociados. No se podrá eliminar si tiene productos.`
+                  : ' Esta acción no se puede deshacer.'
+              }`
+            : 'Esta acción no se puede deshacer.'
+        }
+        confirmLabel="Eliminar"
+        loading={deleting}
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
+      />
     </div>
   );
 }

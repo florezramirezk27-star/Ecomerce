@@ -40,10 +40,10 @@ export default function PerformanceChart() {
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v);
 
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-200/60">
+    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/40">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-400 font-medium">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             Rendimiento
           </p>
           <h2 className="mt-2 text-2xl font-bold text-slate-900">

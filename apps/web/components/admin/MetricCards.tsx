@@ -133,7 +133,7 @@ export default function MetricCards({
             key={card.id}
             type="button"
             onClick={() => onSelectInsight(card.id)}
-            className={`group relative overflow-hidden rounded-[2rem] border bg-white p-6 shadow-lg shadow-slate-200/60 transition-all duration-300 ${
+            className={`group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm shadow-slate-200/40 transition-all duration-300 ${
               isSelected
                 ? 'border-blue-200 ring-2 ring-blue-200/50'
                 : 'border-slate-200 hover:-translate-y-1 hover:border-slate-300 hover:shadow-xl'
@@ -143,7 +143,7 @@ export default function MetricCards({
 
             <div className="relative flex items-start justify-between">
               <div className="flex-1">
-                <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400 font-medium">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                   {card.label}
                 </p>
                 <p className="mt-3 text-3xl font-bold text-slate-900">

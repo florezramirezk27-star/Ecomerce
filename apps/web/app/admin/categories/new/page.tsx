@@ -2,7 +2,17 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Tag } from 'lucide-react';
 import { apiFetch } from '@/lib/admin';
+import {
+  Alert,
+  Button,
+  Card,
+  Field,
+  Input,
+  PageHeader,
+  Textarea,
+} from '@/components/admin/ui';
 
 export default function NewCategoryPage() {
   const router = useRouter();
@@ -33,44 +43,39 @@ export default function NewCategoryPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-4xl font-bold text-gray-900">
-          Crear Categoría
-        </h1>
-        <p className="text-gray-600 mt-1">
-          Agrega una nueva categoría de productos
-        </p>
-      </div>
+    <div className="max-w-2xl space-y-6">
+      <PageHeader
+        title="Crear Categoría"
+        subtitle="Agrega una nueva categoría de productos"
+      />
 
-      {error && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">
-          {error}
+      {error && <Alert type="error">{error}</Alert>}
+
+      <Card className="p-6">
+        <div className="mb-5 flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <Tag className="h-4.5 w-4.5" />
+          </div>
+          <h2 className="text-base font-bold text-slate-900">
+            Información de la categoría
+          </h2>
         </div>
-      )}
 
-      <div className="bg-white rounded-lg shadow-md p-6 max-w-2xl">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Nombre *
-            </label>
-            <input
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <Field label="Nombre *">
+            <Input
               type="text"
               value={formData.name}
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Ej: Electrónica"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Slug *
-            </label>
-            <input
+          <Field label="Slug *">
+            <Input
               type="text"
               value={formData.slug}
               onChange={(e) =>
@@ -78,42 +83,35 @@ export default function NewCategoryPage() {
               }
               required
               placeholder="ej: electronica"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Descripción
-            </label>
-            <textarea
+          <Field label="Descripción">
+            <Textarea
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
               rows={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Descripción breve de la categoría"
             />
-          </div>
+          </Field>
 
-          <div className="flex gap-4 pt-4">
-            <button
+          <div className="flex gap-4 pt-2">
+            <Button
+              variant="secondary"
+              className="flex-1"
               type="button"
               onClick={() => router.back()}
-              className="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold transition"
             >
               Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-50 transition"
-            >
+            </Button>
+            <Button className="flex-1" type="submit" isLoading={loading}>
               {loading ? 'Guardando...' : 'Crear Categoría'}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
+      </Card>
     </div>
   );
 }

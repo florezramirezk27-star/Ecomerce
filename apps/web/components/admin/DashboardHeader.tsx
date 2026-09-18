@@ -4,7 +4,7 @@ import { Bell, MessageSquare, Search } from 'lucide-react';
 
 export default function DashboardHeader() {
   return (
-    <header className="flex items-center justify-between gap-4 rounded-[2rem] border border-slate-200 bg-white px-6 py-4 shadow-lg shadow-slate-200/60">
+    <header className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-sm shadow-slate-200/40">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 text-white text-sm font-bold shadow-sm">

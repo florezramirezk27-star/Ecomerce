@@ -1,8 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Image as ImageIcon, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { API_BASE, getAuthHeader } from '@/lib/admin';
 import ImageEditor from '@/components/ImageEditor';
+import {
+  Alert,
+  Button,
+  Card,
+  Field,
+  LoadingState,
+  PageHeader,
+} from '@/components/admin/ui';
 
 export default function AdminLogoPage() {
   const [logo, setLogo] = useState<string | null>(null);
@@ -113,78 +122,81 @@ export default function AdminLogoPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="w-8 h-8 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
-      </div>
-    );
+    return <LoadingState label="Cargando logo..." />;
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-4xl font-bold text-gray-900">Logo</h1>
-        <p className="text-gray-600 mt-1">Edita el logo de tu tienda</p>
-      </div>
+    <div className="max-w-2xl space-y-6">
+      <PageHeader
+        title="Logo"
+        subtitle="Edita el logo de tu tienda"
+      />
 
-      {message && (
-        <div className={`p-4 rounded-lg border ${
-          message.type === 'success'
-            ? 'bg-green-50 text-green-700 border-green-200'
-            : 'bg-red-50 text-red-700 border-red-200'
-        }`}>
-          {message.text}
-        </div>
-      )}
+      {message && <Alert type={message.type}>{message.text}</Alert>}
 
-      <div className="bg-white rounded-xl shadow-md p-6 space-y-6">
+      <Card className="space-y-6 p-6">
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Logo actual</label>
+          <p className="mb-2 text-sm font-medium text-slate-700">Logo actual</p>
           <div className="flex items-center gap-4">
             {logo ? (
-              <img src={logo} alt="Logo" className="h-20 w-20 object-contain rounded-lg border border-gray-200" />
+              <img
+                src={logo}
+                alt="Logo"
+                className="h-20 w-20 rounded-xl border border-slate-200 object-contain p-1"
+              />
             ) : (
-              <div className="h-20 w-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs text-center">
-                Sin logo
+              <div className="flex h-20 w-20 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 text-slate-400">
+                <ImageIcon className="h-5 w-5" />
               </div>
             )}
             {logo ? (
               <div className="flex flex-col gap-2">
-                <span className="text-sm text-gray-500">Logo visible para todos los usuarios</span>
+                <span className="text-sm text-slate-500">
+                  Logo visible para todos los usuarios
+                </span>
                 <div className="flex gap-2">
-                  <button
+                  <Button
+                    className="px-4 py-2 text-xs"
                     onClick={handleEditCurrentLogo}
-                    className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium transition"
                   >
+                    <Pencil className="h-3.5 w-3.5" />
                     Editar
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="danger"
+                    className="px-4 py-2 text-xs"
                     onClick={handleRemove}
-                    className="px-4 py-1.5 border border-red-300 text-red-600 text-sm rounded-lg hover:bg-red-50 font-medium transition"
                   >
+                    <Trash2 className="h-3.5 w-3.5" />
                     Eliminar
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
-              <span className="text-sm text-gray-500">No hay logo configurado</span>
+              <span className="text-sm text-slate-500">
+                No hay logo configurado
+              </span>
             )}
           </div>
         </div>
 
-        <div className="border-t border-gray-200 pt-6">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Subir imagen nueva</label>
-          <input
-            ref={fileInputRef}
-            id="logoFile"
-            type="file"
-            accept="image/*"
-            onChange={handleFileSelect}
-            className="block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-          />
-          <p className="text-xs text-gray-400 mt-1">Formatos: JPG, PNG, WebP. Máx 5MB. Podrás recortar y editar la imagen antes de guardarla.</p>
+        <div className="border-t border-slate-100 pt-6">
+          <Field label="Subir imagen nueva">
+            <input
+              ref={fileInputRef}
+              id="logoFile"
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="w-full cursor-pointer text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+            />
+          </Field>
+          <p className="mt-1.5 text-xs text-slate-400">
+            Formatos: JPG, PNG, WebP. Máx 5MB. Podrás recortar y editar la
+            imagen antes de guardarla.
+          </p>
         </div>
-      </div>
+      </Card>
 
       {editImage && (
         <ImageEditor
@@ -198,10 +210,12 @@ export default function AdminLogoPage() {
       )}
 
       {uploading && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-8 flex flex-col items-center gap-4 shadow-2xl">
-            <div className="w-12 h-12 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
-            <p className="text-gray-700 font-medium">Subiendo imagen...</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 rounded-2xl bg-white p-8 shadow-2xl">
+            <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+            <p className="text-sm font-medium text-slate-700">
+              Subiendo imagen...
+            </p>
           </div>
         </div>
       )}

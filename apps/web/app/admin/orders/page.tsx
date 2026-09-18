@@ -1,9 +1,30 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  CheckCircle2,
+  ChevronDown,
+  ClipboardList,
+  Clock,
+  Package,
+  Truck,
+  XCircle,
+} from 'lucide-react';
 import { apiFetch, Order, formatPrice, formatDate } from '@/lib/admin';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  ConfirmModal,
+  EmptyState,
+  LoadingState,
+  PageHeader,
+  Pagination,
+} from '@/components/admin/ui';
 
 type OrderStatus = Order['status'];
+type BadgeTone = 'gray' | 'blue' | 'green' | 'yellow' | 'red' | 'purple' | 'cyan';
 
 const STATUSES: OrderStatus[] = [
   'PENDING',
@@ -21,12 +42,15 @@ const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   CANCELLED: [],
 };
 
-const STATUS_CONFIG: Record<OrderStatus, { bg: string; text: string; badge: string; label: string }> = {
-  PENDING: { bg: 'bg-yellow-50', text: 'text-yellow-700', badge: 'bg-yellow-100', label: 'Pendiente' },
-  PAID: { bg: 'bg-blue-50', text: 'text-blue-700', badge: 'bg-blue-100', label: 'Pagado' },
-  SHIPPED: { bg: 'bg-purple-50', text: 'text-purple-700', badge: 'bg-purple-100', label: 'Enviado' },
-  DELIVERED: { bg: 'bg-green-50', text: 'text-green-700', badge: 'bg-green-100', label: 'Entregado' },
-  CANCELLED: { bg: 'bg-red-50', text: 'text-red-700', badge: 'bg-red-100', label: 'Cancelado' },
+const STATUS_CONFIG: Record<
+  OrderStatus,
+  { tone: BadgeTone; label: string; icon: typeof Package }
+> = {
+  PENDING: { tone: 'yellow', label: 'Pendiente', icon: Clock },
+  PAID: { tone: 'blue', label: 'Pagado', icon: CheckCircle2 },
+  SHIPPED: { tone: 'purple', label: 'Enviado', icon: Truck },
+  DELIVERED: { tone: 'green', label: 'Entregado', icon: Package },
+  CANCELLED: { tone: 'red', label: 'Cancelado', icon: XCircle },
 };
 
 interface OrdersResponse {
@@ -146,38 +170,29 @@ export default function AdminOrdersPage() {
     (order) => filterStatus === 'ALL' || order.status === filterStatus,
   );
 
+  const chipClass = (active: boolean) =>
+    `rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
+      active
+        ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+    }`;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-4xl font-bold text-gray-900">
-          Órdenes
-        </h1>
-        <p className="text-gray-600 mt-1">
-          Administra todas las órdenes de tu tienda
-        </p>
-      </div>
+      <PageHeader
+        title="Órdenes"
+        subtitle="Administra todas las órdenes de tu tienda"
+      />
 
-      {successMsg && (
-        <div className="p-4 bg-green-50 text-green-700 rounded-lg border border-green-200">
-          {successMsg}
-        </div>
-      )}
+      {successMsg && <Alert type="success">{successMsg}</Alert>}
 
-      {error && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">
-          {error}
-        </div>
-      )}
+      {error && <Alert type="error">{error}</Alert>}
 
-      <div className="bg-white rounded-lg shadow-md p-4">
-        <div className="flex gap-2 flex-wrap">
+      <Card className="p-4">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setFilterStatus('ALL')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              filterStatus === 'ALL'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={chipClass(filterStatus === 'ALL')}
           >
             Todas ({ordersData?.total || 0})
           </button>
@@ -187,108 +202,110 @@ export default function AdminOrdersPage() {
               <button
                 key={status}
                 onClick={() => setFilterStatus(status)}
-                className={`px-4 py-2 rounded-lg font-medium transition ${
-                  filterStatus === status
-                    ? `${STATUS_CONFIG[status].badge} ${STATUS_CONFIG[status].text}`
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className={chipClass(filterStatus === status)}
               >
                 {STATUS_CONFIG[status].label} ({count})
               </button>
             );
           })}
         </div>
-      </div>
+      </Card>
 
-      <div className="space-y-4">
-        {loading ? (
-          <div className="p-12 text-center bg-white rounded-lg">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">Cargando órdenes...</p>
-          </div>
-        ) : filteredOrders.length === 0 ? (
-          <div className="p-12 text-center bg-white rounded-lg text-gray-500">
-            <p className="text-lg">No hay órdenes</p>
-          </div>
-        ) : (
-          filteredOrders.map((order) => {
+      {loading ? (
+        <Card>
+          <LoadingState label="Cargando órdenes..." />
+        </Card>
+      ) : filteredOrders.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={ClipboardList}
+            title="No hay órdenes"
+            description="Cuando los clientes realicen compras, sus órdenes aparecerán aquí."
+          />
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {filteredOrders.map((order) => {
             const allowedNext = VALID_TRANSITIONS[order.status];
+            const cfg = STATUS_CONFIG[order.status];
+            const StatusIcon = cfg.icon;
+            const isExpanded = expandedOrder === order.id;
+
             return (
-              <div
-                key={order.id}
-                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition"
-              >
+              <Card key={order.id} className="overflow-hidden">
                 <button
-                  onClick={() =>
-                    setExpandedOrder(
-                      expandedOrder === order.id ? null : order.id,
-                    )
-                  }
-                  className="w-full p-4 md:p-6 flex items-center justify-between hover:bg-gray-50 transition"
+                  onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
+                  className="flex w-full items-center justify-between gap-4 p-4 text-left transition hover:bg-slate-50 md:p-6"
                 >
-                  <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 flex-1 text-left min-w-0">
+                  <div className="flex min-w-0 flex-1 flex-col gap-2 md:flex-row md:items-center md:gap-6">
                     <div className="min-w-0">
-                      <p className="text-xs md:text-sm font-mono text-gray-500">
+                      <p className="font-mono text-xs text-slate-400">
                         Orden #{order.id.slice(0, 8)}
                       </p>
-                      <p className="font-bold text-gray-900 text-base md:text-lg truncate">
+                      <p className="truncate text-base font-bold text-slate-900">
                         {order.user?.name || 'Usuario desconocido'}
+                      </p>
+                      <p className="truncate text-xs text-slate-500 md:hidden">
+                        {order.user?.email}
                       </p>
                     </div>
                     <div className="hidden md:block">
-                      <p className="text-sm text-gray-600">Email</p>
-                      <p className="font-medium text-sm truncate max-w-[200px]">{order.user?.email}</p>
+                      <p className="text-xs text-slate-400">Email</p>
+                      <p className="max-w-[200px] truncate text-sm font-medium text-slate-700">
+                        {order.user?.email}
+                      </p>
                     </div>
                     <div className="hidden sm:block">
-                      <p className="text-sm text-gray-600">Fecha</p>
-                      <p className="font-medium text-sm">
+                      <p className="text-xs text-slate-400">Fecha</p>
+                      <p className="text-sm font-medium text-slate-700">
                         {formatDate(order.createdAt)}
                       </p>
                     </div>
-                    <div className="md:ml-auto">
-                      <span
-                        className={`inline-block px-3 py-1 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-semibold ${STATUS_CONFIG[order.status].badge} ${STATUS_CONFIG[order.status].text}`}
-                      >
-                        {STATUS_CONFIG[order.status].label}
-                      </span>
-                    </div>
                   </div>
-                  <div className="ml-2 md:ml-4 text-lg md:text-2xl font-bold text-green-600 shrink-0">
-                    {formatPrice(order.total)}
-                  </div>
-                  <div className="ml-2 md:ml-4 text-gray-500 shrink-0">
-                    {expandedOrder === order.id ? '▼' : '▶'}
+                  <div className="ml-auto flex shrink-0 items-center gap-4">
+                    <Badge tone={cfg.tone}>
+                      <StatusIcon className="h-3.5 w-3.5" />
+                      {cfg.label}
+                    </Badge>
+                    <span className="text-base font-bold text-emerald-600 md:text-lg">
+                      {formatPrice(order.total)}
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 text-slate-400 transition-transform ${
+                        isExpanded ? 'rotate-180' : ''
+                      }`}
+                    />
                   </div>
                 </button>
 
-                {expandedOrder === order.id && (
-                  <div className="border-t border-gray-200 p-6 space-y-6">
+                {isExpanded && (
+                  <div className="space-y-6 border-t border-slate-100 p-6">
                     <div>
-                      <h4 className="font-bold text-gray-900 mb-4">
+                      <h4 className="mb-4 text-sm font-bold text-slate-900">
                         Productos ({order.items?.length ?? 0})
                       </h4>
                       <div className="space-y-3">
                         {(order.items ?? []).map((item) => (
                           <div
                             key={item.id}
-                            className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg"
+                            className="flex items-center gap-4 rounded-xl bg-slate-50 p-3"
                           >
                             {item.product?.image && (
                               <img
                                 src={item.product.image}
                                 alt={item.product.name}
-                                className="h-12 w-12 rounded object-cover"
+                                className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200"
                               />
                             )}
-                            <div className="flex-1">
-                              <p className="font-medium text-gray-900">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-slate-900">
                                 {item.product?.name}
                               </p>
-                              <p className="text-sm text-gray-600">
+                              <p className="text-xs text-slate-500">
                                 Cantidad: {item.quantity}
                               </p>
                             </div>
-                            <p className="font-bold text-gray-900">
+                            <p className="font-bold text-slate-900">
                               {formatPrice(item.price)}
                             </p>
                           </div>
@@ -298,34 +315,27 @@ export default function AdminOrdersPage() {
 
                     {allowedNext.length > 0 && (
                       <div>
-                        <h4 className="font-bold text-gray-900 mb-3">
-                          Cambiar Estado
+                        <h4 className="mb-3 text-sm font-bold text-slate-900">
+                          Cambiar estado
                         </h4>
                         <div className="flex flex-wrap gap-2">
                           {allowedNext.map((status) => {
-                            const isLoading = changingStatus === `${order.id}-${status}`;
+                            const isLoading =
+                              changingStatus === `${order.id}-${status}`;
+                            const nextCfg = STATUS_CONFIG[status];
                             return (
-                              <button
+                              <Button
                                 key={status}
+                                variant={status === 'CANCELLED' ? 'danger' : 'primary'}
+                                className="px-4 py-2.5 text-xs"
+                                isLoading={isLoading}
+                                disabled={changingStatus !== null}
                                 onClick={() => handleStatusChange(order.id, status)}
-                                disabled={isLoading}
-                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 ${
-                                  isLoading
-                                    ? 'opacity-50 cursor-wait'
-                                    : 'hover:opacity-90'
-                                } ${
-                                  status === 'CANCELLED'
-                                    ? 'bg-red-500 text-white'
-                                    : 'bg-blue-600 text-white'
-                                }`}
                               >
-                                {isLoading ? (
-                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                ) : null}
                                 {status === 'CANCELLED'
                                   ? 'Cancelar orden'
-                                  : `Marcar como ${STATUS_CONFIG[status].label}`}
-                              </button>
+                                  : `Marcar como ${nextCfg.label}`}
+                              </Button>
                             );
                           })}
                         </div>
@@ -333,84 +343,36 @@ export default function AdminOrdersPage() {
                     )}
 
                     {order.status === 'DELIVERED' && (
-                      <p className="text-sm text-gray-500 italic">
+                      <p className="text-sm italic text-slate-500">
                         Orden entregada. No se pueden realizar más cambios.
                       </p>
                     )}
                     {order.status === 'CANCELLED' && (
-                      <p className="text-sm text-gray-500 italic">
+                      <p className="text-sm italic text-slate-500">
                         Orden cancelada. No se pueden realizar más cambios.
                       </p>
                     )}
                   </div>
                 )}
-              </div>
+              </Card>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
       {ordersData && ordersData.totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-            className="px-4 py-2 border rounded-lg disabled:opacity-50 hover:bg-gray-50 transition"
-          >
-            Anterior
-          </button>
-          {Array.from({ length: ordersData.totalPages }, (_, i) => i + 1).map(
-            (p) => (
-              <button
-                key={p}
-                onClick={() => setPage(p)}
-                className={`w-10 h-10 rounded-lg font-medium transition ${
-                  p === page
-                    ? 'bg-blue-600 text-white'
-                    : 'border hover:bg-gray-50'
-                }`}
-              >
-                {p}
-              </button>
-            ),
-          )}
-          <button
-            onClick={() => setPage((p) => Math.min(ordersData.totalPages, p + 1))}
-            disabled={page >= ordersData.totalPages}
-            className="px-4 py-2 border rounded-lg disabled:opacity-50 hover:bg-gray-50 transition"
-          >
-            Siguiente
-          </button>
-        </div>
+        <Pagination page={page} totalPages={ordersData.totalPages} onChange={setPage} />
       )}
 
-      {cancelTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">
-              Cancelar orden
-            </h3>
-            <p className="text-gray-600 mb-6">
-              ¿Estás seguro de cancelar esta orden? El stock de los productos será restaurado.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setCancelTarget(null)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition"
-              >
-                No, mantener
-              </button>
-              <button
-                onClick={confirmCancel}
-                disabled={changingStatus !== null}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition disabled:opacity-50"
-              >
-                {changingStatus ? 'Cancelando...' : 'Sí, cancelar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={!!cancelTarget}
+        title="Cancelar orden"
+        description="¿Estás seguro de cancelar esta orden? El stock de los productos será restaurado."
+        confirmLabel="Sí, cancelar"
+        loading={changingStatus !== null}
+        onCancel={() => setCancelTarget(null)}
+        onConfirm={confirmCancel}
+      />
     </div>
   );
 }

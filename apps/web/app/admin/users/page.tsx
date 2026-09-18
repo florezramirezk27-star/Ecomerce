@@ -1,7 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Users as UsersIcon, Pencil } from 'lucide-react';
 import { apiFetch, User, formatDate } from '@/lib/admin';
+import {
+  Alert,
+  Badge,
+  Card,
+  EmptyState,
+  LoadingState,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  Table,
+  Td,
+  Th,
+  THead,
+  TRow,
+} from '@/components/admin/ui';
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -9,6 +25,7 @@ export default function AdminUsersPage() {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [roleChangeId, setRoleChangeId] = useState<string | null>(null);
+  const [roleLoading, setRoleLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -38,6 +55,7 @@ export default function AdminUsersPage() {
 
   const handleRoleChange = async (id: string, newRole: 'ADMIN' | 'CUSTOMER') => {
     try {
+      setRoleLoading(true);
       const updated = await apiFetch(`/users/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ role: newRole }),
@@ -50,6 +68,8 @@ export default function AdminUsersPage() {
       setError(
         err instanceof Error ? err.message : 'Error al actualizar usuario',
       );
+    } finally {
+      setRoleLoading(false);
     }
   };
 
@@ -59,159 +79,171 @@ export default function AdminUsersPage() {
       u.email.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
+  const roleButtonClass = (active: boolean) =>
+    `rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+      active
+        ? 'bg-blue-600 text-white shadow-sm'
+        : 'text-slate-600 hover:bg-slate-100'
+    }`;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-4xl font-bold text-gray-900">
-          Usuarios
-        </h1>
-        <p className="text-gray-600 mt-1">
-          Gestiona los usuarios de tu tienda
-        </p>
-      </div>
+      <PageHeader
+        title="Usuarios"
+        subtitle="Gestiona los usuarios de tu tienda"
+      />
 
-      {error && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">
-          {error}
-        </div>
-      )}
+      {error && <Alert type="error">{error}</Alert>}
 
-      {/* Search */}
-      <div className="bg-white rounded-lg shadow-md p-4">
-        <input
-          type="text"
-          placeholder="Buscar por nombre o email..."
+      <Card className="p-4">
+        <SearchInput
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onChange={setSearchTerm}
+          placeholder="Buscar por nombre o email..."
+          className="max-w-md"
         />
-      </div>
+      </Card>
 
-      {/* Users list */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <Card className="overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">Cargando usuarios...</p>
-          </div>
+          <LoadingState label="Cargando usuarios..." />
         ) : filteredUsers.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
-            <p className="text-lg">No hay usuarios</p>
-          </div>
+          <EmptyState
+            icon={UsersIcon}
+            title="No hay usuarios"
+            description="Los usuarios registrados en tu tienda aparecerán aquí."
+          />
         ) : (
           <>
-            {/* Desktop table */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+            <div className="hidden md:block">
+              <Table>
+                <THead>
                   <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nombre</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Órdenes</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Rol</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Registro</th>
+                    <Th>Usuario</Th>
+                    <Th>Email</Th>
+                    <Th>Órdenes</Th>
+                    <Th>Rol</Th>
+                    <Th>Registro</Th>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
+                </THead>
+                <tbody>
                   {filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50 transition">
-                      <td className="px-6 py-4 font-semibold text-gray-900">{user.name}</td>
-                      <td className="px-6 py-4 text-sm">{user.email}</td>
-                      <td className="px-6 py-4 text-sm">
-                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-semibold">
+                    <TRow key={user.id}>
+                      <Td>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold uppercase text-slate-600">
+                            {user.name.charAt(0)}
+                          </div>
+                          <div className="font-semibold text-slate-900">
+                            {user.name}
+                          </div>
+                        </div>
+                      </Td>
+                      <Td className="text-slate-600">{user.email}</Td>
+                      <Td>
+                        <Badge tone="blue">
                           {user._count?.orders || 0}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
+                        </Badge>
+                      </Td>
+                      <Td>
                         {roleChangeId === user.id ? (
-                          <div className="flex gap-2">
-                            <button onClick={() => handleRoleChange(user.id, 'ADMIN')}
-                              className={`px-3 py-1 rounded-lg text-sm font-medium transition ${user.role === 'ADMIN' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-600'}`}>
+                          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+                            <button
+                              onClick={() => handleRoleChange(user.id, 'ADMIN')}
+                              disabled={roleLoading}
+                              className={roleButtonClass(user.role === 'ADMIN')}
+                            >
                               Admin
                             </button>
-                            <button onClick={() => handleRoleChange(user.id, 'CUSTOMER')}
-                              className={`px-3 py-1 rounded-lg text-sm font-medium transition ${user.role === 'CUSTOMER' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-600'}`}>
+                            <button
+                              onClick={() => handleRoleChange(user.id, 'CUSTOMER')}
+                              disabled={roleLoading}
+                              className={roleButtonClass(user.role === 'CUSTOMER')}
+                            >
                               Cliente
                             </button>
                           </div>
                         ) : (
-                          <button onClick={() => setRoleChangeId(user.id)}
-                            className={`px-3 py-1 rounded-full text-xs font-semibold ${user.role === 'ADMIN' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                            {user.role}
+                          <button
+                            onClick={() => setRoleChangeId(user.id)}
+                            className="group inline-flex items-center gap-1.5"
+                            title="Cambiar rol"
+                          >
+                            <Badge tone={user.role === 'ADMIN' ? 'blue' : 'green'}>
+                              {user.role === 'ADMIN' ? 'Admin' : 'Cliente'}
+                            </Badge>
+                            <Pencil className="h-3.5 w-3.5 text-slate-300 transition group-hover:text-slate-500" />
                           </button>
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{formatDate(user.createdAt)}</td>
-                    </tr>
+                      </Td>
+                      <Td className="text-slate-500">
+                        {formatDate(user.createdAt)}
+                      </Td>
+                    </TRow>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             </div>
 
-            {/* Mobile cards */}
-            <div className="block md:hidden divide-y divide-gray-200">
+            <div className="space-y-3 p-4 md:hidden">
               {filteredUsers.map((user) => (
-                <div key={user.id} className="p-4 space-y-3">
-                  <div>
-                    <div className="font-semibold text-gray-900">{user.name}</div>
-                    <div className="text-sm text-gray-500">{user.email}</div>
+                <Card key={user.id} className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold uppercase text-slate-600">
+                      {user.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {user.name}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {user.email}
+                      </p>
+                    </div>
+                    <Badge tone="blue">{user._count?.orders || 0} órdenes</Badge>
                   </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="text-gray-500">Órdenes:</span>
-                    <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-semibold text-xs">
-                      {user._count?.orders || 0}
-                    </span>
-                    <span className="text-gray-500 ml-2">Rol:</span>
+                  <div className="mt-3 flex items-center justify-between">
                     {roleChangeId === user.id ? (
-                      <div className="flex gap-1">
-                        <button onClick={() => handleRoleChange(user.id, 'ADMIN')}
-                          className={`px-2 py-0.5 rounded text-xs font-medium ${user.role === 'ADMIN' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-600'}`}>
+                      <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+                        <button
+                          onClick={() => handleRoleChange(user.id, 'ADMIN')}
+                          disabled={roleLoading}
+                          className={roleButtonClass(user.role === 'ADMIN')}
+                        >
                           Admin
                         </button>
-                        <button onClick={() => handleRoleChange(user.id, 'CUSTOMER')}
-                          className={`px-2 py-0.5 rounded text-xs font-medium ${user.role === 'CUSTOMER' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-600'}`}>
+                        <button
+                          onClick={() => handleRoleChange(user.id, 'CUSTOMER')}
+                          disabled={roleLoading}
+                          className={roleButtonClass(user.role === 'CUSTOMER')}
+                        >
                           Cliente
                         </button>
                       </div>
                     ) : (
-                      <button onClick={() => setRoleChangeId(user.id)}
-                        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${user.role === 'ADMIN' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                        {user.role}
+                      <button
+                        onClick={() => setRoleChangeId(user.id)}
+                        className="group inline-flex items-center gap-1.5"
+                        title="Cambiar rol"
+                      >
+                        <Badge tone={user.role === 'ADMIN' ? 'blue' : 'green'}>
+                          {user.role === 'ADMIN' ? 'Admin' : 'Cliente'}
+                        </Badge>
+                        <Pencil className="h-3.5 w-3.5 text-slate-300 transition group-hover:text-slate-500" />
                       </button>
                     )}
+                    <span className="text-xs text-slate-400">
+                      {formatDate(user.createdAt)}
+                    </span>
                   </div>
-                  <div className="text-xs text-gray-500">
-                    Registro: {formatDate(user.createdAt)}
-                  </div>
-                </div>
+                </Card>
               ))}
             </div>
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 p-4 border-t border-gray-200">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Anterior
-                </button>
-                <span className="text-sm text-gray-600">
-                  Página {page} de {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Siguiente
-                </button>
-              </div>
-            )}
+            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
           </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

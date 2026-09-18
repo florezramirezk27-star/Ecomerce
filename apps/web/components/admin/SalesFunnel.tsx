@@ -1,6 +1,7 @@
 'use client';
 
 import { TrendingUp, ArrowDown, Users, ShoppingCart, CreditCard, Package } from 'lucide-react';
+import { Card } from '@/components/admin/ui';
 
 interface SalesFunnelProps {
   avgOrderValue: number;
@@ -25,10 +26,10 @@ export default function SalesFunnel({
   formatPrice,
 }: SalesFunnelProps) {
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-200/60">
+    <Card className="p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-400 font-medium">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             Métricas clave
           </p>
           <h2 className="mt-1.5 text-xl font-bold text-slate-900">Datos reales</h2>
@@ -87,8 +88,8 @@ export default function SalesFunnel({
             <Package className="h-4 w-4" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400 font-medium">
-              Embudo de ventas
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Embudo de ventas
             </p>
             <p className="text-sm font-semibold text-slate-900">
               {formatPrice(totalRevenue)} — {totalOrders} órdenes
@@ -135,6 +136,6 @@ export default function SalesFunnel({
           })}
         </div>
       </div>
-    </section>
+    </Card>
   );
 }

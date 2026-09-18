@@ -1,8 +1,30 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Boxes,
+  CheckCircle2,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
+  XCircle,
+} from 'lucide-react';
 import { apiFetch, formatPrice } from '@/lib/admin';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  LoadingState,
+  PageHeader,
+  Table,
+  Td,
+  Th,
+  THead,
+  TRow,
+} from '@/components/admin/ui';
 
 interface ImportedProduct {
   id: string;
@@ -92,131 +114,173 @@ export default function AdminDropiPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold text-gray-900">Dropi</h1>
-          <p className="text-gray-600 mt-1">
-            Importa productos del catálogo Dropi a tu tienda
-          </p>
-        </div>
-        <Link
-          href="/dropi"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition shadow-md"
-        >
-          Ir al Catálogo Dropi
-        </Link>
-      </div>
+      <PageHeader
+        title="Dropi"
+        subtitle="Importa productos del catálogo Dropi a tu tienda"
+        action={
+          <Link
+            href="/dropi"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Ir al Catálogo Dropi
+          </Link>
+        }
+      />
 
-      <div className="bg-white rounded-xl shadow-md p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Conexión con Dropi
-        </h2>
+      <Card className="p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <Boxes className="h-4.5 w-4.5" />
+          </div>
+          <h2 className="text-base font-bold text-slate-900">
+            Conexión con Dropi
+          </h2>
+        </div>
+
         {statusLoading ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
             Verificando conexión...
           </div>
         ) : status?.connected ? (
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-green-500" />
-            <span className="text-sm text-gray-700">
-              Conectado como <strong>{status.email}</strong>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Badge tone="green">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Conectado
+            </Badge>
+            <span className="text-sm text-slate-700">
+              Correo:{' '}
+              <strong className="font-semibold text-slate-900">
+                {status.email}
+              </strong>
             </span>
-            <span className="text-xs text-gray-400 ml-2">(auto-reconecta cada 45 min)</span>
-            <button
+            <span className="text-xs text-slate-400">
+              auto-reconecta cada 45 min
+            </span>
+            <Button
+              variant="secondary"
+              className="sm:ml-auto"
+              isLoading={reconnecting}
               onClick={() => handleRelogin(false)}
-              disabled={reconnecting}
-              className="ml-auto text-sm text-blue-600 hover:text-blue-800 underline disabled:opacity-50"
             >
-              {reconnecting ? 'Reconectando...' : 'Reconectar'}
-            </button>
+              <RefreshCw className="h-4 w-4" />
+              Reconectar
+            </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-red-500" />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Badge tone="red">
+              <XCircle className="h-3.5 w-3.5" />
+              Desconectado
+            </Badge>
             <span className="text-sm text-red-600">
-              Desconectado — revisá las credenciales en .env
+              Revisa las credenciales en el archivo .env
             </span>
-            <button
+            <Button
+              variant="secondary"
+              className="sm:ml-auto"
+              isLoading={reconnecting}
               onClick={() => handleRelogin(true)}
-              disabled={reconnecting}
-              className="ml-auto text-sm text-blue-600 hover:text-blue-800 underline disabled:opacity-50"
             >
-              {reconnecting ? 'Reconectando...' : 'Forzar Reconexión'}
-            </button>
+              <RefreshCw className="h-4 w-4" />
+              Forzar reconexión
+            </Button>
           </div>
         )}
-      </div>
+      </Card>
 
-      <div className="bg-white rounded-xl shadow-md p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Productos importados recientemente
-        </h2>
-        <div className="flex items-center gap-3 mb-4">
-          <button
+      <Card className="overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">
+              Productos importados recientemente
+            </h2>
+            <p className="text-sm text-slate-500">
+              Últimos productos sincronizados con el catálogo Dropi
+            </p>
+          </div>
+          <Button
+            variant="success"
+            isLoading={syncing}
             onClick={handleSyncStock}
-            disabled={syncing}
-            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow"
           >
-            {syncing ? 'Sincronizando...' : 'Sincronizar stock y precios'}
-          </button>
+            <RefreshCw className="h-4 w-4" />
+            Sincronizar stock y precios
+          </Button>
+        </div>
+
+        <div className="p-6">
           {syncMessage && (
-            <span
-              className={`text-sm ${syncMessage.startsWith('Error') ? 'text-red-600' : 'text-gray-600'}`}
-            >
+            <Alert type={syncMessage.startsWith('Error') ? 'error' : 'success'} className="mb-4">
               {syncMessage}
-            </span>
+            </Alert>
+          )}
+
+          {loading ? (
+            <LoadingState label="Cargando productos..." />
+          ) : products.length === 0 ? (
+            <EmptyState
+              icon={Boxes}
+              title="No hay productos importados"
+              description="Cuando importes productos desde el catálogo Dropi, aparecerán aquí."
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <THead>
+                  <tr>
+                    <Th>Producto</Th>
+                    <Th>Precio</Th>
+                    <Th>Stock</Th>
+                    <Th>Categoría</Th>
+                  </tr>
+                </THead>
+                <tbody>
+                  {products.map((p) => (
+                    <TRow key={p.id}>
+                      <Td>
+                        <div className="flex items-center gap-3">
+                          {p.image ? (
+                            <img
+                              src={p.image}
+                              alt={p.name}
+                              className="h-10 w-10 rounded-lg object-cover ring-1 ring-slate-200"
+                            />
+                          ) : (
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
+                              <Boxes className="h-4 w-4" />
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-medium text-slate-900">{p.name}</div>
+                            {p.customCode && (
+                              <div className="text-xs text-slate-400">
+                                SKU: {p.customCode}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </Td>
+                      <Td className="font-semibold text-emerald-600">
+                        {formatPrice(p.price)}
+                      </Td>
+                      <Td>
+                        <Badge tone={p.stock > 0 ? 'green' : 'red'}>
+                          {p.stock} uds
+                        </Badge>
+                      </Td>
+                      <Td className="text-slate-600">
+                        {p.category?.name || 'N/A'}
+                      </Td>
+                    </TRow>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
           )}
         </div>
-        {loading ? (
-          <div className="text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          </div>
-        ) : products.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">
-            No hay productos importados aún.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Producto</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Precio</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Stock</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Categoría</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {products.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 flex items-center gap-3">
-                      {p.image ? (
-                        <img src={p.image} alt={p.name} className="h-10 w-10 rounded object-cover" />
-                      ) : (
-                        <div className="h-10 w-10 rounded bg-gray-200 flex items-center justify-center">📦</div>
-                      )}
-                      <div>
-                        <div className="font-medium text-gray-900">{p.name}</div>
-                        {p.customCode && (
-                          <div className="text-xs text-gray-400">SKU: {p.customCode}</div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-green-600">
-                      {formatPrice(p.price)}
-                    </td>
-                    <td className="px-4 py-3">{p.stock}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {p.category?.name || 'N/A'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      </Card>
     </div>
   );
 }

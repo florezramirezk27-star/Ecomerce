@@ -1,6 +1,7 @@
 'use client';
 
 import { Package, CheckCircle, Truck, XCircle, Clock } from 'lucide-react';
+import { Badge, Card } from '@/components/admin/ui';
 import type { DashboardRecentOrder } from '@/lib/admin';
 
 interface RecentOrdersProps {
@@ -53,26 +54,24 @@ const statusConfig: Record<
 export default function RecentOrders({ orders, formatDate, formatPrice }: RecentOrdersProps) {
   if (orders.length === 0) {
     return (
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-200/60">
-        <p className="text-center py-12 text-sm text-slate-500">No hay pedidos recientes</p>
-      </section>
+      <Card className="p-6">
+        <p className="py-12 text-center text-sm text-slate-500">No hay pedidos recientes</p>
+      </Card>
     );
   }
 
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-200/60">
+    <Card className="p-6">
       <div className="mb-5 flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-400 font-medium">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             Pedidos recientes
           </p>
           <h3 className="mt-1.5 text-xl font-bold text-slate-900">
             Actividad de pedidos
           </h3>
         </div>
-        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 ring-1 ring-emerald-200">
-          Tiempo real
-        </span>
+        <Badge tone="green">Tiempo real</Badge>
       </div>
 
       <div className="space-y-3">
@@ -113,6 +112,6 @@ export default function RecentOrders({ orders, formatDate, formatPrice }: Recent
           );
         })}
       </div>
-    </section>
+    </Card>
   );
 }

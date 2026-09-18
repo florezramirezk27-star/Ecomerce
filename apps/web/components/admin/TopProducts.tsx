@@ -3,6 +3,8 @@
 import { ShoppingCart } from 'lucide-react';
 import type { DashboardTopProduct } from '@/lib/admin';
 
+import { Badge, Card } from '@/components/admin/ui';
+
 interface TopProductsProps {
   products: DashboardTopProduct[];
   formatPrice: (v: number | string) => string;
@@ -17,28 +19,26 @@ const productImages: Record<string, string> = {
 export default function TopProducts({ products, formatPrice }: TopProductsProps) {
   if (products.length === 0) {
     return (
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-200/60">
-        <p className="text-center py-12 text-sm text-slate-500">Aún no hay ventas</p>
-      </section>
+      <Card className="p-6">
+        <p className="py-12 text-center text-sm text-slate-500">Aún no hay ventas</p>
+      </Card>
     );
   }
 
   const maxRevenue = Math.max(...products.map((p) => p.revenue));
 
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-200/60">
+    <Card className="p-6">
       <div className="mb-5 flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-400 font-medium">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             Productos más vendidos
           </p>
           <h3 className="mt-1.5 text-xl font-bold text-slate-900">
             Top {products.length}
           </h3>
         </div>
-        <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-600 ring-1 ring-cyan-200">
-          En vivo
-        </span>
+        <Badge tone="green">En vivo</Badge>
       </div>
 
       <div className="space-y-3">
@@ -86,6 +86,6 @@ export default function TopProducts({ products, formatPrice }: TopProductsProps)
           );
         })}
       </div>
-    </section>
+    </Card>
   );
 }
