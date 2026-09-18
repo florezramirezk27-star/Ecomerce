@@ -35,5 +35,13 @@ export class CheckoutDto {
 
   @IsString()
   @IsOptional()
+  shippingDocType?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingDocNumber?: string;
+
+  @IsString()
+  @IsOptional()
   notes?: string;
 }

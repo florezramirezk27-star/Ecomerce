@@ -8,5 +8,7 @@ export const checkoutSchema = z.object({
   shippingState: z.string().min(1, 'El departamento es requerido'),
   shippingZip: z.string().optional(),
   shippingEmail: z.string().email().optional().or(z.literal('')),
+  shippingDocType: z.string().optional(),
+  shippingDocNumber: z.string().optional(),
   notes: z.string().optional(),
 });

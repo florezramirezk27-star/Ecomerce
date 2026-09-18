@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api";
 import ProductCarousel from "@/components/ProductCarousel";
 import PromoGrid from "@/components/PromoGrid";
 import VideoHero from "@/components/VideoHero";
+import Footer from "@/components/Footer";
 import {
   Banknote,
   Eye,
@@ -89,6 +90,7 @@ export default function Home() {
   }
 
   return (
+    <>
     <main className="min-h-screen bg-orange-50">
       <VideoHero />
       <div className="max-w-7xl mx-auto px-6 py-12 space-y-12">
@@ -242,6 +244,8 @@ export default function Home() {
           </div>
         </div>
       </section>
-    </main>
+      </main>
+      <Footer />
+    </>
   );
 }

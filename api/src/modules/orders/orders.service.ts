@@ -52,6 +52,11 @@ export class OrdersService {
       throw new BadRequestException('Cart is empty');
     }
 
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    const customerEmail = dto.shippingEmail || user?.email || null;
+
     const dropiCartItems = cart.items.filter((i) => i.product.dropiProductId);
     if (dropiCartItems.length > 0) {
       const stockCheck = await this.dropiService.validateStock(
@@ -114,7 +119,7 @@ export class OrdersService {
           shippingCity: dto.shippingCity,
           shippingState: dto.shippingState,
           shippingZip: dto.shippingZip || null,
-          shippingEmail: dto.shippingEmail || null,
+          shippingEmail: customerEmail,
           notes: dto.notes || null,
 
           items: {
@@ -160,13 +165,9 @@ export class OrdersService {
       return order;
     });
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
     if (user) {
       this.mailService.sendOrderConfirmationEmail(
-        dto.shippingEmail || user.email,
+        customerEmail || '',
         user.name,
         order.id,
         cart.items.map((item) => ({
@@ -178,12 +179,14 @@ export class OrdersService {
         {
           name: dto.shippingName,
           phone: dto.shippingPhone,
-          email: dto.shippingEmail,
+          email: customerEmail,
           address: dto.shippingAddress,
           city: dto.shippingCity,
           state: dto.shippingState,
           zip: dto.shippingZip,
           notes: dto.notes,
+          docType: dto.shippingDocType,
+          docNumber: dto.shippingDocNumber,
         },
       );
     }
@@ -204,10 +207,13 @@ export class OrdersService {
             shipping: {
               name: dto.shippingName,
               phone: dto.shippingPhone,
-              email: dto.shippingEmail || undefined,
+              email: customerEmail || undefined,
               address: dto.shippingAddress,
               city: dto.shippingCity,
               state: dto.shippingState,
+              zip: dto.shippingZip || undefined,
+              docType: dto.shippingDocType || undefined,
+              docNumber: dto.shippingDocNumber || undefined,
               notes: dto.notes || undefined,
             },
           },
@@ -225,7 +231,7 @@ export class OrdersService {
       this.mailService.sendAdminOrderNotification(
         adminEmail,
         user?.name || dto.shippingName,
-        user?.email || dto.shippingEmail || null,
+        customerEmail || null,
         order.id,
         cart.items.map((item) => ({
           name: item.product.name,
@@ -236,12 +242,14 @@ export class OrdersService {
         {
           name: dto.shippingName,
           phone: dto.shippingPhone,
-          email: dto.shippingEmail,
+          email: customerEmail,
           address: dto.shippingAddress,
           city: dto.shippingCity,
           state: dto.shippingState,
           zip: dto.shippingZip,
           notes: dto.notes,
+          docType: dto.shippingDocType,
+          docNumber: dto.shippingDocNumber,
         },
         dropiStatus,
       );

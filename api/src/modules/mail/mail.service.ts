@@ -16,6 +16,8 @@ interface ShippingInfo {
   state: string;
   zip?: string | null;
   notes?: string | null;
+  docType?: string | null;
+  docNumber?: string | null;
 }
 
 function htmlToText(html: string): string {
@@ -291,74 +293,126 @@ export class MailService {
     total: number,
     shipping?: ShippingInfo,
   ) {
+    const invoiceNumber = orderId.slice(0, 8).toUpperCase();
+    const date = new Date().toLocaleDateString('es-CO', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    const subtotal = items.reduce(
+      (acc, i) => acc + i.price * i.quantity,
+      0,
+    );
+    const currency = (v: number) => `$${v.toLocaleString('es-CO')}`;
+
     const itemsHtml = items
       .map(
-        (i) =>
-          `<tr>
-            <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px">${i.name}</td>
-            <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px;text-align:center">${i.quantity}</td>
-            <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px;text-align:right">$${i.price.toLocaleString('es-CO')}</td>
-            <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px;text-align:right;font-weight:bold">$${(i.price * i.quantity).toLocaleString('es-CO')}</td>
+        (i, idx) =>
+          `<tr style="${idx % 2 === 1 ? 'background:#f8fafc' : ''}">
+            <td style="padding:12px 16px;border-bottom:1px solid #eef0f3;color:#18181b;font-size:14px;line-height:1.45">${i.name}</td>
+            <td style="padding:12px 16px;border-bottom:1px solid #eef0f3;color:#52525b;font-size:14px;text-align:center">${i.quantity}</td>
+            <td style="padding:12px 16px;border-bottom:1px solid #eef0f3;color:#52525b;font-size:14px;text-align:right">${currency(i.price)}</td>
+            <td style="padding:12px 16px;border-bottom:1px solid #eef0f3;color:#18181b;font-size:14px;text-align:right;font-weight:600">${currency(i.price * i.quantity)}</td>
           </tr>`,
       )
       .join('\n');
 
-    const shippingHtml = shipping
-      ? `<div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e4e4e7">
-          <h3 style="margin:0 0 10px;font-size:14px;color:#18181b;font-weight:700">Dirección de envío</h3>
-          <p style="margin:0;font-size:13px;color:#52525b;line-height:1.6">
-            ${shipping.name}<br>
-            ${shipping.phone}<br>
-            ${shipping.email ? `${shipping.email}<br>` : ''}
-            ${shipping.address}<br>
-            ${shipping.city}, ${shipping.state}${shipping.zip ? ` — ${shipping.zip}` : ''}
-          </p>
-          ${shipping.notes ? `<p style="margin:8px 0 0;font-size:12px;color:#71717a;font-style:italic">Notas: ${shipping.notes}</p>` : ''}
-        </div>`
+    const docLine = shipping?.docNumber
+      ? `<tr>
+            <td style="padding:5px 0;color:#64748b">Documento</td>
+            <td style="padding:5px 0;text-align:right;color:#0f172a;font-weight:600">${shipping.docType || 'CC'} ${shipping.docNumber}</td>
+          </tr>`
+      : '';
+
+    const shippingAddressHtml = shipping
+      ? `<tr>
+            <td style="padding:5px 0;color:#64748b">Dirección de entrega</td>
+            <td style="padding:5px 0;text-align:right;color:#0f172a;font-weight:600">${shipping.address}, ${shipping.city}, ${shipping.state}${shipping.zip ? ` (${shipping.zip})` : ''}</td>
+          </tr>`
+      : '';
+
+    const notesHtml = shipping?.notes
+      ? `<tr>
+            <td style="padding:5px 0;color:#64748b">Notas del pedido</td>
+            <td style="padding:5px 0;text-align:right;color:#0f172a;font-weight:600;font-style:italic">${shipping.notes}</td>
+          </tr>`
       : '';
 
     await this.sendHtml({
       to,
-      subject: `Factura de compra #${orderId.slice(0, 8)} — Kronio Market`,
+      subject: `Factura de compra #${invoiceNumber} — Kronio Market`,
       tag: 'ORDER CONFIRMATION',
       html: `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0">
-  <div style="max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
-    <div style="background:#18181b;padding:32px 24px;text-align:center">
-      <h1 style="color:#fff;margin:0;font-size:24px;letter-spacing:1px">KRONIO MARKET</h1>
-      <p style="color:#a1a1aa;margin:6px 0 0;font-size:13px">Factura electrónica</p>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#eef2f7;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <div style="max-width:640px;margin:0 auto;padding:24px 12px">
+
+    <!-- Marcador: encabezado con marca -->
+    <div style="background:linear-gradient(135deg,#2563eb 0%,#4f46e5 60%,#4338ca 100%);border-radius:16px 16px 0 0;padding:28px 32px;color:#fff">
+      <table style="width:100%;border-collapse:collapse">
+        <tr>
+          <td style="vertical-align:middle">
+            <div style="display:inline-block;background:#fff;color:#2563eb;font-size:15px;font-weight:800;padding:8px 12px;border-radius:10px;letter-spacing:0.5px">KRONIO MARKET</div>
+            <p style="margin:8px 0 0;font-size:12px;color:#c7d2fe;font-weight:500;letter-spacing:0.6px;text-transform:uppercase">Comprobante de compra</p>
+          </td>
+          <td style="vertical-align:middle;text-align:right">
+            <p style="margin:0;font-size:11px;color:#c7d2fe;text-transform:uppercase;letter-spacing:0.5px">Factura N°</p>
+            <p style="margin:2px 0 0;font-size:18px;font-weight:800;letter-spacing:1px">${invoiceNumber}</p>
+          </td>
+        </tr>
+      </table>
     </div>
-    <div style="padding:32px 24px">
-      <p style="color:#333;font-size:15px;line-height:1.5">Hola <strong>${name}</strong>,</p>
-      <p style="color:#333;font-size:15px;line-height:1.5">Gracias por tu compra. Aquí están los detalles de tu factura:</p>
 
-      <div style="background:#f4f4f5;border-radius:8px;padding:16px;margin:20px 0">
-        <table style="width:100%;font-size:13px;color:#52525b">
-          <tr>
-            <td style="padding:4px 0">N° de factura</td>
-            <td style="padding:4px 0;text-align:right;font-weight:bold;color:#18181b">${orderId}</td>
-          </tr>
-          <tr>
-            <td style="padding:4px 0">Fecha</td>
-            <td style="padding:4px 0;text-align:right;font-weight:bold;color:#18181b">${new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })}</td>
-          </tr>
-          <tr>
-            <td style="padding:4px 0">Método de pago</td>
-            <td style="padding:4px 0;text-align:right;font-weight:bold;color:#16a34a">Pago contra entrega</td>
-          </tr>
-        </table>
-      </div>
+    <div style="background:#ffffff;border-radius:0 0 16px 16px;padding:32px;box-shadow:0 10px 30px rgba(30,41,59,0.08)">
 
-      <h3 style="font-size:15px;color:#18181b;margin:24px 0 10px;font-weight:700">Productos</h3>
+      <!-- Saludo -->
+      <p style="margin:0 0 6px;font-size:15px;color:#0f172a;line-height:1.5">Hola <strong>${name}</strong>,</p>
+      <p style="margin:0 0 24px;font-size:14px;color:#64748b;line-height:1.6">
+        ¡Gracias por tu compra en Kronio Market! Este es tu comprobante. El pago se realiza contra entrega.
+      </p>
+
+      <!-- Data del documento -->
+      <table style="width:100%;border-collapse:collapse;background:#f8fafc;border:1px solid #eef0f3;border-radius:12px;padding:0">
+        <tr>
+          <td style="padding:16px 20px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <tr>
+                <td style="padding:5px 0;color:#64748b">Fecha</td>
+                <td style="padding:5px 0;text-align:right;color:#0f172a;font-weight:600">${date}</td>
+              </tr>
+              <tr>
+                <td style="padding:5px 0;color:#64748b">Cliente</td>
+                <td style="padding:5px 0;text-align:right;color:#0f172a;font-weight:600">${shipping?.name || name}</td>
+              </tr>
+              <tr>
+                <td style="padding:5px 0;color:#64748b">Teléfono</td>
+                <td style="padding:5px 0;text-align:right;color:#0f172a;font-weight:600">${shipping?.phone || '—'}</td>
+              </tr>
+              ${docLine}
+              <tr>
+                <td style="padding:5px 0;color:#64748b">Método de pago</td>
+                <td style="padding:5px 0;text-align:right;color:#059669;font-weight:700">Pago contra entrega</td>
+              </tr>
+              ${shippingAddressHtml}
+              ${notesHtml}
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Detalle de productos -->
+      <h3 style="margin:28px 0 12px;font-size:13px;color:#0f172a;font-weight:700;text-transform:uppercase;letter-spacing:0.6px">Detalle de tu pedido</h3>
       <table style="width:100%;border-collapse:collapse">
         <thead>
-          <tr style="background:#f4f4f5">
-            <th style="padding:10px 16px;text-align:left;font-size:12px;color:#71717a;text-transform:uppercase">Producto</th>
-            <th style="padding:10px 16px;text-align:center;font-size:12px;color:#71717a;text-transform:uppercase">Cant</th>
-            <th style="padding:10px 16px;text-align:right;font-size:12px;color:#71717a;text-transform:uppercase">Precio</th>
-            <th style="padding:10px 16px;text-align:right;font-size:12px;color:#71717a;text-transform:uppercase">Subtotal</th>
+          <tr style="background:#f1f5f9">
+            <th style="padding:11px 16px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;border-radius:8px 0 0 8px">Producto</th>
+            <th style="padding:11px 16px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Cant.</th>
+            <th style="padding:11px 16px;text-align:right;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Precio</th>
+            <th style="padding:11px 16px;text-align:right;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;border-radius:0 8px 8px 0">Subtotal</th>
           </tr>
         </thead>
         <tbody>
@@ -366,29 +420,56 @@ export class MailService {
         </tbody>
         <tfoot>
           <tr>
-            <td colspan="3" style="padding:14px 16px;text-align:right;font-size:14px;color:#333;font-weight:bold">Total:</td>
-            <td style="padding:14px 16px;text-align:right;font-size:18px;color:#2563eb;font-weight:bold">$${total.toLocaleString('es-CO')}</td>
+            <td colspan="3" style="padding:14px 16px 4px;text-align:right;font-size:13px;color:#64748b">Subtotal</td>
+            <td style="padding:14px 16px 4px;text-align:right;font-size:14px;color:#0f172a;font-weight:600">${currency(subtotal)}</td>
+          </tr>
+          <tr>
+            <td colspan="3" style="padding:4px 16px 16px;text-align:right;font-size:14px;color:#0f172a;font-weight:700">Total a pagar contra entrega</td>
+            <td style="padding:4px 16px 16px;text-align:right;font-size:20px;color:#2563eb;font-weight:800">${currency(total)}</td>
           </tr>
         </tfoot>
       </table>
 
-      ${shippingHtml}
-
-      <div style="margin-top:24px;padding:16px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0">
-        <p style="margin:0;font-size:13px;color:#166534;line-height:1.6">
-          <strong>💵 Pago contra entrega</strong><br>
-          Pagarás en efectivo cuando recibas tu pedido. Ten el monto exacto disponible.
-        </p>
+      <!-- Pago contra entrega -->
+      <div style="margin-top:24px;padding:16px 20px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px">
+        <table style="width:100%;border-collapse:collapse">
+          <tr>
+            <td style="vertical-align:top;padding-right:12px">
+              <div style="width:36px;height:36px;border-radius:50%;background:#10b981;color:#fff;text-align:center;line-height:36px;font-size:18px;font-weight:bold">💵</div>
+            </td>
+            <td style="vertical-align:middle">
+              <p style="margin:0;font-size:14px;color:#065f46;font-weight:700">Pago contra entrega</p>
+              <p style="margin:2px 0 0;font-size:13px;color:#047857;line-height:1.5">
+                Pagarás en efectivo al recibir tu pedido. Ten el monto exacto para facilitar la entrega.
+              </p>
+            </td>
+          </tr>
+        </table>
       </div>
 
-      <p style="color:#666;font-size:13px;margin-top:24px;border-top:1px solid #e4e4e7;padding-top:16px">
-        Te notificaremos cuando el estado de tu pedido cambie.<br><br>
-        Si tienes dudas, responde a este correo.
+      <!-- Garantías y legal -->
+      <table style="width:100%;border-collapse:collapse;margin-top:24px;background:#f8fafc;border:1px solid #eef0f3;border-radius:12px">
+        <tr>
+          <td style="padding:16px 20px">
+            <p style="margin:0 0 6px;font-size:13px;color:#0f172a;font-weight:700">Tus derechos como comprador</p>
+            <p style="margin:0;font-size:12px;color:#64748b;line-height:1.65">
+              Todos nuestros productos cuentan con garantía legal conforme a la Ley 1480 de 2011.
+              Tienes plazo de <strong>retracto</strong> de hasta 5 días hábiles y puedes solicitar cambios o
+              devoluciones según lo dispuesto por la ley. Cualquier novedad, respóndenos a este correo.
+            </p>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin:20px 0 0;font-size:12px;color:#94a3b8;line-height:1.6;border-top:1px solid #eef0f3;padding-top:16px">
+        Kronio Market &middot; Tienda en línea &middot; Bogotá, Colombia<br>
+        Correo de contacto: <span style="color:#2563eb">kroniomarket@gmail.com</span> &middot; NIT 000.000.000-0
       </p>
     </div>
-    <div style="background:#f4f4f5;padding:16px 24px;text-align:center;font-size:11px;color:#a1a1aa">
-      Kronio Market — Tu tienda de confianza
-    </div>
+
+    <p style="margin:16px 0 0;text-align:center;font-size:11px;color:#94a3b8">
+      Este es un correo generado automáticamente por Kronio Market. No lo respondas si es un error — escríbenos a kroniomarket@gmail.com.
+    </p>
   </div>
 </body>
 </html>`,

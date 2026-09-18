@@ -49,6 +49,8 @@ interface DropiOrderShippingInput {
   state: string;
   notes?: string;
   zip?: string;
+  docType?: string;
+  docNumber?: string;
   distributionCompanyId?: number;
   distributionCompanyName?: string;
   rateType?: 'CON RECAUDO' | 'SIN RECAUDO';
@@ -440,8 +442,8 @@ export class DropiOrdersService {
         id: distributionCompanyId,
         name: distributionCompanyName,
       },
-      dni: '',
-      dni_type: '',
+      dni: shipping.docNumber || '',
+      dni_type: shipping.docType || '',
       insurance: shipping.insurance ?? false,
       payment_method_id: 1,
       phone: shipping.phone,

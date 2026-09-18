@@ -43,6 +43,8 @@ export interface DropiShippingInfo {
   state: string;
   notes?: string;
   zip?: string;
+  docType?: string;
+  docNumber?: string;
   distributionCompanyId?: number;
   distributionCompanyName?: string;
   rateType?: 'CON RECAUDO' | 'SIN RECAUDO';
