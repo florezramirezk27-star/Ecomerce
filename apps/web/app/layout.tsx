@@ -9,6 +9,7 @@ import "@fontsource/anton";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Banner from "@/components/Banner";
+import Footer from "@/components/Footer";
 import StoreChat from "@/components/chat/StoreChat";
 
 const FALLBACK_ICON = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%232563eb"/><text x="16" y="24" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="22" fill="white">K</text></svg>';
@@ -47,6 +48,7 @@ export default function RootLayout({
         <Navbar />
         <Banner />
         <div className="flex-1">{children}</div>
+        <Footer />
         <StoreChat />
       </body>
     </html>

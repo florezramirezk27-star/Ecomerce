@@ -5,7 +5,12 @@ import { apiFetch } from "@/lib/api";
 import ProductCarousel from "@/components/ProductCarousel";
 import PromoGrid from "@/components/PromoGrid";
 import VideoHero from "@/components/VideoHero";
-import Footer from "@/components/Footer";
+import {
+  Banknote,
+  Eye,
+  Target,
+  Truck,
+} from "lucide-react";
 
 interface ProductSummary {
   id: string;
@@ -124,56 +129,119 @@ export default function Home() {
         )}
       </div>
 
-      <section className="bg-gradient-to-b from-white to-gray-50 border-t border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 py-16 md:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-              Nuestra Raz&oacute;n de Ser
+      <section className="relative overflow-hidden bg-white">
+        <div className="pointer-events-none absolute -top-32 -right-32 h-96 w-96 rounded-full bg-blue-100/50 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-orange-100/50 blur-3xl" />
+
+        <div className="relative mx-auto max-w-7xl px-6 py-16 md:py-24">
+          {/* Header */}
+          <div className="mx-auto mb-14 max-w-3xl text-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-blue-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+              Sobre nosotros
+            </span>
+            <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-gray-900 md:text-4xl">
+              Nuestra{" "}
+              <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                raz&oacute;n de ser
+              </span>
             </h2>
-            <p className="text-gray-500 max-w-lg mx-auto">
-              Conoce lo que nos impulsa a ofrecerte el mejor servicio cada d&iacute;a.
+            <p className="mx-auto mt-4 max-w-xl text-base text-gray-500">
+              Una tienda en l&iacute;nea pensada para todos los colombianos: pagas al
+              recibir tu pedido, en cualquier rinc&oacute;n del pa&iacute;s.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+          {/* Images + Misión/Visión */}
+          <div className="grid items-center gap-12 lg:grid-cols-2">
+            {/* Image collage */}
+            <div className="relative mx-auto w-full max-w-xl lg:mx-0">
+              <div className="group block overflow-hidden rounded-3xl border border-gray-100 shadow-2xl shadow-gray-200/60">
+                <img
+                  src="https://aveonline.co/wp-content/uploads/2024/08/IMG_3016.jpeg"
+                  alt="Env&iacute;os contra entrega en e-commerce"
+                  className="aspect-[4/3] w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Misi&oacute;n</h3>
-              <p className="text-gray-600 text-sm leading-relaxed">
-                Democratizar el acceso a productos de calidad en Colombia, ofreciendo una
-                experiencia de compra en l&iacute;nea segura, r&aacute;pida y confiable.
-                Nos comprometemos a conectar a las personas con los mejores productos,
-                brindando un servicio excepcional, precios justos y entregas oportunas en
-                todo el territorio nacional.
-              </p>
+
+              <div className="absolute -bottom-10 -right-2 hidden w-44 overflow-hidden rounded-2xl border-4 border-white shadow-xl md:block lg:-right-8">
+                <img
+                  src="https://images.pexels.com/photos/6699397/pexels-photo-6699397.jpeg?auto=compress&cs=tinysrgb&w=600"
+                  alt="Mensajero entregando un paquete"
+                  className="aspect-square w-full object-cover transition-transform duration-500 hover:scale-105"
+                />
+              </div>
+
+              <div className="absolute -top-5 right-1/2 hidden translate-x-1/2 rounded-full bg-white/95 px-4 py-1.5 text-xs font-semibold text-gray-700 shadow-lg shadow-gray-200/50 backdrop-blur md:block lg:right-6 lg:translate-x-0">
+                Entrega confiable en todo el pa&iacute;s
+              </div>
+
+              <div className="absolute -top-5 left-6 flex items-center gap-3 rounded-2xl border border-gray-100 bg-white/95 px-4 py-3 shadow-lg shadow-gray-200/50 backdrop-blur">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+                  <Banknote className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">Pago contra entrega</p>
+                  <p className="text-xs text-gray-500">No pagas hasta recibir</p>
+                </div>
+              </div>
+
+              <div className="absolute -bottom-6 left-8 flex items-center gap-3 rounded-2xl border border-gray-100 bg-white/95 px-4 py-3 shadow-lg shadow-gray-200/50 backdrop-blur">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                  <Truck className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">Env&iacute;os a todo el pa&iacute;s</p>
+                  <p className="text-xs text-gray-500">Hasta la puerta de tu casa</p>
+                </div>
+              </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
+            {/* Misión / Visión */}
+            <div className="space-y-6">
+              <div className="group relative overflow-hidden rounded-3xl border border-gray-100 bg-gradient-to-br from-blue-50/60 to-white p-8 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-100/60">
+                <div className="mb-5 flex items-center gap-4">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25 transition-transform group-hover:scale-105">
+                    <Target className="h-6 w-6" />
+                  </span>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+                      Por qu&eacute; existimos
+                    </p>
+                    <h3 className="text-xl font-bold text-gray-900">Misi&oacute;n</h3>
+                  </div>
+                </div>
+                <p className="text-sm leading-relaxed text-gray-600">
+                  Democratizar el acceso a productos de calidad en Colombia con un modelo
+                  de compra sencillo y de confianza: pago contra entrega, precios justos
+                  y entregas oportunas en todo el territorio nacional, sin necesidad de
+                  tarjeta ni pagos anticipados.
+                </p>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Visi&oacute;n</h3>
-              <p className="text-gray-600 text-sm leading-relaxed">
-                Ser la plataforma de comercio electr&oacute;nico l&iacute;der en Colombia
-                para 2030, reconocida por nuestra excelencia en servicio al cliente,
-                innovaci&oacute;n tecnol&oacute;gica y compromiso con la satisfacci&oacute;n
-                de cada comprador. Aspiramos a transformar la forma en que los colombianos
-                compran en l&iacute;nea, creando un ecosistema de confianza que impulse el
-                comercio digital en el pa&iacute;s.
-              </p>
+
+              <div className="group relative overflow-hidden rounded-3xl border border-gray-100 bg-gradient-to-br from-indigo-50/60 to-white p-8 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-100/60">
+                <div className="mb-5 flex items-center gap-4">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-transform group-hover:scale-105">
+                    <Eye className="h-6 w-6" />
+                  </span>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">
+                      A d&oacute;nde vamos
+                    </p>
+                    <h3 className="text-xl font-bold text-gray-900">Visi&oacute;n</h3>
+                  </div>
+                </div>
+                <p className="text-sm leading-relaxed text-gray-600">
+                  Ser en 2030 la tienda en l&iacute;nea m&aacute;s confiable de Colombia,
+                  reconocida por la cercan&iacute;a con cada comprador, la excelencia en el
+                  servicio y la innovaci&oacute;n tecnol&oacute;gica, transformando la forma
+                  en que los colombianos compran desde cualquier rinc&oacute;n del pa&iacute;s.
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </section>
-
-      <Footer />
     </main>
   );
 }
