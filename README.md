@@ -41,7 +41,7 @@ Monorepo gestionado con **pnpm workspaces** compuesto por dos aplicaciones:
 | `Cart` / `CartItem` | Carrito de compras por usuario |
 | `Order` | Pedidos con estados (PENDING/PAID/SHIPPED/DELIVERED/CANCELLED), datos de envio, idempotencyKey |
 | `OrderItem` | Items del pedido |
-| `OrderTracking` | Seguimiento de envios via Dropi/Aveonline (transportadora, estado, eventos, guia, respuesta cruda) |
+| `OrderTracking` | Seguimiento de envios via Dropi (transportadora, estado, eventos, guia, respuesta cruda) |
 | `ChatSession` | Sesiones de chat con estados de conversacion (EXPLORING -> COMPARING -> INTENT_TO_BUY -> CHECKOUT_READY) |
 | `ChatMessage` | Mensajes del chat con soporte para tool calls y resultados |
 
@@ -225,7 +225,6 @@ Plantillas HTML para:
 │           ├── ai/                 # Agente IA (Gemini, RAG, tools, guardrails)
 │           ├── dropi/              # Integracion con Dropi dropshipping (login 2FA, catalogo, ordenes, tracking)
 │           ├── dropi-integration/  # Puente WooCommerce (webhooks /wp-json/wc/v3) para pedidos de Dropi
-│           ├── aveonline/          # Integracion con Aveonline (dropshipping API V3)
 │           ├── uploads/            # Upload de imagenes (Cloudinary/S3)
 │           ├── mail/               # Servicio de email (Nodemailer)
 │           └── settings/           # Configuracion de tienda (logo)
@@ -311,6 +310,7 @@ Ver `.env.example` para la lista completa. Las variables principales son:
 | `AWS_*` | Credenciales de AWS S3 |
 | `SMTP_*` | Configuracion de email SMTP |
 | `GOOGLE_CLIENT_ID/SECRET` | Credenciales de Google OAuth |
+| `FACEBOOK_CLIENT_ID/SECRET` | Credenciales de Facebook OAuth (Meta for Developers) |
 | `FRONTEND_URL` | URL del frontend (para links de email) |
 
 ---

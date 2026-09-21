@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { isAuthenticated } from "@/lib/auth";
+import { getUser, isAuthenticated } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { getGuestCart, removeFromGuestCart, updateGuestCartQuantity, type GuestCartItem } from "@/lib/guest-cart";
+import { trackMetaEvent } from "@/lib/facebook-pixel";
 import { DEPARTMENTS, MUNICIPALITIES } from "@/lib/colombia";
 
 interface CartItem {
@@ -240,6 +241,15 @@ export default function CartPage() {
       notes: "",
     });
     setMessage(null);
+    void trackMetaEvent("InitiateCheckout", {
+      num_items: items.reduce((acc, item) => acc + item.quantity, 0),
+      value: items.reduce(
+        (acc, item) =>
+          acc + Number(item.product.price) * item.quantity,
+        0,
+      ),
+      currency: "COP",
+    });
     setShowCheckout(true);
   };
 
@@ -287,6 +297,21 @@ export default function CartPage() {
           : "✓ Pedido realizado con éxito. Pagarás contra entrega.",
       });
       setItems([]);
+      void trackMetaEvent("Purchase", {
+        value: items.reduce(
+          (acc, item) =>
+            acc + Number(item.product.price) * item.quantity,
+          0,
+        ),
+        currency: "COP",
+        num_items: items.reduce(
+          (acc, item) => acc + item.quantity,
+          0,
+        ),
+        content_ids: items.map((item) => item.product.id),
+        email: shippingForm.shippingEmail || getUser()?.email || undefined,
+        phone: shippingForm.shippingPhone || undefined,
+      });
       await loadOrders();
     } catch (err: unknown) {
       setMessage({

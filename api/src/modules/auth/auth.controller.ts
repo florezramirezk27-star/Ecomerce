@@ -197,6 +197,30 @@ export class AuthController {
     }
   }
 
+  @Get('facebook')
+  @UseGuards(AuthGuard('facebook'))
+  async facebookAuth() {}
+
+  @Get('facebook/callback')
+  @UseGuards(AuthGuard('facebook'))
+  async facebookAuthRedirect(@Req() req, @Res() res: Response) {
+    try {
+      const result = await this.authService.facebookLogin(req.user);
+
+      const code = this.authService.generateExchangeCode(
+        result.access_token,
+        result.user,
+      );
+
+      const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/facebook/callback?code=${encodeURIComponent(code)}`;
+      return res.redirect(redirectUrl);
+    } catch {
+      return res.redirect(
+        `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=facebook_auth_failed`,
+      );
+    }
+  }
+
   @Post('exchange')
   @HttpCode(200)
   async exchangeCode(

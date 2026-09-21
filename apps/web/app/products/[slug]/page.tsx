@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
 import { addToGuestCart } from "@/lib/guest-cart";
+import { trackMetaEvent } from "@/lib/facebook-pixel";
 import CandleInfographic from "@/components/CandleInfographic";
 import CandleArtisanalInfographic from "@/components/CandleArtisanalInfographic";
 import CountdownTimer from "@/components/CountdownTimer";
@@ -87,6 +88,18 @@ export default function ProductPage() {
     })();
   }, [slug]);
 
+  useEffect(() => {
+    if (!product) return;
+    const value = Number(product.price);
+    void trackMetaEvent("ViewContent", {
+      content_ids: [product.id],
+      content_name: product.name,
+      content_type: "product",
+      value,
+      currency: "COP",
+    });
+  }, [product]);
+
   const handleAddToCart = async () => {
     if (!isAuthenticated()) {
       if (!product) return;
@@ -97,6 +110,13 @@ export default function ProductPage() {
         image: product.image,
         slug: product.slug,
         quantity,
+      });
+      void trackMetaEvent("AddToCart", {
+        content_ids: [product.id],
+        content_name: product.name,
+        content_type: "product",
+        value: Number(product.price) * quantity,
+        currency: "COP",
       });
       setCartMessage({
         type: "success",
@@ -114,6 +134,14 @@ export default function ProductPage() {
           productId: product?.id,
           quantity,
         }),
+      });
+
+      void trackMetaEvent("AddToCart", {
+        content_ids: [product?.id],
+        content_name: product?.name,
+        content_type: "product",
+        value: Number(product?.price ?? 0) * quantity,
+        currency: "COP",
       });
 
       setCartMessage({
@@ -146,6 +174,13 @@ export default function ProductPage() {
         slug: product.slug,
         quantity,
       });
+      void trackMetaEvent("AddToCart", {
+        content_ids: [product.id],
+        content_name: product.name,
+        content_type: "product",
+        value: Number(product.price) * quantity,
+        currency: "COP",
+      });
       router.push("/cart");
       return;
     }
@@ -158,6 +193,13 @@ export default function ProductPage() {
           productId: product?.id,
           quantity,
         }),
+      });
+      void trackMetaEvent("AddToCart", {
+        content_ids: [product.id],
+        content_name: product.name,
+        content_type: "product",
+        value: Number(product.price) * quantity,
+        currency: "COP",
       });
       router.push("/cart");
     } catch (err) {

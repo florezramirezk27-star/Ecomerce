@@ -44,6 +44,7 @@ model User {
   email     String   @unique
   password  String?
   googleId          String?   @unique
+  facebookId        String?   @unique
   role              Role      @default(CUSTOMER)
   resetToken        String?   @unique
   resetTokenExpiry  DateTime?
@@ -91,8 +92,6 @@ model Product {
   oldPrice    Decimal?  @db.Decimal(10,2)
   customCode          String?
   dropiProductId      Int?
-  aveonlineProviderId Int?
-  aveonlineProductRef String?
   stock               Int
   lowStockThreshold   Int       @default(5)
   image       String?
@@ -224,8 +223,6 @@ model OrderTracking {
   dropiGuideId  String?
   trackingUrl   String?
   guidePdfUrl   String?
-  aveonlineOrderId String?
-  aveonlineGuideId String?
   carrier       String?
   status        String   @default("PENDING")
   lastEvent     String?

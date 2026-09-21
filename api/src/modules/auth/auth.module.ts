@@ -8,7 +8,21 @@ import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { GoogleStrategy } from './strategies/google.strategy';
+import { FacebookStrategy } from './strategies/facebook.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
+
+const facebookStrategyProvider = {
+  provide: FacebookStrategy,
+  useFactory: () => {
+    if (
+      !process.env.FACEBOOK_CLIENT_ID ||
+      !process.env.FACEBOOK_CLIENT_SECRET
+    ) {
+      return undefined;
+    }
+    return new FacebookStrategy();
+  },
+};
 
 @Module({
   imports: [
@@ -40,6 +54,11 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    GoogleStrategy,
+    facebookStrategyProvider,
+  ],
 })
 export class AuthModule {}

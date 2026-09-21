@@ -289,6 +289,74 @@ export class AuthService {
     };
   }
 
+  async facebookLogin(facebookProfile: {
+    email: string | null;
+    name: string;
+    facebookId: string;
+  }) {
+    let user = await this.prisma.user.findUnique({
+      where: { facebookId: facebookProfile.facebookId },
+    });
+
+    const adminEmails = (process.env.ADMIN_GOOGLE_EMAIL || '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase());
+
+    if (!user) {
+      const existingUser = facebookProfile.email
+        ? await this.usersService.findByEmail(facebookProfile.email)
+        : null;
+
+      if (existingUser) {
+        user = await this.prisma.user.update({
+          where: { id: existingUser.id },
+          data: { facebookId: facebookProfile.facebookId },
+        });
+      } else {
+        const syntheticEmail =
+          facebookProfile.email ||
+          `${facebookProfile.facebookId}@facebook.local`;
+        const isAdmin = adminEmails.includes(syntheticEmail.toLowerCase());
+
+        user = await this.prisma.user.create({
+          data: {
+            name: facebookProfile.name,
+            email: syntheticEmail,
+            facebookId: facebookProfile.facebookId,
+            role: isAdmin ? 'ADMIN' : 'CUSTOMER',
+          },
+        });
+      }
+    } else if (
+      user.role !== 'ADMIN' &&
+      adminEmails.includes(user.email.toLowerCase())
+    ) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { role: 'ADMIN' },
+      });
+    }
+
+    const session = await this.createSession(user.id);
+
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      sessionId: session.id,
+    };
+
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    };
+  }
+
   async forgotPassword(email: string) {
     const user = await this.usersService.findByEmail(email);
 
