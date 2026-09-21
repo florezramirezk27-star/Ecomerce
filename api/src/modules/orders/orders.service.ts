@@ -2,10 +2,12 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   UnprocessableEntityException,
 } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
 import { CheckoutDto } from './dto/checkout.dto';
@@ -20,6 +22,8 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
@@ -165,9 +169,10 @@ export class OrdersService {
       return order;
     });
 
-    if (user) {
-      this.mailService.sendOrderConfirmationEmail(
-        customerEmail || '',
+    let customerEmailSent = false;
+    if (user && customerEmail) {
+      customerEmailSent = await this.mailService.sendOrderConfirmationEmail(
+        customerEmail,
         user.name,
         order.id,
         cart.items.map((item) => ({
@@ -192,7 +197,14 @@ export class OrdersService {
     }
 
     const dropiItems = cart.items.filter((i) => i.product.dropiProductId);
-    let dropiStatus: string | undefined;
+
+    let dropiResult: {
+      success: boolean | null;
+      message: string;
+      orderId: string | null;
+      carrier: string | null;
+      raw: unknown;
+    };
 
     if (dropiItems.length > 0) {
       try {
@@ -219,16 +231,74 @@ export class OrdersService {
           },
           order.id,
         );
-        dropiStatus = result.message;
-      } catch (err: any) {
-        dropiStatus = `Dropi error: ${err.message}`;
+        const firstOk = result.results.find((r) => r.dropiOrderId) || null;
+        dropiResult = {
+          success: result.success,
+          message: result.message,
+          orderId: firstOk?.dropiOrderId ?? null,
+          carrier: firstOk?.carrier ?? null,
+          raw: result.results,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'unknown error';
+        dropiResult = {
+          success: false,
+          message: `Dropi error: ${message}`,
+          orderId: null,
+          carrier: null,
+          raw: { error: message },
+        };
+      }
+    } else {
+      dropiResult = {
+        success: null,
+        message: 'Pedido sin productos de proveedor; no aplica Dropi',
+        orderId: null,
+        carrier: null,
+        raw: null,
+      };
+    }
+
+    if (dropiItems.length > 0) {
+      try {
+        await this.prisma.orderTracking.upsert({
+          where: { orderId: order.id },
+          create: {
+            orderId: order.id,
+            dropiOrderId: dropiResult.orderId
+              ? String(dropiResult.orderId)
+              : null,
+            carrier: dropiResult.carrier,
+            status: dropiResult.success ? 'CREATED' : 'PENDING',
+            lastEvent: dropiResult.message,
+            rawResponse: dropiResult.raw as Prisma.InputJsonValue,
+            checkedAt: new Date(),
+          },
+          update: {
+            dropiOrderId: dropiResult.orderId
+              ? String(dropiResult.orderId)
+              : null,
+            carrier: dropiResult.carrier,
+            status: dropiResult.success ? 'CREATED' : 'PENDING',
+            lastEvent: dropiResult.message,
+            rawResponse: dropiResult.raw as Prisma.InputJsonValue,
+            checkedAt: new Date(),
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `No se pudo guardar el tracking de Dropi para ${order.id}: ${
+            err instanceof Error ? err.message : err
+          }`,
+        );
       }
     }
 
     const adminEmail =
       process.env.ADMIN_EMAIL || process.env.ADMIN_GOOGLE_EMAIL || '';
+    let adminEmailSent = false;
     if (adminEmail) {
-      this.mailService.sendAdminOrderNotification(
+      adminEmailSent = await this.mailService.sendAdminOrderNotification(
         adminEmail,
         user?.name || dto.shippingName,
         customerEmail || null,
@@ -251,11 +321,26 @@ export class OrdersService {
           docType: dto.shippingDocType,
           docNumber: dto.shippingDocNumber,
         },
-        dropiStatus,
+        dropiResult?.message,
       );
     }
 
-    return order;
+    return {
+      ...order,
+      dropi: {
+        success: dropiResult?.success ?? null,
+        message: dropiResult?.message ?? 'Sin integración con proveedor',
+        orderId: dropiResult?.orderId ?? null,
+      },
+      emails: {
+        customer: customerEmailSent
+          ? 'sent'
+          : customerEmail
+            ? 'failed'
+            : 'skipped',
+        admin: adminEmailSent ? 'sent' : adminEmail ? 'failed' : 'skipped',
+      },
+    };
   }
 
   async findMyOrders(userId: string, page = 1, limit = 20) {

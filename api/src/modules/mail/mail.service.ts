@@ -94,7 +94,7 @@ export class MailService {
     total: number,
     shipping: ShippingInfo,
     dropiStatus?: string,
-  ) {
+  ): Promise<boolean> {
     const itemsHtml = items
       .map(
         (i) =>
@@ -192,6 +192,7 @@ export class MailService {
 </body>
 </html>`,
     });
+    return true;
   }
 
   private async send(options: {
@@ -199,7 +200,7 @@ export class MailService {
     subject: string;
     text: string;
     tag: string;
-  }) {
+  }): Promise<boolean> {
     if (this.transporter) {
       try {
         await this.transporter.sendMail({
@@ -208,14 +209,22 @@ export class MailService {
           subject: options.subject,
           text: options.text,
         });
+        this.logger.log(
+          `[${options.tag}] enviado a ${options.to} | ${options.subject}`,
+        );
+        return true;
       } catch (err) {
         this.logger.error(
           `Error sending ${options.tag} email: ${err instanceof Error ? err.message : err}`,
         );
+        return false;
       }
     }
 
-    this.logger.log(`[${options.tag}] To: ${options.to} | ${options.subject}`);
+    this.logger.warn(
+      `[${options.tag}] SMTP no configurado — no se envió a ${options.to}`,
+    );
+    return false;
   }
 
   private async sendHtml(options: {
@@ -223,7 +232,7 @@ export class MailService {
     subject: string;
     html: string;
     tag: string;
-  }) {
+  }): Promise<boolean> {
     if (this.transporter) {
       try {
         await this.transporter.sendMail({
@@ -233,14 +242,22 @@ export class MailService {
           text: htmlToText(options.html),
           html: options.html,
         });
+        this.logger.log(
+          `[${options.tag}] enviado a ${options.to} | ${options.subject}`,
+        );
+        return true;
       } catch (err) {
         this.logger.error(
           `Error sending ${options.tag} email: ${err instanceof Error ? err.message : err}`,
         );
+        return false;
       }
     }
 
-    this.logger.log(`[${options.tag}] To: ${options.to} | ${options.subject}`);
+    this.logger.warn(
+      `[${options.tag}] SMTP no configurado — no se envió a ${options.to}`,
+    );
+    return false;
   }
 
   async sendPasswordResetEmail(to: string, name: string, resetLink: string) {
@@ -292,17 +309,14 @@ export class MailService {
     items: OrderItemInfo[],
     total: number,
     shipping?: ShippingInfo,
-  ) {
+  ): Promise<boolean> {
     const invoiceNumber = orderId.slice(0, 8).toUpperCase();
     const date = new Date().toLocaleDateString('es-CO', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
-    const subtotal = items.reduce(
-      (acc, i) => acc + i.price * i.quantity,
-      0,
-    );
+    const subtotal = items.reduce((acc, i) => acc + i.price * i.quantity, 0);
     const currency = (v: number) => `$${v.toLocaleString('es-CO')}`;
 
     const itemsHtml = items
@@ -474,6 +488,7 @@ export class MailService {
 </body>
 </html>`,
     });
+    return true;
   }
 
   async sendOrderStatusEmail(

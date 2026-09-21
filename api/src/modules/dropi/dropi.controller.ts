@@ -33,11 +33,12 @@ export class DropiController {
     @Query('pageSize') pageSize?: string,
     @Query('userVerified') userVerified?: string,
     @Query('favorite') favorite?: string,
+    @Query('privated') privated?: string,
   ) {
     const body: any = {
       pageSize: pageSize ? Number(pageSize) : 50,
       startData: 0,
-      privated_product: false,
+      privated_product: privated === 'true',
       userVerified: userVerified === 'true',
       favorite: favorite === 'true',
       country: 'COLOMBIA',

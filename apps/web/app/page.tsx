@@ -39,17 +39,10 @@ export default function Home() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [data, saleProducts] = await Promise.all([
-          apiFetch("/products") as Promise<ProductSummary[]>,
-          apiFetch("/products?onSale=true") as Promise<ProductSummary[]>,
-        ]);
-
-        console.log("🔥 TODOS:", data);
-        console.log("🔥 OFERTAS:", saleProducts);
+        const data = (await apiFetch("/products")) as ProductSummary[];
 
         setProducts(data);
       } catch (err) {
-        console.error("Error al cargar productos:", err);
         setError(
           err instanceof Error
             ? err.message
@@ -101,10 +94,13 @@ export default function Home() {
         ) : (
           <>
             <section>
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                Productos Recomendados
-              </h2>
-              <ProductCarousel products={recommended} />
+              <ProductCarousel
+                products={recommended}
+                label="Recomendados"
+                title="Recomendados para ti"
+                subtitle="Una selección curada con los productos mejor valorados y disponibles hoy en la tienda."
+                actionHref="/products"
+              />
             </section>
 
             {promotions.length > 0 && (
@@ -113,10 +109,13 @@ export default function Home() {
 
             {homeProducts.length > 0 && (
               <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                  Productos del Hogar
-                </h2>
-                <ProductCarousel products={homeProducts} />
+                <ProductCarousel
+                  products={homeProducts}
+                  label="Hogar y decoración"
+                  title="Productos del Hogar"
+                  subtitle="Todo lo que necesitas para transformar y renovar tu espacio."
+                  actionHref="/products?category=hogar-y-decoracion"
+                />
               </section>
             )}
 

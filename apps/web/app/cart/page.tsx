@@ -261,13 +261,31 @@ export default function CartPage() {
     setCheckoutLoading(true);
     try {
       const idempotencyKey = crypto.randomUUID();
-      await apiFetch("/orders/checkout", {
+      const res = await apiFetch("/orders/checkout", {
         method: "POST",
         body: JSON.stringify({ ...shippingForm, idempotencyKey }),
       });
 
       setShowCheckout(false);
-      setMessage({ type: "success", text: "✓ Pedido realizado con éxito. Pagarás contra entrega." });
+
+      const dropiStatus = res?.dropi?.success;
+      const emailsStatus = res?.emails ?? {};
+      const warnings: string[] = [];
+      if (dropiStatus === false) {
+        warnings.push(`No se envió a Dropi: ${res?.dropi?.message || "error desconocido"}`);
+      }
+      if (emailsStatus.customer === "failed") {
+        warnings.push("No se pudo enviar la factura al cliente por correo.");
+      }
+      if (emailsStatus.admin === "failed") {
+        warnings.push("No se notificó al correo de la tienda (revisa SMTP).");
+      }
+      setMessage({
+        type: "success",
+        text: warnings.length > 0
+          ? `✓ Pedido realizado. Pagarás contra entrega. Atención: ${warnings.join(" ")}`
+          : "✓ Pedido realizado con éxito. Pagarás contra entrega.",
+      });
       setItems([]);
       await loadOrders();
     } catch (err: unknown) {
