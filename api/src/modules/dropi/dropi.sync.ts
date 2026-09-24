@@ -57,6 +57,17 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
+      const updates = await this.tracking.syncAllPendingOrders();
+      if (updates.length > 0) {
+        this.logger.log(
+          `Sync automático de estados Dropi: ${updates.length} orden(es) actualizada(s)`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(`Sync de estados Dropi falló: ${err.message}`);
+    }
+
+    try {
       const deleted = await this.tracking.syncDeletedOrders();
       if (deleted.length > 0) {
         this.logger.log(

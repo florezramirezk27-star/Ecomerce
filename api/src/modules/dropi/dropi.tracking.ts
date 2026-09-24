@@ -3,22 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { DropiClient } from './dropi.client';
 import { DropiAuthService } from './dropi.auth';
 import { MailService } from '../mail/mail.service';
-import {
-  DropiTrackingData,
-  DROPI_STATUS_MAP,
-  DROPI_API_HOST,
-} from './dropi.types';
-
-const DELETED_STATUSES = new Set([
-  'CANCELADO',
-  'CANCELLED',
-  'CANCELED',
-  'ELIMINADO',
-  'DELETED',
-  'REMOVED',
-  'ANULADO',
-  'REJECTED',
-]);
+import { DropiTrackingData, DROPI_STATUS_MAP } from './dropi.types';
 
 @Injectable()
 export class DropiTrackingService {
@@ -151,6 +136,11 @@ export class DropiTrackingService {
   }> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
+      include: {
+        items: true,
+        user: true,
+        tracking: true,
+      },
     });
 
     if (!order) {
@@ -183,10 +173,17 @@ export class DropiTrackingService {
     const canTransition = allowed.includes(translatedDropiStatus);
 
     if (canTransition && translatedDropiStatus !== currentOrderStatus) {
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: { status: translatedDropiStatus as any },
-      });
+      if (translatedDropiStatus === 'CANCELLED') {
+        await this.markCancelled(
+          order,
+          `Cancelada en Dropi (${trackingData.status || 'CANCELADO'})`,
+        );
+      } else {
+        await this.prisma.order.update({
+          where: { id: orderId },
+          data: { status: translatedDropiStatus as any },
+        });
+      }
     }
 
     await this.upsertTracking(orderId, {
@@ -247,47 +244,45 @@ export class DropiTrackingService {
     status: string | null;
     raw: any;
   }> {
-    let token = await this.auth.getToken();
-    let res = await this.client.request(
-      `/api/orders/myorders/${dropiOrderId}`,
-      'GET',
-      undefined,
-      token,
-      DROPI_API_HOST,
-    );
+    const order = await this.prisma.order.findFirst({
+      where: { tracking: { dropiOrderId } },
+      include: {
+        tracking: true,
+        user: true,
+        items: true,
+      },
+    });
 
-    if (res.statusCode === 401) {
-      this.auth.invalidateToken();
-      token = await this.auth.getToken();
-      res = await this.client.request(
-        `/api/orders/myorders/${dropiOrderId}`,
-        'GET',
-        undefined,
-        token,
-        DROPI_API_HOST,
-      );
+    if (!order?.tracking?.dropiGuideId) {
+      return { found: true, deleted: false, status: null, raw: null };
     }
 
-    let body: any = {};
     try {
-      body = JSON.parse(res.data);
-    } catch {
-      body = { raw: res.data };
+      const info = await this.trackByGuide(order.tracking.dropiGuideId);
+      if (info === null) {
+        const stale =
+          order.tracking.checkedAt &&
+          Date.now() - new Date(order.tracking.checkedAt).getTime() >
+            6 * 60 * 60 * 1000;
+        return {
+          found: !(stale === true),
+          deleted: stale === true,
+          status: null,
+          raw: null,
+        };
+      }
+      return {
+        found: true,
+        deleted: false,
+        status: info.status,
+        raw: info.rawResponse,
+      };
+    } catch (err: any) {
+      this.logger.error(
+        `fetchDropiOrderStatus falló para ${dropiOrderId}: ${err.message}`,
+      );
+      return { found: true, deleted: false, status: null, raw: null };
     }
-
-    const found = (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300;
-
-    const rawStatus = this.findStatus(body);
-    const deleted =
-      !found ||
-      (rawStatus ? DELETED_STATUSES.has(String(rawStatus).toUpperCase()) : false);
-
-    return {
-      found,
-      deleted,
-      status: rawStatus,
-      raw: body,
-    };
   }
 
   async syncDeletedOrders(): Promise<
@@ -320,64 +315,25 @@ export class DropiTrackingService {
 
       try {
         const info = await this.fetchDropiOrderStatus(dropiOrderId);
-        const isDeleted = info.deleted;
-
-        if (!isDeleted) continue;
+        if (!info.deleted) continue;
 
         this.logger.warn(
-          `Dropi: envío ${dropiOrderId} de la orden ${order.id} fue eliminado en Dropi (${info.status || 'no encontrado'}). Cancelando en la tienda...`,
+          `Dropi: envío ${dropiOrderId} de la orden ${order.id} fue eliminado en Dropi (${info.status || 'no encontrado en tracking'}). Cancelando en la tienda...`,
         );
 
-        await this.prisma.$transaction(async (tx) => {
-          for (const item of order.items) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { stock: { increment: item.quantity } },
-            });
-          }
-          await tx.order.update({
-            where: { id: order.id },
-            data: { status: 'CANCELLED' },
-          });
-        });
-
-        const customerEmail = order.shippingEmail || order.user?.email;
-        if (customerEmail) {
-          void this.mailService
-            .sendOrderStatusEmail(
-              customerEmail,
-              order.user?.name || order.shippingName || 'Cliente',
-              order.id,
-              'CANCELLED',
-            )
-            .then(
-              () => {
-                this.logger.log(
-                  `Cancelación por Dropi notificada a ${customerEmail} (orden ${order.id})`,
-                );
-              },
-              (err) => {
-                this.logger.error(
-                  `Error avisando cancelación por Dropi (${order.id}): ${err instanceof Error ? err.message : err}`,
-                );
-              },
-            );
-        }
-
-        await this.upsertTracking(order.id, {
-          status: 'CANCELLED',
-          lastEvent: info.found
+        await this.markCancelled(
+          order,
+          info.status
             ? `Envío eliminado en Dropi (${info.status})`
-            : 'Envío eliminado/inexistente en Dropi',
-          carrier: order.tracking?.carrier,
-        });
+            : 'Envío eliminado en Dropi',
+        );
 
         results.push({
           orderId: order.id,
           dropiOrderId,
           previous: order.status,
           current: 'CANCELLED',
-          reason: info.found ? info.status || 'eliminado' : 'no encontrado',
+          reason: info.status || 'no encontrado en tracking',
         });
       } catch (err: any) {
         this.logger.error(
@@ -395,26 +351,54 @@ export class DropiTrackingService {
     return results;
   }
 
-  private findStatus(obj: any): string | null {
-    if (!obj || typeof obj !== 'object') return null;
+  private async markCancelled(
+    order: {
+      id: string;
+      status: string;
+      shippingEmail: string | null;
+      shippingName: string | null;
+      user?: { name: string; email: string } | null;
+      items: { productId: string; quantity: number }[];
+      tracking?: { carrier: string | null } | null;
+    },
+    detail: string,
+  ): Promise<void> {
+    if (order.status === 'CANCELLED') return;
 
-    for (const key of ['status', 'estado', 'order_status', 'new_status']) {
-      const v = obj[key];
-      if (v !== undefined && v !== null && v !== '') return String(v);
-    }
-
-    const nested = obj.order || obj.data || obj.order_data;
-    if (nested && typeof nested === 'object') {
-      return this.findStatus(nested);
-    }
-
-    for (const k of Object.keys(obj)) {
-      if (typeof obj[k] === 'object' && obj[k] !== null) {
-        const found = this.findStatus(obj[k]);
-        if (found) return found;
+    await this.prisma.$transaction(async (tx) => {
+      for (const item of order.items) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        });
       }
-    }
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: 'CANCELLED' },
+      });
+    });
 
-    return null;
+    const customerEmail = order.shippingEmail || order.user?.email || null;
+    if (customerEmail) {
+      void this.mailService
+        .sendOrderStatusEmail(
+          customerEmail,
+          order.user?.name || order.shippingName || 'Cliente',
+          order.id,
+          'CANCELLED',
+        )
+        .then(
+          () => {
+            this.logger.log(
+              `Cancelación notificada a ${customerEmail} (orden ${order.id}): ${detail}`,
+            );
+          },
+          (err) => {
+            this.logger.error(
+              `Error avisando cancelación (${order.id}): ${err instanceof Error ? err.message : err}`,
+            );
+          },
+        );
+    }
   }
 }
