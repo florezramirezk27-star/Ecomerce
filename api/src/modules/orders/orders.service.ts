@@ -12,6 +12,35 @@ import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
 import { CheckoutDto } from './dto/checkout.dto';
 
+type ShippingLike = {
+  name: string;
+  phone: string;
+  email: string | null;
+  address: string;
+  city: string;
+  state: string;
+  zip?: string | null;
+  notes?: string | null;
+  docType?: string | null;
+  docNumber?: string | null;
+};
+
+type OrderItemDetail = {
+  productId: string;
+  name: string;
+  quantity: number;
+  price: number;
+  dropiProductId: number | null;
+};
+
+type DropiResult = {
+  success: boolean | null;
+  message: string;
+  orderId: string | null;
+  carrier: string | null;
+  raw: unknown;
+};
+
 const VALID_TRANSITIONS: Record<string, string[]> = {
   PENDING: ['PAID', 'CANCELLED'],
   PAID: ['SHIPPED', 'CANCELLED'],
@@ -31,13 +60,17 @@ export class OrdersService {
   ) {}
 
   async checkout(userId: string, dto: CheckoutDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
     if (dto.idempotencyKey) {
       const existing = await this.prisma.order.findUnique({
         where: { idempotencyKey: dto.idempotencyKey },
         include: { items: true },
       });
       if (existing) {
-        return existing;
+        return this.processExistingOrder(existing, user, dto);
       }
     }
 
@@ -56,9 +89,6 @@ export class OrdersService {
       throw new BadRequestException('Tu carrito está vacío');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
     const customerEmail = dto.shippingEmail || user?.email || null;
 
     const dropiCartItems = cart.items.filter((i) => i.product.dropiProductId);
@@ -177,15 +207,7 @@ export class OrdersService {
           include: { items: true },
         });
         if (existing) {
-          return {
-            ...existing,
-            dropi: {
-              success: null,
-              message: 'Pedido ya procesado en un intento anterior',
-              orderId: null,
-            },
-            emails: { customer: 'skipped', admin: 'skipped' },
-          };
+          return this.processExistingOrder(existing, user, dto);
         }
       }
       throw err;
@@ -385,6 +407,277 @@ export class OrdersService {
         admin: adminEmail ? 'queued' : 'skipped',
       },
     };
+  }
+
+  private async processExistingOrder(
+    order: {
+      id: string;
+      total: Prisma.Decimal;
+      shippingName: string | null;
+      shippingPhone: string | null;
+      shippingEmail: string | null;
+      shippingAddress: string | null;
+      shippingCity: string | null;
+      shippingState: string | null;
+      shippingZip: string | null;
+      notes: string | null;
+      items: {
+        productId: string;
+        quantity: number;
+        price: Prisma.Decimal;
+      }[];
+    },
+    user: { id: string; name: string; email: string } | null,
+    dto: CheckoutDto,
+    force = false,
+  ) {
+    const productIds = order.items.map((i) => i.productId);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+    });
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
+    const itemDetails: OrderItemDetail[] = order.items.map((it, idx) => ({
+      productId: it.productId,
+      name: productMap.get(it.productId)?.name ?? `Producto ${idx + 1}`,
+      quantity: it.quantity,
+      price: Number(it.price),
+      dropiProductId: productMap.get(it.productId)?.dropiProductId ?? null,
+    }));
+
+    const customerEmail = order.shippingEmail || user?.email || null;
+
+    const shipping: ShippingLike = {
+      name: order.shippingName || dto.shippingName || '',
+      phone: order.shippingPhone || dto.shippingPhone || '',
+      email: customerEmail,
+      address: order.shippingAddress || dto.shippingAddress || '',
+      city: order.shippingCity || dto.shippingCity || '',
+      state: order.shippingState || dto.shippingState || '',
+      zip: order.shippingZip || dto.shippingZip || undefined,
+      notes: order.notes || dto.notes || undefined,
+      docType: dto.shippingDocType,
+      docNumber: dto.shippingDocNumber,
+    };
+
+    const dropiItems = itemDetails.filter((i) => i.dropiProductId);
+
+    const tracking = await this.prisma.orderTracking.findUnique({
+      where: { orderId: order.id },
+    });
+    const alreadyInDropi = !!tracking?.dropiOrderId;
+
+    let dropiResult: DropiResult;
+    if (dropiItems.length === 0) {
+      dropiResult = {
+        success: null,
+        message: 'Pedido sin productos de proveedor; no aplica Dropi',
+        orderId: null,
+        carrier: null,
+        raw: null,
+      };
+    } else if (alreadyInDropi) {
+      dropiResult = {
+        success: true,
+        message: tracking!.lastEvent || 'Orden ya creada en Dropi',
+        orderId: tracking!.dropiOrderId,
+        carrier: tracking!.carrier ?? null,
+        raw: tracking!.rawResponse ?? null,
+      };
+      this.logger.log(
+        `Dropi ya procesado para ${order.id} (${tracking!.dropiOrderId}); se omite reenvío`,
+      );
+    } else {
+      try {
+        const result = await this.dropiService.createOrder(
+          {
+            items: dropiItems.map((i) => ({
+              dropiProductId: i.dropiProductId!,
+              quantity: i.quantity,
+              price: i.price,
+              name: i.name,
+            })),
+            shipping: {
+              name: shipping.name,
+              phone: shipping.phone,
+              email: customerEmail || undefined,
+              address: shipping.address,
+              city: shipping.city,
+              state: shipping.state,
+              zip: shipping.zip || undefined,
+              docType: shipping.docType || undefined,
+              docNumber: shipping.docNumber || undefined,
+              notes: shipping.notes || undefined,
+            },
+          },
+          order.id,
+        );
+        const firstOk = result.results.find((r) => r.dropiOrderId) || null;
+        dropiResult = {
+          success: result.success,
+          message: result.message,
+          orderId: firstOk?.dropiOrderId ?? null,
+          carrier: firstOk?.carrier ?? null,
+          raw: result.results,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'unknown error';
+        this.logger.error(
+          `Dropi: error creando orden ${order.id}: ${message}`,
+        );
+        dropiResult = {
+          success: false,
+          message: `Dropi error: ${message}`,
+          orderId: null,
+          carrier: null,
+          raw: { error: message },
+        };
+      }
+
+      try {
+        await this.prisma.orderTracking.upsert({
+          where: { orderId: order.id },
+          create: {
+            orderId: order.id,
+            dropiOrderId: dropiResult.orderId
+              ? String(dropiResult.orderId)
+              : null,
+            carrier: dropiResult.carrier,
+            status: dropiResult.success ? 'CREATED' : 'PENDING',
+            lastEvent: dropiResult.message,
+            rawResponse: dropiResult.raw as Prisma.InputJsonValue,
+            checkedAt: new Date(),
+          },
+          update: {
+            dropiOrderId: dropiResult.orderId
+              ? String(dropiResult.orderId)
+              : null,
+            carrier: dropiResult.carrier,
+            status: dropiResult.success ? 'CREATED' : 'PENDING',
+            lastEvent: dropiResult.message,
+            rawResponse: dropiResult.raw as Prisma.InputJsonValue,
+            checkedAt: new Date(),
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `No se pudo guardar el tracking de Dropi para ${order.id}: ${
+            err instanceof Error ? err.message : err
+          }`,
+        );
+      }
+    }
+
+    const itemSummary = itemDetails.map((i) => ({
+      name: i.name,
+      quantity: i.quantity,
+      price: i.price,
+    }));
+
+    const adminEmail =
+      process.env.ADMIN_EMAIL || process.env.ADMIN_GOOGLE_EMAIL || '';
+    const skipEmails = alreadyInDropi && !force;
+
+    let customerQueued = false;
+    let adminQueued = false;
+
+    if (!skipEmails) {
+      if (user && customerEmail) {
+        customerQueued = true;
+        void this.mailService
+          .sendOrderConfirmationEmail(
+            customerEmail,
+            user.name || shipping.name,
+            order.id,
+            itemSummary,
+            Number(order.total),
+            shipping,
+          )
+          .then(
+            (sent) => {
+              if (!sent) {
+                this.logger.warn(
+                  `No se pudo enviar la factura a ${customerEmail} (pedido ${order.id})`,
+                );
+              }
+            },
+            (err) => {
+              this.logger.error(
+                `Error enviando factura a ${customerEmail}: ${err instanceof Error ? err.message : err}`,
+              );
+            },
+          );
+      }
+
+      if (adminEmail) {
+        adminQueued = true;
+        void this.mailService
+          .sendAdminOrderNotification(
+            adminEmail,
+            user?.name || shipping.name,
+            customerEmail || null,
+            order.id,
+            itemSummary,
+            Number(order.total),
+            shipping,
+            dropiResult?.message,
+          )
+          .then(
+            (sent) => {
+              if (!sent) {
+                this.logger.warn(
+                  `No se pudo notificar al admin sobre el pedido ${order.id}`,
+                );
+              }
+            },
+            (err) => {
+              this.logger.error(
+                `Error notificando al admin (pedido ${order.id}): ${err instanceof Error ? err.message : err}`,
+              );
+            },
+          );
+      }
+    }
+
+    return {
+      ...order,
+      dropi: {
+        success: dropiResult?.success ?? null,
+        message: dropiResult?.message ?? 'Sin integración con proveedor',
+        orderId: dropiResult?.orderId ?? null,
+      },
+      emails: {
+        customer: skipEmails
+          ? 'skipped'
+          : customerQueued
+            ? 'queued'
+            : 'skipped',
+        admin: skipEmails ? 'skipped' : adminQueued ? 'queued' : 'skipped',
+      },
+    };
+  }
+
+  async reprocessOrder(orderId: string, force = false) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true, user: true },
+    });
+
+    if (!order) {
+      throw new BadRequestException('Orden no encontrada');
+    }
+
+    this.logger.log(
+      `Reprocesando orden ${order.id} (forceEmails=${force})`,
+    );
+    return this.processExistingOrder(
+      order,
+      order.user
+        ? { id: order.user.id, name: order.user.name, email: order.user.email }
+        : null,
+      {} as CheckoutDto,
+      force,
+    );
   }
 
   async findMyOrders(userId: string, page = 1, limit = 20) {

@@ -66,6 +66,16 @@ export class OrdersController {
     return this.ordersService.updateStatus(id, dto.status);
   }
 
+  @Post(':id/reprocess')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  reprocess(
+    @Param('id') id: string,
+    @Query('force') force?: string,
+  ) {
+    return this.ordersService.reprocessOrder(id, force === 'true');
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   findOne(@Param('id') id: string, @Req() req) {

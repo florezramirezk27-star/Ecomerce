@@ -71,6 +71,8 @@ export default function AdminOrdersPage() {
   const [changingStatus, setChangingStatus] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<{ orderId: string; status: OrderStatus } | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
+  const [reprocessing, setReprocessing] = useState<string | null>(null);
+  const [reprocessMsg, setReprocessMsg] = useState<{ orderId: string; text: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,6 +164,39 @@ export default function AdminOrdersPage() {
     } finally {
       setChangingStatus(null);
       setCancelTarget(null);
+    }
+  };
+
+  const handleReprocess = async (orderId: string) => {
+    setReprocessing(orderId);
+    setReprocessMsg(null);
+    setError('');
+    try {
+      const updated = await apiFetch(
+        `/orders/${orderId}/reprocess?force=true`,
+        { method: 'POST' },
+      );
+      const dropiMsg = updated?.dropi?.message;
+      setReprocessMsg({
+        orderId,
+        text: `Dropi: ${dropiMsg || 'enviado'}`,
+      });
+      setOrdersData((prev) =>
+        prev
+          ? {
+              ...prev,
+              items: prev.items.map((o) =>
+                o.id === orderId ? { ...o, ...updated } : o,
+              ),
+            }
+          : prev,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Error al reprocesar la orden',
+      );
+    } finally {
+      setReprocessing(null);
     }
   };
 
@@ -341,6 +376,28 @@ export default function AdminOrdersPage() {
                         </div>
                       </div>
                     )}
+
+                    <div>
+                      <h4 className="mb-3 text-sm font-bold text-slate-900">
+                        Integraciones
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          variant="secondary"
+                          className="px-4 py-2.5 text-xs"
+                          isLoading={reprocessing === order.id}
+                          disabled={reprocessing !== null}
+                          onClick={() => handleReprocess(order.id)}
+                        >
+                          Reenviar a Dropi / correos
+                        </Button>
+                        {reprocessMsg?.orderId === order.id && (
+                          <span className="text-xs font-medium text-blue-600">
+                            {reprocessMsg.text}
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
                     {order.status === 'DELIVERED' && (
                       <p className="text-sm italic text-slate-500">
