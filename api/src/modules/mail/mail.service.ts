@@ -77,10 +77,12 @@ export class MailService {
         secure: Number(port) === 465,
         auth: { user, pass },
       });
-      this.logger.log('Mail transporter configured');
+      this.logger.log(
+        `Mail transporter configured: ${host}:${port} → ${user}`,
+      );
     } else {
       this.logger.warn(
-        'SMTP not configured — emails will be logged to console only',
+        `SMTP not configured — emails will be logged to console only (host=${host || '?'}, port=${port || '?'}, user=${user || '?'}, pass=${pass ? 'set' : '?'})`,
       );
     }
   }
@@ -202,22 +204,30 @@ export class MailService {
     tag: string;
   }): Promise<boolean> {
     if (this.transporter) {
-      try {
-        await this.transporter.sendMail({
-          from: process.env.SMTP_FROM || 'noreply@ecommerce.com',
-          to: options.to,
-          subject: options.subject,
-          text: options.text,
-        });
-        this.logger.log(
-          `[${options.tag}] enviado a ${options.to} | ${options.subject}`,
-        );
-        return true;
-      } catch (err) {
-        this.logger.error(
-          `Error sending ${options.tag} email: ${err instanceof Error ? err.message : err}`,
-        );
-        return false;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          await this.transporter.sendMail({
+            from: process.env.SMTP_FROM || 'noreply@ecommerce.com',
+            to: options.to,
+            subject: options.subject,
+            text: options.text,
+          });
+          this.logger.log(
+            `[${options.tag}] enviado a ${options.to} | ${options.subject}`,
+          );
+          return true;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : err;
+          if (attempt === 1) {
+            this.logger.warn(
+              `[${options.tag}] intento 1 falló (${message}); reintentando...`,
+            );
+            await new Promise((r) => setTimeout(r, 1500));
+            continue;
+          }
+          this.logger.error(`Error sending ${options.tag} email: ${message}`);
+          return false;
+        }
       }
     }
 
@@ -234,23 +244,31 @@ export class MailService {
     tag: string;
   }): Promise<boolean> {
     if (this.transporter) {
-      try {
-        await this.transporter.sendMail({
-          from: process.env.SMTP_FROM || 'noreply@ecommerce.com',
-          to: options.to,
-          subject: options.subject,
-          text: htmlToText(options.html),
-          html: options.html,
-        });
-        this.logger.log(
-          `[${options.tag}] enviado a ${options.to} | ${options.subject}`,
-        );
-        return true;
-      } catch (err) {
-        this.logger.error(
-          `Error sending ${options.tag} email: ${err instanceof Error ? err.message : err}`,
-        );
-        return false;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          await this.transporter.sendMail({
+            from: process.env.SMTP_FROM || 'noreply@ecommerce.com',
+            to: options.to,
+            subject: options.subject,
+            text: htmlToText(options.html),
+            html: options.html,
+          });
+          this.logger.log(
+            `[${options.tag}] enviado a ${options.to} | ${options.subject}`,
+          );
+          return true;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : err;
+          if (attempt === 1) {
+            this.logger.warn(
+              `[${options.tag}] intento 1 falló (${message}); reintentando...`,
+            );
+            await new Promise((r) => setTimeout(r, 1500));
+            continue;
+          }
+          this.logger.error(`Error sending ${options.tag} email: ${message}`);
+          return false;
+        }
       }
     }
 
@@ -501,6 +519,79 @@ export class MailService {
     <p style="margin:16px 0 0;text-align:center;font-size:11px;color:#94a3b8">
       Este es un correo generado automáticamente por Kronio Market. No lo respondas si es un error — escríbenos a kroniomarket26@gmail.com.
     </p>
+  </div>
+</body>
+</html>`,
+    });
+    return true;
+  }
+
+  async sendOrderCancellationEmail(
+    to: string,
+    name: string,
+    orderId: string,
+    items: OrderItemInfo[],
+    total: number,
+  ): Promise<boolean> {
+    const orderNumber = orderId.slice(0, 8).toUpperCase();
+    const itemsHtml = items
+      .map(
+        (i) =>
+          `<tr style="background:#fafafa">
+            <td style="padding:10px 16px;color:#18181b;font-size:14px">${i.name}</td>
+            <td style="padding:10px 16px;color:#52525b;font-size:14px;text-align:center">${i.quantity}</td>
+            <td style="padding:10px 16px;color:#52525b;font-size:14px;text-align:right">$${(i.price * i.quantity).toLocaleString('es-CO')}</td>
+          </tr>`,
+      )
+      .join('\n');
+
+    await this.sendHtml({
+      to,
+      subject: `Pedido #${orderNumber} cancelado — Kronio Market`,
+      tag: 'ORDER CANCELLED',
+      html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0">
+  <div style="max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
+    <div style="background:#dc2626;padding:32px 24px;text-align:center">
+      <h1 style="color:#fff;margin:0;font-size:24px;letter-spacing:1px">PEDIDO CANCELADO</h1>
+      <p style="color:#fecaca;margin:6px 0 0;font-size:13px">#${orderNumber}</p>
+    </div>
+    <div style="padding:32px 24px">
+      <p style="margin:0 0 16px;font-size:15px;color:#18181b;line-height:1.6">
+        Hola <strong>${name}</strong>, tu pedido <strong>#${orderNumber}</strong> de Kronio Market ha sido <strong>cancelado</strong>.
+      </p>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 16px;font-size:13px;color:#991b1b;line-height:1.5">
+        No se te cobrará nada y tu dinero no está comprometido, ya que el pago era contra entrega.
+        Si ya realizaste algún pago, será reintegrado por el mismo medio.
+      </div>
+
+      <h3 style="font-size:15px;color:#18181b;margin:24px 0 10px;font-weight:700">Productos del pedido</h3>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f4f4f5">
+            <th style="padding:10px 16px;text-align:left;font-size:12px;color:#71717a;text-transform:uppercase">Producto</th>
+            <th style="padding:10px 16px;text-align:center;font-size:12px;color:#71717a;text-transform:uppercase">Cant</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;color:#71717a;text-transform:uppercase">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>${itemsHtml || '<tr><td colspan="3" style="padding:10px 16px;color:#71717a;font-size:13px">Sin detalles</td></tr>'}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" style="padding:14px 16px;text-align:right;font-size:14px;color:#333;font-weight:bold">Total:</td>
+            <td style="padding:14px 16px;text-align:right;font-size:18px;color:#dc2626;font-weight:bold">$${total.toLocaleString('es-CO')}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <p style="color:#666;font-size:13px;margin-top:24px;border-top:1px solid #e4e4e7;padding-top:16px">
+        Si tienes dudas o deseas volver a comprar, escríbenos a kroniomarket26@gmail.com. ¡Te esperamos!
+      </p>
+    </div>
+    <div style="background:#f4f4f5;padding:16px 24px;text-align:center;font-size:11px;color:#a1a1aa">
+      Kronio Market — Notificación de cancelación
+    </div>
   </div>
 </body>
 </html>`,

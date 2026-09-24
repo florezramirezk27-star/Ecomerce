@@ -46,6 +46,17 @@ export interface OrderItem {
   price: string | number;
 }
 
+export interface OrderTrackingInfo {
+  id: string;
+  orderId: string;
+  dropiOrderId?: string | null;
+  dropiGuideId?: string | null;
+  carrier?: string | null;
+  status?: string | null;
+  lastEvent?: string | null;
+  checkedAt?: string | null;
+}
+
 export interface Order {
   id: string;
   userId: string;
@@ -59,6 +70,8 @@ export interface Order {
   total: number | string;
   items: OrderItem[];
   createdAt: string;
+  shippingEmail?: string | null;
+  tracking?: OrderTrackingInfo | null;
 }
 
 export interface DashboardTopProduct {

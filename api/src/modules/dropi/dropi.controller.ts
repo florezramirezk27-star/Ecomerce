@@ -109,6 +109,13 @@ export class DropiController {
     return this.dropiService.syncAllPendingOrders();
   }
 
+  @Post('sync-deleted-orders')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async syncDeletedOrders() {
+    return this.dropiService.syncDeletedOrders();
+  }
+
   @Post('sync-stock')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')

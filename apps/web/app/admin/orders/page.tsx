@@ -381,6 +381,44 @@ export default function AdminOrdersPage() {
                       <h4 className="mb-3 text-sm font-bold text-slate-900">
                         Integraciones
                       </h4>
+                      <div className="mb-3 space-y-2 text-sm">
+                        {order.tracking?.dropiOrderId ? (
+                          <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                            <p>
+                              <span className="font-semibold text-slate-900">
+                                Dropi:
+                              </span>{' '}
+                              #{order.tracking.dropiOrderId}
+                            </p>
+                            {order.tracking.dropiGuideId && (
+                              <p>
+                                Guía:{' '}
+                                <span className="font-medium text-slate-800">
+                                  {order.tracking.dropiGuideId}
+                                </span>
+                              </p>
+                            )}
+                            <p>
+                              Estado Dropi:{' '}
+                              <span className="font-medium text-slate-800">
+                                {order.tracking.status || 'PENDING'}
+                              </span>
+                            </p>
+                            {order.tracking.lastEvent && (
+                              <p>{order.tracking.lastEvent}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400">
+                            Sin envío registrado en Dropi
+                          </p>
+                        )}
+                        {order.shippingEmail && (
+                          <p className="text-xs text-slate-500">
+                            Correo del pedido: {order.shippingEmail}
+                          </p>
+                        )}
+                      </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
                           variant="secondary"

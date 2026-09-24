@@ -213,10 +213,10 @@ export class OrdersService {
       throw err;
     }
 
-    if (user && customerEmail) {
+    if (customerEmail) {
       const emailTask = this.mailService.sendOrderConfirmationEmail(
         customerEmail,
-        user.name,
+        user?.name || dto.shippingName || 'Cliente',
         order.id,
         cart.items.map((item) => ({
           name: item.product.name,
@@ -723,6 +723,7 @@ export class OrdersService {
         take: limit,
         include: {
           user: true,
+          tracking: true,
           items: {
             include: {
               product: true,
@@ -748,7 +749,11 @@ export class OrdersService {
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
         user: true,
       },
     });
@@ -846,12 +851,44 @@ export class OrdersService {
       });
     }
 
-    if (order.user) {
-      this.mailService.sendOrderStatusEmail(
-        order.user.email,
-        order.user.name,
-        order.id,
-        status,
+    const customerEmail = order.shippingEmail || order.user?.email || null;
+    const customerName =
+      order.user?.name || order.shippingName || 'Cliente';
+
+    if (customerEmail) {
+      const itemsForMail = order.items.map((item) => ({
+        name: item.product?.name || `Producto`,
+        quantity: item.quantity,
+        price: Number(item.price),
+      }));
+
+      const mailTask =
+        status === 'CANCELLED'
+          ? this.mailService.sendOrderCancellationEmail(
+              customerEmail,
+              customerName,
+              order.id,
+              itemsForMail,
+              Number(order.total),
+            )
+          : this.mailService.sendOrderStatusEmail(
+              customerEmail,
+              customerName,
+              order.id,
+              status,
+            );
+
+      void mailTask.then(
+        () => {
+          this.logger.log(
+            `Estado #${order.id} → notificado a ${customerEmail}`,
+          );
+        },
+        (err) => {
+          this.logger.error(
+            `Error enviando estado de ${order.id} a ${customerEmail}: ${err instanceof Error ? err.message : err}`,
+          );
+        },
       );
     }
 
@@ -859,12 +896,25 @@ export class OrdersService {
       const adminEmail =
         process.env.ADMIN_EMAIL || process.env.ADMIN_GOOGLE_EMAIL || '';
       if (adminEmail) {
-        this.mailService.sendOrderStatusEmail(
-          adminEmail,
-          'Admin',
-          order.id,
-          status,
-        );
+        void this.mailService
+          .sendOrderStatusEmail(
+            adminEmail,
+            'Admin',
+            order.id,
+            status,
+          )
+          .then(
+            () => {
+              this.logger.log(
+                `Cancelación #${order.id} notificada al admin (${adminEmail})`,
+              );
+            },
+            (err) => {
+              this.logger.error(
+                `Error notificando cancelación al admin (${order.id}): ${err instanceof Error ? err.message : err}`,
+              );
+            },
+          );
       }
     }
 

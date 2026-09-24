@@ -116,6 +116,10 @@ export class DropiService {
     return this.tracking.syncAllPendingOrders();
   }
 
+  async syncDeletedOrders(): Promise<any> {
+    return this.tracking.syncDeletedOrders();
+  }
+
   async syncStock(targetIds?: number[]): Promise<StockSyncSummary> {
     return this.sync.syncStock(targetIds);
   }

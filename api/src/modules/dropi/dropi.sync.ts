@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DropiProductsService } from './dropi.products';
+import { DropiTrackingService } from './dropi.tracking';
 import { DropiCatalogBody } from './dropi.types';
 
 export interface StockSyncSummary {
@@ -17,6 +18,7 @@ export interface StockSyncSummary {
 }
 
 const SYNC_INTERVAL_MS = 30 * 60 * 1000;
+const FIRST_RUN_DELAY_MS = 15 * 1000;
 
 @Injectable()
 export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
@@ -26,25 +28,44 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly products: DropiProductsService,
     private readonly prisma: PrismaService,
+    private readonly tracking: DropiTrackingService,
   ) {}
 
   onModuleInit() {
     this.timer = setInterval(() => {
-      this.syncStock()
-        .then((summary) =>
-          this.logger.log(
-            `Stock sync automático: ${summary.checked} revisados, ${summary.updated} actualizados`,
-          ),
-        )
-        .catch((err) =>
-          this.logger.error(`Stock sync automático falló: ${err.message}`),
-        );
+      void this.runAllSync();
     }, SYNC_INTERVAL_MS);
     this.timer.unref?.();
+
+    setTimeout(() => {
+      void this.runAllSync();
+    }, FIRST_RUN_DELAY_MS).unref?.();
   }
 
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+  }
+
+  private async runAllSync() {
+    try {
+      const summary = await this.syncStock();
+      this.logger.log(
+        `Stock sync automático: ${summary.checked} revisados, ${summary.updated} actualizados, ${summary.errors} errores`,
+      );
+    } catch (err: any) {
+      this.logger.error(`Stock sync automático falló: ${err.message}`);
+    }
+
+    try {
+      const deleted = await this.tracking.syncDeletedOrders();
+      if (deleted.length > 0) {
+        this.logger.log(
+          `Sync automático: ${deleted.length} envío(s) eliminado(s) en Dropi marcados como cancelados`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(`Sync de envíos eliminados falló: ${err.message}`);
+    }
   }
 
   async syncStock(targetIds?: number[]): Promise<StockSyncSummary> {
@@ -138,18 +159,19 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
       }
 
       const stock = this.products.computeStock(dropiProduct);
-      const salePrice = Number(dropiProduct.sale_price);
-      const suggestedPrice = dropiProduct.suggested_price
+      const cost = Number(dropiProduct.sale_price) || 0;
+      const suggested = dropiProduct.suggested_price
         ? Number(dropiProduct.suggested_price)
-        : undefined;
+        : 0;
+      const price = suggested > 0 ? suggested : cost;
 
       try {
         await this.prisma.product.update({
           where: { id: local.id },
           data: {
             stock,
-            ...(salePrice > 0 && { price: salePrice }),
-            ...(suggestedPrice && { oldPrice: suggestedPrice }),
+            ...(price > 0 && { price }),
+            ...(suggested > 0 && { oldPrice: Math.round(suggested * 1.15) }),
           },
         });
         summary.updated++;
