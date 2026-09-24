@@ -1,7 +1,16 @@
 'use client';
 
-import { CheckCircle2, KeyRound, MailCheck, ShieldCheck, Timer } from 'lucide-react';
-import { Badge, Card, PageHeader } from '@/components/admin/ui';
+import { useState } from 'react';
+import {
+  CheckCircle2,
+  KeyRound,
+  MailCheck,
+  MailPlus,
+  ShieldCheck,
+  Timer,
+} from 'lucide-react';
+import { apiFetch } from '@/lib/admin';
+import { Alert, Badge, Button, Card, PageHeader } from '@/components/admin/ui';
 
 const steps = [
   'Ingresa tu email y contraseña en la página de inicio de sesión',
@@ -11,6 +20,34 @@ const steps = [
 ];
 
 export default function SecurityPage() {
+  const [sending, setSending] = useState(false);
+  const [mailResult, setMailResult] = useState<string | null>(null);
+  const [mailError, setMailError] = useState<string | null>(null);
+
+  const sendTestMail = async () => {
+    setSending(true);
+    setMailResult(null);
+    setMailError(null);
+    try {
+      const res = await apiFetch('/mail/test', { method: 'POST' });
+      if (res?.ok) {
+        setMailResult(
+          `Correo enviado a ${res.to || 'el ADMIN_EMAIL'}. Revisa la bandeja (y Spam). SMTP: ${res.mailerHost || '?'} → ${res.smtpUser || '?'}`,
+        );
+      } else {
+        setMailError(
+          res?.error || 'No se pudo enviar el correo de prueba',
+        );
+      }
+    } catch (err) {
+      setMailError(
+        err instanceof Error ? err.message : 'Error al probar el correo',
+      );
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl space-y-6">
       <PageHeader
@@ -74,6 +111,38 @@ export default function SecurityPage() {
               </span>
             </div>
           </div>
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <MailPlus className="h-4.5 w-4.5" />
+          </div>
+          <h2 className="text-base font-bold text-slate-900">
+            Probar envío de correos
+          </h2>
+        </div>
+
+        <p className="text-sm leading-relaxed text-slate-600">
+          Envía un correo de prueba para verificar que SMTP (Gmail) funciona.
+          Se envía a <strong>ADMIN_EMAIL</strong> = <strong>kroniomarket26@gmail.com</strong>.
+        </p>
+
+        <div className="mt-5">
+          <Button
+            variant="primary"
+            isLoading={sending}
+            disabled={sending}
+            onClick={sendTestMail}
+          >
+            Enviar correo de prueba
+          </Button>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {mailResult && <Alert type="success">{mailResult}</Alert>}
+          {mailError && <Alert type="error">{mailError}</Alert>}
         </div>
       </Card>
     </div>
