@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 
 interface OrderItemInfo {
@@ -40,9 +40,25 @@ function htmlToText(html: string): string {
 }
 
 @Injectable()
-export class MailService {
+export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter | null = null;
+
+  async onModuleInit() {
+    if (!this.transporter) return;
+    try {
+      await this.transporter.verify();
+      this.logger.log(
+        `SMTP credentials verificadas OK: ${process.env.SMTP_USER || '?'}`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `SMTP credentials RECHAZADAS (revisa SMTP_USER/SMTP_PASS): ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
+  }
 
   constructor() {
     const clean = (v?: string): string | undefined => {
@@ -626,5 +642,86 @@ export class MailService {
           ? 'Si tienes dudas, contáctanos.'
           : 'Gracias por confiar en nosotros.'),
     });
+  }
+
+  async sendTestEmail(
+    to: string,
+  ): Promise<{
+    ok: boolean;
+    smtpConfigured: boolean;
+    mailerHost: string | null;
+    smtpUser: string | null;
+    to: string;
+    error?: string;
+  }> {
+    const mailerHost = process.env.SMTP_HOST || null;
+    const smtpUser = process.env.SMTP_USER || null;
+
+    if (!this.transporter) {
+      return {
+        ok: false,
+        smtpConfigured: false,
+        mailerHost,
+        smtpUser,
+        to,
+        error:
+          'SMTP no configurado (faltan SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS en las variables de entorno)',
+      };
+    }
+
+    if (!to) {
+      return {
+        ok: false,
+        smtpConfigured: true,
+        mailerHost,
+        smtpUser,
+        to,
+        error: 'Falta el destinatario (ADMIN_EMAIL/ADMIN_GOOGLE_EMAIL o body.to)',
+      };
+    }
+
+    const base = {
+      smtpConfigured: true,
+      mailerHost,
+      smtpUser,
+      to,
+    };
+
+    try {
+      await this.transporter.verify();
+    } catch (err) {
+      return {
+        ...base,
+        ok: false,
+        error: `Credenciales SMTP RECHAZADAS por ${mailerHost}: ${
+          err instanceof Error ? err.message : err
+        }`,
+      };
+    }
+
+    const sent = await this.sendHtml({
+      to,
+      subject: 'Prueba — Kronio Market',
+      tag: 'SMTP TEST',
+      html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0">
+  <div style="max-width:520px;margin:40px auto;background:#fff;border-radius:12px;padding:32px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
+    <h1 style="color:#18181b;font-size:20px;margin:0 0 8px">Kronio Market</h1>
+    <p style="color:#52525b;font-size:14px;margin:0">Correo de prueba enviado correctamente.</p>
+    <p style="color:#71717a;font-size:12px;margin:20px 0 0;border-top:1px solid #e4e4e7;padding-top:12px">Desde ${smtpUser || 'SMTP'} · ${new Date().toLocaleString('es-CO')}</p>
+  </div>
+</body>
+</html>`,
+    });
+
+    return {
+      ...base,
+      ok: sent,
+      error: sent
+        ? undefined
+        : 'El mensaje no pudo enviarse (revisa los logs del servicio)',
+    };
   }
 }
