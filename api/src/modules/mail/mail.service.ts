@@ -1,5 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import * as net from 'net';
+import { lookup } from 'dns/promises';
 
 interface OrderItemInfo {
   name: string;
@@ -46,18 +48,98 @@ export class MailService implements OnModuleInit {
 
   async onModuleInit() {
     if (!this.transporter) return;
+    await this.probeAndVerify(this.logger, 'boot');
+  }
+
+  private async probeAndVerify(
+    logger: Logger,
+    context: string,
+  ): Promise<string | null> {
+    const host = process.env.SMTP_HOST || '';
+    const port = Number(process.env.SMTP_PORT) || 587;
+
+    const probe = await this.probeSmtp(host, port);
+    if (!probe.ok) {
+      const msg = `[${context}] No se puede conectar a ${host}:${port} desde el servidor: ${probe.error}`;
+      logger.error(msg);
+      return msg;
+    }
+    logger.log(`[${context}] Conexión TCP a ${host}:${port} OK`);
+
     try {
-      await this.transporter.verify();
-      this.logger.log(
-        `SMTP credentials verificadas OK: ${process.env.SMTP_USER || '?'}`,
+      await this.withTimeout(this.transporter!.verify(), 15000);
+      logger.log(
+        `[${context}] SMTP credentials verificadas OK: ${process.env.SMTP_USER || '?'}`,
       );
+      return null;
     } catch (err) {
-      this.logger.error(
-        `SMTP credentials RECHAZADAS (revisa SMTP_USER/SMTP_PASS): ${
+      const msg = `[${context}] SMTP audit rechazada por ${host} (revisa SMTP_USER/SMTP_PASS): ${
+        err instanceof Error ? err.message : err
+      }`;
+      logger.error(msg);
+      return msg;
+    }
+  }
+
+  private async probeSmtp(
+    host: string,
+    port: number,
+  ): Promise<{ ok: boolean; error?: string }> {
+    if (!host) return { ok: false, error: 'SMTP_HOST vacío' };
+    try {
+      const addresses = await lookup(host, { all: true });
+      const resolved = addresses.map((a) => a.address).join(', ');
+      if (addresses.length === 0)
+        return { ok: false, error: `DNS no resolvió ${host}` };
+      this.logger.log(`DNS ${host} → ${resolved}`);
+    } catch (err) {
+      return {
+        ok: false,
+        error: `DNS no resolvió ${host}: ${
           err instanceof Error ? err.message : err
         }`,
-      );
+      };
     }
+
+    return new Promise((resolve) => {
+      const socket = net.connect({ host, port });
+      const timer = setTimeout(() => {
+        socket.destroy();
+        resolve({
+          ok: false,
+          error: `timeout de conexión a ${host}:${port} (puerto bloqueado o red sin salida a Gmail)`,
+        });
+      }, 8000);
+      socket.once('connect', () => {
+        clearTimeout(timer);
+        socket.destroy();
+        resolve({ ok: true });
+      });
+      socket.once('error', (err) => {
+        clearTimeout(timer);
+        socket.destroy();
+        resolve({ ok: false, error: err.message });
+      });
+    });
+  }
+
+  private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`timeout tras ${ms}ms`)),
+        ms,
+      );
+      promise.then(
+        (v) => {
+          clearTimeout(timer);
+          resolve(v);
+        },
+        (e) => {
+          clearTimeout(timer);
+          reject(e);
+        },
+      );
+    });
   }
 
   constructor() {
@@ -92,6 +174,9 @@ export class MailService implements OnModuleInit {
         port: Number(port),
         secure: Number(port) === 465,
         auth: { user, pass },
+        connectionTimeout: 15000,
+        greetingTimeout: 10000,
+        socketTimeout: 20000,
       });
       this.logger.log(
         `Mail transporter configured: ${host}:${port} → ${user}`,
@@ -687,8 +772,17 @@ export class MailService implements OnModuleInit {
       to,
     };
 
+    const probe = await this.probeSmtp(mailerHost || '', 587);
+    if (!probe.ok) {
+      return {
+        ...base,
+        ok: false,
+        error: `No se puede conectar a ${mailerHost} desde Render: ${probe.error}.`,
+      };
+    }
+
     try {
-      await this.transporter.verify();
+      await this.withTimeout(this.transporter.verify(), 15000);
     } catch (err) {
       return {
         ...base,
