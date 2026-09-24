@@ -47,37 +47,18 @@ export class MailService implements OnModuleInit {
   private transporter: nodemailer.Transporter | null = null;
 
   async onModuleInit() {
+    await this.buildTransporter();
     if (!this.transporter) return;
-    await this.probeAndVerify(this.logger, 'boot');
-  }
-
-  private async probeAndVerify(
-    logger: Logger,
-    context: string,
-  ): Promise<string | null> {
-    const host = process.env.SMTP_HOST || '';
-    const port = Number(process.env.SMTP_PORT) || 587;
-
-    const probe = await this.probeSmtp(host, port);
-    if (!probe.ok) {
-      const msg = `[${context}] No se puede conectar a ${host}:${port} desde el servidor: ${probe.error}`;
-      logger.error(msg);
-      return msg;
-    }
-    logger.log(`[${context}] Conexión TCP a ${host}:${port} OK`);
-
     try {
-      await this.withTimeout(this.transporter!.verify(), 15000);
-      logger.log(
-        `[${context}] SMTP credentials verificadas OK: ${process.env.SMTP_USER || '?'}`,
+      await this.withTimeout(this.transporter.verify(), 15000);
+      this.logger.log(
+        `SMTP credentials verificadas OK: ${process.env.SMTP_USER || '?'}`,
       );
-      return null;
     } catch (err) {
-      const msg = `[${context}] SMTP audit rechazada por ${host} (revisa SMTP_USER/SMTP_PASS): ${
+      const msg = `SMTP unverified tras selección de puerto: ${
         err instanceof Error ? err.message : err
       }`;
-      logger.error(msg);
-      return msg;
+      this.logger.error(msg);
     }
   }
 
@@ -118,9 +99,41 @@ export class MailService implements OnModuleInit {
       socket.once('error', (err) => {
         clearTimeout(timer);
         socket.destroy();
-        resolve({ ok: false, error: err.message });
+        const raw = err instanceof Error ? err.message || err.name : String(err);
+        const code = (err as NodeJS.ErrnoException).code
+          ? ` (code ${(err as NodeJS.ErrnoException).code})`
+          : '';
+        resolve({ ok: false, error: `${raw}${code}` });
       });
     });
+  }
+
+  private async autoSelectSmtpConfig(
+    host: string,
+    port: number,
+    user: string,
+    pass: string,
+  ) {
+    const candidates = [
+      { port, secure: Number(port) === 465, source: 'SMTP_PORT' },
+      { port: 465, secure: true, source: 'fallback 465' },
+      { port: 25, secure: false, source: 'fallback 25' },
+    ];
+    const failures: string[] = [];
+    for (const cand of candidates) {
+      const probe = await this.probeSmtp(host, cand.port);
+      if (probe.ok) {
+        this.logger.log(
+          `SMTP ${host}:${cand.port} alcanzable (${cand.source}) — usando este puerto`,
+        );
+        return { host, port: cand.port, secure: cand.secure };
+      }
+      failures.push(`${cand.port} (${cand.source}): ${probe.error}`);
+    }
+    this.logger.error(
+      `Ningún puerto SMTP alcanzable para ${host}. Detalle: ${failures.join(' | ')}`,
+    );
+    return { host, port, secure: Number(port) === 465 };
   }
 
   private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -162,24 +175,25 @@ export class MailService implements OnModuleInit {
       const v = process.env[key];
       if (v) process.env[key] = clean(v);
     }
+  }
 
+  private async buildTransporter() {
     const host = process.env.SMTP_HOST;
-    const port = process.env.SMTP_PORT;
+    const port = Number(process.env.SMTP_PORT) || 587;
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
 
     if (host && port && user && pass) {
+      const cfg = await this.autoSelectSmtpConfig(host, port, user, pass);
       this.transporter = nodemailer.createTransport({
-        host,
-        port: Number(port),
-        secure: Number(port) === 465,
+        ...cfg,
         auth: { user, pass },
         connectionTimeout: 15000,
         greetingTimeout: 10000,
         socketTimeout: 20000,
       });
       this.logger.log(
-        `Mail transporter configured: ${host}:${port} → ${user}`,
+        `Mail transporter configured: ${cfg.host}:${cfg.port} → ${user}`,
       );
     } else {
       this.logger.warn(
@@ -772,24 +786,27 @@ export class MailService implements OnModuleInit {
       to,
     };
 
-    const probe = await this.probeSmtp(mailerHost || '', 587);
-    if (!probe.ok) {
-      return {
-        ...base,
-        ok: false,
-        error: `No se puede conectar a ${mailerHost} desde Render: ${probe.error}.`,
-      };
-    }
-
     try {
       await this.withTimeout(this.transporter.verify(), 15000);
     } catch (err) {
+      const portProbes = await Promise.all(
+        [587, 465, 25].map(async (p) => ({
+          port: p,
+          ok: (await this.probeSmtp(mailerHost || '', p)).ok,
+        })),
+      );
+      const reachable = portProbes
+        .filter((p) => p.ok)
+        .map((p) => p.port)
+        .join(', ');
       return {
         ...base,
         ok: false,
-        error: `Credenciales SMTP RECHAZADAS por ${mailerHost}: ${
+        error: `Fallo al autenticar con ${mailerHost}: ${
           err instanceof Error ? err.message : err
-        }`,
+        }. Puertos alcanzables desde el servidor: ${
+          reachable || 'ninguno (587/465/25 bloqueados)'
+        }.`,
       };
     }
 
