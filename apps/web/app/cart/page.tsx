@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, isAuthenticated } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
@@ -94,6 +94,7 @@ export default function CartPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [showCheckout, setShowCheckout] = useState(false);
+  const idempotencyRef = useRef<string | null>(null);
   const [shippingForm, setShippingForm] = useState({
     shippingName: "",
     shippingPhone: "",
@@ -270,11 +271,14 @@ export default function CartPage() {
 
     setCheckoutLoading(true);
     try {
-      const idempotencyKey = crypto.randomUUID();
+      if (!idempotencyRef.current) {
+        idempotencyRef.current = crypto.randomUUID();
+      }
       const res = await apiFetch("/orders/checkout", {
         method: "POST",
-        body: JSON.stringify({ ...shippingForm, idempotencyKey }),
+        body: JSON.stringify({ ...shippingForm, idempotencyKey: idempotencyRef.current }),
       });
+      idempotencyRef.current = null;
 
       setShowCheckout(false);
 

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   LineChart,
   Line,
@@ -12,32 +13,72 @@ import {
   Legend,
 } from 'recharts';
 import { Plus, FileText } from 'lucide-react';
+import { apiFetch } from '@/lib/admin';
 
 const periods = ['Hoy', 'Ayer', 'Últimos 7 Días', 'Mes Actual'] as const;
 
-const monthlyData = [
-  { day: '1', ventas: 120000, pedidos: 3, trafico: 45 },
-  { day: '3', ventas: 85000, pedidos: 2, trafico: 38 },
-  { day: '5', ventas: 200000, pedidos: 5, trafico: 72 },
-  { day: '7', ventas: 95000, pedidos: 2, trafico: 41 },
-  { day: '9', ventas: 310000, pedidos: 7, trafico: 95 },
-  { day: '11', ventas: 145000, pedidos: 4, trafico: 55 },
-  { day: '13', ventas: 220000, pedidos: 6, trafico: 68 },
-  { day: '15', ventas: 175000, pedidos: 4, trafico: 62 },
-  { day: '17', ventas: 400000, pedidos: 9, trafico: 120 },
-  { day: '19', ventas: 250000, pedidos: 6, trafico: 88 },
-  { day: '21', ventas: 320000, pedidos: 8, trafico: 105 },
-  { day: '23', ventas: 280000, pedidos: 7, trafico: 92 },
-  { day: '25', ventas: 150000, pedidos: 3, trafico: 50 },
-  { day: '27', ventas: 340000, pedidos: 8, trafico: 110 },
-  { day: '29', ventas: 200000, pedidos: 5, trafico: 75 },
-];
+const periodParam: Record<(typeof periods)[number], string> = {
+  'Hoy': 'today',
+  'Ayer': 'yesterday',
+  'Últimos 7 Días': '7days',
+  'Mes Actual': 'month',
+};
+
+interface PerformancePoint {
+  label: string;
+  ventas: number;
+  pedidos: number;
+}
+
+interface PerformanceResponse {
+  period: string;
+  mode: 'hour' | 'day';
+  points: PerformancePoint[];
+}
 
 export default function PerformanceChart() {
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('Mes Actual');
+  const [selectedPeriod, setSelectedPeriod] =
+    useState<(typeof periods)[number]>('Mes Actual');
+  const [data, setData] = useState<PerformancePoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const result = (await apiFetch(
+          `/dashboard/performance?period=${periodParam[selectedPeriod]}`,
+        )) as PerformanceResponse;
+        setData(result.points);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Error al cargar el rendimiento',
+        );
+        setData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [selectedPeriod]);
 
   const formatCurrency = (v: number) =>
-    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v);
+    new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+    }).format(v);
+
+  const formatShort = (v: number) =>
+    v >= 1_000_000
+      ? `${(v / 1_000_000).toFixed(1)}M`
+      : v >= 1_000
+        ? `${(v / 1_000).toFixed(0)}k`
+        : `${v}`;
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/40">
@@ -47,10 +88,10 @@ export default function PerformanceChart() {
             Rendimiento
           </p>
           <h2 className="mt-2 text-2xl font-bold text-slate-900">
-            Rendimiento Mensual Detallado
+            Ventas y Pedidos
           </h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
             {periods.map((p) => (
               <button
@@ -66,88 +107,111 @@ export default function PerformanceChart() {
               </button>
             ))}
           </div>
-          <button className="flex items-center gap-1.5 rounded-2xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700">
+          <Link
+            href="/admin/orders"
+            className="flex items-center gap-1.5 rounded-2xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          >
             <Plus className="h-3.5 w-3.5" />
             Nuevo Pedido
-          </button>
-          <button className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">
+          </Link>
+          <Link
+            href="/admin/orders"
+            className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50"
+          >
             <FileText className="h-3.5 w-3.5" />
             Reporte
-          </button>
+          </Link>
         </div>
       </div>
 
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="h-72">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={monthlyData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis
-              dataKey="day"
-              tick={{ fontSize: 12, fill: '#94a3b8' }}
-              axisLine={{ stroke: '#e2e8f0' }}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fontSize: 12, fill: '#94a3b8' }}
-              axisLine={false}
-              tickLine={false}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              tickFormatter={(v: any) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
-            />
-            <Tooltip
-              contentStyle={{
-                borderRadius: '16px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                padding: '12px 16px',
-                background: 'white',
-              }}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              formatter={(value: any, name: any) => {
-                if (name === 'ventas') return [formatCurrency(value), 'Ventas'];
-                if (name === 'trafico') return [`${value}`, 'Tráfico'];
-                return [value, name === 'pedidos' ? 'Pedidos' : name];
-              }}
-              labelFormatter={(label) => `Día ${label}`}
-            />
-            <Legend
-              wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              formatter={(value: any) => {
-                const labels: Record<string, string> = {
-                  ventas: 'Ventas',
-                  pedidos: 'Pedidos',
-                  trafico: 'Tráfico',
-                };
-                return <span className="text-slate-600">{labels[value] || value}</span>;
-              }}
-            />
-            <Line
-              type="monotone"
-              dataKey="ventas"
-              stroke="#22d3ee"
-              strokeWidth={2}
-              dot={{ r: 3, fill: '#22d3ee', strokeWidth: 0 }}
-              activeDot={{ r: 5, fill: '#22d3ee', stroke: 'white', strokeWidth: 2 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="pedidos"
-              stroke="#3b82f6"
-              strokeWidth={2}
-              dot={{ r: 3, fill: '#3b82f6', strokeWidth: 0 }}
-              activeDot={{ r: 5, fill: '#3b82f6', stroke: 'white', strokeWidth: 2 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="trafico"
-              stroke="#94a3b8"
-              strokeWidth={2}
-              dot={{ r: 3, fill: '#94a3b8', strokeWidth: 0 }}
-              activeDot={{ r: 5, fill: '#94a3b8', stroke: 'white', strokeWidth: 2 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        {loading ? (
+          <div className="flex h-full items-center justify-center text-sm text-slate-400">
+            Cargando datos...
+          </div>
+        ) : data.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-slate-400">
+            Aún no hay ventas en este período.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={data}
+              margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 12, fill: '#94a3b8' }}
+                axisLine={{ stroke: '#e2e8f0' }}
+                tickLine={false}
+              />
+              <YAxis
+                yAxisId="ventas"
+                tick={{ fontSize: 12, fill: '#94a3b8' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v: number) => formatShort(v)}
+                width={60}
+              />
+              <YAxis
+                yAxisId="pedidos"
+                orientation="right"
+                tick={{ fontSize: 12, fill: '#94a3b8' }}
+                axisLine={false}
+                tickLine={false}
+                width={40}
+              />
+              <Tooltip
+                contentStyle={{
+                  borderRadius: '16px',
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                  padding: '12px 16px',
+                  background: 'white',
+                }}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                formatter={(value: any, name: any) => {
+                  if (name === 'ventas') return [formatCurrency(Number(value)), 'Ventas'];
+                  return [value, name === 'pedidos' ? 'Pedidos' : name];
+                }}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                formatter={(value: any) => (
+                  <span className="text-slate-600">
+                    {value === 'ventas' ? 'Ventas (COP)' : 'Pedidos'}
+                  </span>
+                )}
+              />
+              <Line
+                type="monotone"
+                yAxisId="ventas"
+                dataKey="ventas"
+                stroke="#22d3ee"
+                strokeWidth={2}
+                dot={{ r: 3, fill: '#22d3ee', strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: '#22d3ee', stroke: 'white', strokeWidth: 2 }}
+              />
+              <Line
+                type="monotone"
+                yAxisId="pedidos"
+                dataKey="pedidos"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={{ r: 3, fill: '#3b82f6', strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: '#3b82f6', stroke: 'white', strokeWidth: 2 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </section>
   );

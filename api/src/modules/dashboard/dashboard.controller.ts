@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -13,5 +13,12 @@ export class DashboardController {
   @Roles('ADMIN')
   getStats() {
     return this.dashboardService.getStats();
+  }
+
+  @Get('performance')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getPerformance(@Query('period') period?: string) {
+    return this.dashboardService.getPerformance(period);
   }
 }

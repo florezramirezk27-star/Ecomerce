@@ -261,16 +261,33 @@ export class MailService {
   }
 
   async sendPasswordResetEmail(to: string, name: string, resetLink: string) {
-    await this.send({
+    await this.sendHtml({
       to,
-      subject: 'Recuperación de contraseña',
+      subject: 'Recuperación de contraseña - Kronio Market',
       tag: 'PASSWORD RESET',
-      text:
-        `Hola ${name},\n\n` +
-        `Recibimos una solicitud para restablecer tu contraseña.\n\n` +
-        `Haz clic en el siguiente enlace para crear una nueva contraseña:\n${resetLink}\n\n` +
-        `Este enlace expirará en 1 hora.\n\n` +
-        `Si no solicitaste este cambio, ignora este correo.\n`,
+      html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0">
+  <div style="max-width:480px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
+    <div style="background:linear-gradient(135deg,#1d4ed8,#4338ca);padding:24px;text-align:center">
+      <h1 style="color:#fff;margin:0;font-size:20px">Kronio Market</h1>
+    </div>
+    <div style="padding:32px 24px">
+      <p style="color:#333;font-size:15px;line-height:1.5">Hola <strong>${name}</strong>,</p>
+      <p style="color:#333;font-size:15px;line-height:1.5">
+        Recibimos una solicitud para restablecer tu contraseña. Haz clic en el siguiente botón para crear una nueva:
+      </p>
+      <div style="text-align:center;margin:28px 0">
+        <a href="${resetLink}" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;border-radius:10px;padding:14px 32px;font-size:15px;font-weight:bold;text-decoration:none">Restablecer contraseña</a>
+      </div>
+      <p style="color:#666;font-size:13px;line-height:1.5">Este enlace expira en <strong>1 hora</strong>. Si no puede ver el botón, copia y pega esta dirección en tu navegador:</p>
+      <p style="color:#2563eb;font-size:12px;word-break:break-all;background:#f4f4f5;border-radius:8px;padding:12px">${resetLink}</p>
+      <p style="color:#666;font-size:13px;margin-top:20px;border-top:1px solid #e4e4e7;padding-top:16px">Si no solicitaste este cambio, ignora este correo. Tu contraseña no cambiará.</p>
+    </div>
+  </div>
+</body>
+</html>`,
     });
   }
 
@@ -477,12 +494,12 @@ export class MailService {
 
       <p style="margin:20px 0 0;font-size:12px;color:#94a3b8;line-height:1.6;border-top:1px solid #eef0f3;padding-top:16px">
         Kronio Market &middot; Tienda en línea &middot; Bogotá, Colombia<br>
-        Correo de contacto: <span style="color:#2563eb">kroniomarket@gmail.com</span> &middot; NIT 000.000.000-0
+        Correo de contacto: <span style="color:#2563eb">kroniomarket26@gmail.com</span> &middot; NIT 000.000.000-0
       </p>
     </div>
 
     <p style="margin:16px 0 0;text-align:center;font-size:11px;color:#94a3b8">
-      Este es un correo generado automáticamente por Kronio Market. No lo respondas si es un error — escríbenos a kroniomarket@gmail.com.
+      Este es un correo generado automáticamente por Kronio Market. No lo respondas si es un error — escríbenos a kroniomarket26@gmail.com.
     </p>
   </div>
 </body>

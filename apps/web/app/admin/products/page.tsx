@@ -24,6 +24,7 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -50,11 +51,18 @@ export default function AdminProductsPage() {
   const handleDelete = async (id: string) => {
     try {
       setDeleting(true);
-      await apiFetch(`/products/${id}`, {
+      setError('');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result: any = await apiFetch(`/products/${id}`, {
         method: 'DELETE',
       });
       setProducts((prev) => prev.filter((p) => p.id !== id));
       setDeleteConfirm(null);
+      setSuccess(
+        result?.archived
+          ? `"${result.name || 'Producto'}" tiene pedidos asociados, por eso no se puede borrar su historial. Fue desactivado y ya no aparece en la tienda.`
+          : 'Producto eliminado correctamente.',
+      );
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Error al eliminar producto',
@@ -94,6 +102,8 @@ export default function AdminProductsPage() {
       />
 
       {error && <Alert type="error">{error}</Alert>}
+
+      {success && <Alert type="success">{success}</Alert>}
 
       <Card className="p-4">
         <SearchInput

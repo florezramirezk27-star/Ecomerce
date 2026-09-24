@@ -53,7 +53,7 @@ export class OrdersService {
     });
 
     if (!cart || cart.items.length === 0) {
-      throw new BadRequestException('Cart is empty');
+      throw new BadRequestException('Tu carrito está vacío');
     }
 
     const user = await this.prisma.user.findUnique({
@@ -84,94 +84,115 @@ export class OrdersService {
       }
     }
 
-    const order = await this.prisma.$transaction(async (tx) => {
-      const productIds = cart.items.map((i) => i.productId);
-      const products = await tx.product.findMany({
-        where: { id: { in: productIds } },
-      });
+    let order;
+    try {
+      order = await this.prisma.$transaction(async (tx) => {
+        const productIds = cart.items.map((i) => i.productId);
+        const products = await tx.product.findMany({
+          where: { id: { in: productIds } },
+        });
 
-      const productMap = new Map(products.map((p) => [p.id, p]));
+        const productMap = new Map(products.map((p) => [p.id, p]));
 
-      const total = cart.items.reduce((sum, item) => {
-        const product = productMap.get(item.productId);
+        const total = cart.items.reduce((sum, item) => {
+          const product = productMap.get(item.productId);
 
-        if (!product || !product.active) {
-          throw new BadRequestException(
-            `El producto ${item.product.name} no está disponible`,
-          );
-        }
+          if (!product || !product.active) {
+            throw new BadRequestException(
+              `El producto ${item.product.name} no está disponible`,
+            );
+          }
 
-        if (item.quantity > product.stock) {
-          throw new BadRequestException(
-            `No hay suficiente stock para ${item.product.name}`,
-          );
-        }
+          if (item.quantity > product.stock) {
+            throw new BadRequestException(
+              `No hay suficiente stock para ${item.product.name}`,
+            );
+          }
 
-        return sum + Number(item.product.price) * item.quantity;
-      }, 0);
+          return sum + Number(item.product.price) * item.quantity;
+        }, 0);
 
-      const order = await tx.order.create({
-        data: {
-          userId,
-          total,
-          paymentMethod: 'CASH_ON_DELIVERY',
-          idempotencyKey: dto.idempotencyKey || null,
-
-          shippingName: dto.shippingName,
-          shippingPhone: dto.shippingPhone,
-          shippingAddress: dto.shippingAddress,
-          shippingCity: dto.shippingCity,
-          shippingState: dto.shippingState,
-          shippingZip: dto.shippingZip || null,
-          shippingEmail: customerEmail,
-          notes: dto.notes || null,
-
-          items: {
-            create: cart.items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              price: item.product.price,
-            })),
-          },
-        },
-
-        include: {
-          items: true,
-        },
-      });
-
-      for (const item of cart.items) {
-        const updated = await tx.product.updateMany({
-          where: {
-            id: item.productId,
-            stock: { gte: item.quantity },
-          },
+        const created = await tx.order.create({
           data: {
-            stock: {
-              decrement: item.quantity,
+            userId,
+            total,
+            paymentMethod: 'CASH_ON_DELIVERY',
+            idempotencyKey: dto.idempotencyKey || null,
+
+            shippingName: dto.shippingName,
+            shippingPhone: dto.shippingPhone,
+            shippingAddress: dto.shippingAddress,
+            shippingCity: dto.shippingCity,
+            shippingState: dto.shippingState,
+            shippingZip: dto.shippingZip || null,
+            shippingEmail: customerEmail,
+            notes: dto.notes || null,
+
+            items: {
+              create: cart.items.map((item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                price: item.product.price,
+              })),
             },
+          },
+
+          include: {
+            items: true,
           },
         });
 
-        if (updated.count === 0) {
-          throw new BadRequestException(
-            `No hay suficiente stock para ${item.product.name}`,
-          );
+        for (const item of cart.items) {
+          const updated = await tx.product.updateMany({
+            where: {
+              id: item.productId,
+              stock: { gte: item.quantity },
+            },
+            data: {
+              stock: {
+                decrement: item.quantity,
+              },
+            },
+          });
+
+          if (updated.count === 0) {
+            throw new BadRequestException(
+              `No hay suficiente stock para ${item.product.name}`,
+            );
+          }
+        }
+
+        await tx.cartItem.deleteMany({
+          where: {
+            cartId: cart.id,
+          },
+        });
+
+        return created;
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002' && dto.idempotencyKey) {
+        const existing = await this.prisma.order.findUnique({
+          where: { idempotencyKey: dto.idempotencyKey },
+          include: { items: true },
+        });
+        if (existing) {
+          return {
+            ...existing,
+            dropi: {
+              success: null,
+              message: 'Pedido ya procesado en un intento anterior',
+              orderId: null,
+            },
+            emails: { customer: 'skipped', admin: 'skipped' },
+          };
         }
       }
+      throw err;
+    }
 
-      await tx.cartItem.deleteMany({
-        where: {
-          cartId: cart.id,
-        },
-      });
-
-      return order;
-    });
-
-    let customerEmailSent = false;
     if (user && customerEmail) {
-      customerEmailSent = await this.mailService.sendOrderConfirmationEmail(
+      const emailTask = this.mailService.sendOrderConfirmationEmail(
         customerEmail,
         user.name,
         order.id,
@@ -192,6 +213,20 @@ export class OrdersService {
           notes: dto.notes,
           docType: dto.shippingDocType,
           docNumber: dto.shippingDocNumber,
+        },
+      );
+      void emailTask.then(
+        (sent) => {
+          if (!sent) {
+            this.logger.warn(
+              `No se pudo enviar la factura a ${customerEmail} (pedido ${order.id})`,
+            );
+          }
+        },
+        (err) => {
+          this.logger.error(
+            `Error enviando factura a ${customerEmail}: ${err instanceof Error ? err.message : err}`,
+          );
         },
       );
     }
@@ -296,9 +331,8 @@ export class OrdersService {
 
     const adminEmail =
       process.env.ADMIN_EMAIL || process.env.ADMIN_GOOGLE_EMAIL || '';
-    let adminEmailSent = false;
     if (adminEmail) {
-      adminEmailSent = await this.mailService.sendAdminOrderNotification(
+      const adminTask = this.mailService.sendAdminOrderNotification(
         adminEmail,
         user?.name || dto.shippingName,
         customerEmail || null,
@@ -323,6 +357,20 @@ export class OrdersService {
         },
         dropiResult?.message,
       );
+      void adminTask.then(
+        (sent) => {
+          if (!sent) {
+            this.logger.warn(
+              `No se pudo notificar al admin sobre el pedido ${order.id}`,
+            );
+          }
+        },
+        (err) => {
+          this.logger.error(
+            `Error notificando al admin (pedido ${order.id}): ${err instanceof Error ? err.message : err}`,
+          );
+        },
+      );
     }
 
     return {
@@ -333,12 +381,8 @@ export class OrdersService {
         orderId: dropiResult?.orderId ?? null,
       },
       emails: {
-        customer: customerEmailSent
-          ? 'sent'
-          : customerEmail
-            ? 'failed'
-            : 'skipped',
-        admin: adminEmailSent ? 'sent' : adminEmail ? 'failed' : 'skipped',
+        customer: customerEmail ? 'queued' : 'skipped',
+        admin: adminEmail ? 'queued' : 'skipped',
       },
     };
   }

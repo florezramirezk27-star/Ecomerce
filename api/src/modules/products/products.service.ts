@@ -148,9 +148,25 @@ export class ProductsService {
     });
   }
 
-  remove(id: string) {
-    return this.prisma.product.delete({
-      where: { id },
+  async remove(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.cartItem.deleteMany({ where: { productId: id } });
+      await tx.productEmbedding.deleteMany({ where: { productId: id } });
+
+      const referencedInOrder = await tx.orderItem.findFirst({
+        where: { productId: id },
+        select: { id: true },
+      });
+
+      if (referencedInOrder) {
+        const product = await tx.product.update({
+          where: { id },
+          data: { active: false },
+        });
+        return { ...product, archived: true };
+      }
+
+      return tx.product.delete({ where: { id } });
     });
   }
 }
