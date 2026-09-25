@@ -154,6 +154,26 @@ export const formatDate = (date: string) => {
   }).format(new Date(date));
 };
 
+export const timeAgo = (date: string, now: number = Date.now()) => {
+  const timestamp = new Date(date).getTime();
+  if (!Number.isFinite(timestamp)) return '';
+
+  const diffMs = now - timestamp;
+  if (diffMs < 60_000) return 'hace un momento';
+
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 60) return `hace ${minutes} min`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `hace ${days} d`;
+
+  const months = Math.floor(days / 30);
+  return months === 1 ? 'hace 1 mes' : `hace ${months} meses`;
+};
+
 async function fetchWithRetry(
   url: string,
   options: RequestInit,

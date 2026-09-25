@@ -1,13 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AlertTriangle, PackageX } from 'lucide-react';
-import {
-  apiFetch,
-  DashboardStats,
-  formatPrice,
-  formatDate,
-} from '@/lib/admin';
+import { formatPrice, formatDate } from '@/lib/admin';
+import { useAdminDashboard } from '@/lib/useAdminDashboard';
 import { Alert, Badge, Card, LoadingState } from '@/components/admin/ui';
 import DashboardHeader from '@/components/admin/DashboardHeader';
 import MetricCards from '@/components/admin/MetricCards';
@@ -17,39 +13,27 @@ import RecentOrders from '@/components/admin/RecentOrders';
 import SalesFunnel from '@/components/admin/SalesFunnel';
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { stats, loading, error, refresh } = useAdminDashboard();
   const [selectedInsight, setSelectedInsight] = useState('Ventas del día');
-
-  useEffect(() => {
-    const loadDashboard = async () => {
-      try {
-        setLoading(true);
-        const data = await apiFetch('/dashboard/stats');
-        setStats(data);
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Error al cargar métricas',
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadDashboard();
-  }, []);
 
   if (loading) {
     return <LoadingState label="Cargando dashboard..." />;
   }
 
-  if (error) {
+  if (error && !stats) {
     return (
       <div className="flex justify-center p-16">
-        <Alert type="error">{error}</Alert>
+        <Alert type="error">
+          <div className="flex flex-col items-center gap-3">
+            <span>{error}</span>
+            <button
+              onClick={refresh}
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700"
+            >
+              Reintentar
+            </button>
+          </div>
+        </Alert>
       </div>
     );
   }
