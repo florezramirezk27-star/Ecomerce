@@ -183,7 +183,7 @@ export class AuthController {
     try {
       const result = await this.authService.googleLogin(req.user);
 
-      const code = this.authService.generateExchangeCode(
+      const code = await this.authService.generateExchangeCode(
         result.access_token,
         result.user,
       );
@@ -207,7 +207,7 @@ export class AuthController {
     try {
       const result = await this.authService.facebookLogin(req.user);
 
-      const code = this.authService.generateExchangeCode(
+      const code = await this.authService.generateExchangeCode(
         result.access_token,
         result.user,
       );
@@ -228,7 +228,7 @@ export class AuthController {
     body: { code: string },
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = this.authService.exchangeCode(body.code);
+    const result = await this.authService.exchangeCode(body.code);
     if (!result) {
       throw new HttpException('Código inválido o expirado', 400);
     }

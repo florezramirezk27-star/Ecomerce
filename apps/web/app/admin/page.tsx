@@ -6,6 +6,7 @@ import { formatPrice, formatDate } from '@/lib/admin';
 import { useAdminDashboard } from '@/lib/useAdminDashboard';
 import { Alert, Badge, Card, LoadingState } from '@/components/admin/ui';
 import DashboardHeader from '@/components/admin/DashboardHeader';
+import LiveVisitorsCard from '@/components/admin/LiveVisitorsCard';
 import MetricCards from '@/components/admin/MetricCards';
 import PerformanceChart from '@/components/admin/PerformanceChart';
 import TopProducts from '@/components/admin/TopProducts';
@@ -73,6 +74,8 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       <DashboardHeader />
+
+      <LiveVisitorsCard />
 
       <MetricCards
         stats={stats}

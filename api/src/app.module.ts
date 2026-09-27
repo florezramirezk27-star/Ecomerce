@@ -19,6 +19,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { DropiModule } from './modules/dropi/dropi.module';
 import { DropiIntegrationModule } from './modules/dropi-integration/dropi-integration.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { PresenceModule } from './modules/presence/presence.module';
 import { AIModule } from './modules/ai/ai.module';
 import { MetaModule } from './modules/meta/meta.module';
 import { CsrfGuard } from './common/guards/csrf.guard';
@@ -51,6 +52,7 @@ import { RedisModule } from './common/redis/redis.module';
     DropiModule,
     DropiIntegrationModule,
     ChatModule,
+    PresenceModule,
     AIModule,
     MetaModule,
   ],

@@ -10,6 +10,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { FacebookStrategy } from './strategies/facebook.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { RedisModule } from '../../common/redis/redis.module';
 
 const facebookStrategyProvider = {
   provide: FacebookStrategy,
@@ -29,6 +30,7 @@ const facebookStrategyProvider = {
     UsersModule,
     PassportModule,
     PrismaModule,
+    RedisModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

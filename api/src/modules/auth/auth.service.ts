@@ -10,11 +10,16 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../../common/redis/redis.service';
 import { sessionLifetimeMs } from '../../common/token-expiry';
 import { RegisterDto } from './dto/register.dto';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+
+const EXCHANGE_CODE_TTL_MS = 60_000;
+const EXCHANGE_CODE_TTL_S = 60;
+const EXCHANGE_CODE_PREFIX = 'auth:exchange:';
 
 @Injectable()
 export class AuthService {
@@ -23,6 +28,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -198,27 +204,68 @@ export class AuthService {
     }
   }
 
+  /**
+   * Codigos de un solo uso para el intercambio del redirect de Google/Facebook.
+   *
+   * Se guardan en Redis con TTL porque el redirect de OAuth y el POST de
+   * /auth/exchange pueden caer en instancias distintas de la API (o entre un
+   * reinicio y el otro), y un Map en memoria pierde el codigo en ese caso. El
+   * Map queda como red de seguridad cuando no hay REDIS_URL o Redis falla.
+   */
   private readonly exchangeCodes = new Map<
     string,
     { token: string; user: any; expiresAt: number }
   >();
 
-  generateExchangeCode(token: string, user: any): string {
+  private pruneExchangeCodes() {
+    const now = Date.now();
+    for (const [code, entry] of this.exchangeCodes) {
+      if (entry.expiresAt < now) this.exchangeCodes.delete(code);
+    }
+  }
+
+  async generateExchangeCode(token: string, user: any): Promise<string> {
     const code = randomUUID();
-    this.exchangeCodes.set(code, {
-      token,
-      user,
-      expiresAt: Date.now() + 60_000,
-    });
+    const expiresAt = Date.now() + EXCHANGE_CODE_TTL_MS;
+
+    this.pruneExchangeCodes();
+    this.exchangeCodes.set(code, { token, user, expiresAt });
+
+    if (this.redis.isEnabled()) {
+      await this.redis
+        .setWithTtl(
+          `${EXCHANGE_CODE_PREFIX}${code}`,
+          EXCHANGE_CODE_TTL_S,
+          JSON.stringify({ token, user }),
+        )
+        .catch(() => {});
+    }
+
     return code;
   }
 
-  exchangeCode(code: string): { access_token: string; user: any } | null {
-    const entry = this.exchangeCodes.get(code);
-    if (!entry || entry.expiresAt < Date.now()) {
-      this.exchangeCodes.delete(code);
-      return null;
+  async exchangeCode(
+    code: string,
+  ): Promise<{ access_token: string; user: any } | null> {
+    if (this.redis.isEnabled()) {
+      const raw = await this.redis
+        .getAndDelete(`${EXCHANGE_CODE_PREFIX}${code}`)
+        .catch(() => null);
+
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          return { access_token: parsed.token, user: parsed.user };
+        } catch {
+          return null;
+        }
+      }
     }
+
+    this.pruneExchangeCodes();
+    const entry = this.exchangeCodes.get(code);
+    if (!entry) return null;
+
     this.exchangeCodes.delete(code);
     return { access_token: entry.token, user: entry.user };
   }
