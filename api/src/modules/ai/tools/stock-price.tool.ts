@@ -47,9 +47,7 @@ export class StockPriceTool implements AgentTool<StockPriceIn, StockPriceOut> {
 
     if (args.query && args.query.trim() && products.length === 0) {
       const normalizedQuery = this.normalizeText(args.query.trim());
-      const terms = normalizedQuery
-        .split(/\s+/)
-        .filter((w) => w.length > 2);
+      const terms = normalizedQuery.split(/\s+/).filter((w) => w.length > 2);
 
       if (terms.length > 0) {
         const fallbackCatalog = await this.prisma.product.findMany({

@@ -8,8 +8,10 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { DropiQuoteParams } from './dropi.types';
 import { DropiService } from './dropi.service';
+import { DropiWebhookGuard } from '../../common/guards/dropi-webhook.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -140,7 +142,9 @@ export class DropiController {
   }
 
   @Post('webhook')
-  async webhook(@Body() payload: any) {
+  @UseGuards(DropiWebhookGuard)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  async webhook(@Body() payload: unknown) {
     return this.dropiService.handleWebhook(payload);
   }
 

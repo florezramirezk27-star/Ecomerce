@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { getUser, serverLogout } from "@/lib/auth";
@@ -203,7 +204,15 @@ export default function Navbar() {
     <nav className="flex items-center justify-between px-4 md:px-10 py-4 border-b relative z-40">
       <Link href="/" className="font-bold text-lg shrink-0 flex items-center gap-3">
         {logo ? (
-          <img src={logo} alt="Kronio Market" className="h-12 w-auto max-w-[180px] object-contain mix-blend-multiply" />
+                  <Image
+                    src={logo}
+                    alt="Kronio Market"
+                    width={180}
+                    height={48}
+                    priority
+                    sizes="180px"
+                    className="h-12 w-auto max-w-[180px] object-contain mix-blend-multiply"
+                  />
         ) : (
           <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-yellow-400 via-blue-500 to-red-500 flex items-center justify-center text-white text-sm font-bold shadow-sm">
             K

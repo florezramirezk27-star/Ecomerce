@@ -10,6 +10,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { FacebookStrategy } from './strategies/facebook.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { SessionCacheService } from './session-cache.service';
 import { RedisModule } from '../../common/redis/redis.module';
 
 const facebookStrategyProvider = {
@@ -50,6 +51,7 @@ const facebookStrategyProvider = {
           secret: jwtSecret,
           signOptions: {
             expiresIn,
+            algorithm: 'HS256',
           },
         };
       },
@@ -58,6 +60,7 @@ const facebookStrategyProvider = {
   controllers: [AuthController],
   providers: [
     AuthService,
+    SessionCacheService,
     JwtStrategy,
     GoogleStrategy,
     facebookStrategyProvider,

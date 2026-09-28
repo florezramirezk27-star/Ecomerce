@@ -9,8 +9,10 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 
 import { OrdersService } from './orders.service';
+import { parsePagination } from '../../common/pipes/parse-pagination';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { checkoutSchema, updateOrderStatusSchema } from '../../common/schemas';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -25,13 +27,20 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
-    const pageNumber = page ? Number(page) : 1;
-    const limitNumber = limit ? Number(limit) : 20;
+    const { page: pageNumber, limit: limitNumber } = parsePagination(
+      page,
+      limit,
+    );
     return this.ordersService.findAll(pageNumber, limitNumber);
   }
 
   @Post('checkout')
   @UseGuards(JwtAuthGuard)
+  // Cada checkout escribe pedido, descuenta stock y llama a la API de Dropi.
+  // El limite global (100/min) deja margen de sobra para automatizar pedidos y
+  // agotar el stock de un producto. 10/min sigue siendo comodamente mas que lo
+  // que necesita un comprador legitimo.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async checkout(
     @Req() req,
     @Body(new ZodValidationPipe(checkoutSchema)) dto: any,
@@ -46,8 +55,10 @@ export class OrdersController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    const pageNumber = page ? Number(page) : 1;
-    const limitNumber = limit ? Number(limit) : 20;
+    const { page: pageNumber, limit: limitNumber } = parsePagination(
+      page,
+      limit,
+    );
     return this.ordersService.findMyOrders(
       req.user.id,
       pageNumber,
@@ -69,10 +80,7 @@ export class OrdersController {
   @Post(':id/reprocess')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  reprocess(
-    @Param('id') id: string,
-    @Query('force') force?: string,
-  ) {
+  reprocess(@Param('id') id: string, @Query('force') force?: string) {
     return this.ordersService.reprocessOrder(id, force === 'true');
   }
 

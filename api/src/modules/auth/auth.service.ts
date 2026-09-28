@@ -12,6 +12,7 @@ import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { sessionLifetimeMs } from '../../common/token-expiry';
+import { SessionCacheService } from './session-cache.service';
 import { RegisterDto } from './dto/register.dto';
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -29,6 +30,7 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly sessionCache: SessionCacheService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -87,6 +89,7 @@ export class AuthService {
     await this.prisma.session.deleteMany({
       where: { id: session.id, userId },
     });
+    await this.sessionCache.invalidate(session.id);
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -184,10 +187,12 @@ export class AuthService {
       await this.prisma.session.deleteMany({
         where: { id: sessionId, userId },
       });
+      await this.sessionCache.invalidate(sessionId);
     } else {
       await this.prisma.session.deleteMany({
         where: { userId },
       });
+      await this.sessionCache.invalidateUser(userId);
     }
     return { message: 'Sesión cerrada exitosamente' };
   }
@@ -198,6 +203,7 @@ export class AuthService {
       await this.prisma.session.deleteMany({
         where: { userId: payload.sub },
       });
+      await this.sessionCache.invalidateUser(payload.sub);
       return { message: 'Sesión cerrada exitosamente' };
     } catch {
       throw new UnauthorizedException('Token inválido');
@@ -448,6 +454,13 @@ export class AuthService {
       resetToken: null,
       resetTokenExpiry: null,
     });
+
+    // Cerrar las sesiones existentes. Sin esto, cambiar la contraseña no expulsa
+    // a nadie: un atacante que robo una sesion mantiene el acceso hasta que el
+    // JWT expira (7 dias), y el reset de contrasena deja de ser una salida
+    // real para la victima. El logout ya hacia esto; aqui faltaba.
+    await this.prisma.session.deleteMany({ where: { userId: user.id } });
+    await this.sessionCache.invalidateUser(user.id);
 
     return { message: 'Contraseña actualizada exitosamente' };
   }

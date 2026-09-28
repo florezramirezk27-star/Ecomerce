@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { Image as ImageIcon, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { API_BASE, getAuthHeader } from '@/lib/admin';
 import ImageEditor from '@/components/ImageEditor';
@@ -139,11 +140,14 @@ export default function AdminLogoPage() {
           <p className="mb-2 text-sm font-medium text-slate-700">Logo actual</p>
           <div className="flex items-center gap-4">
             {logo ? (
-              <img
-                src={logo}
-                alt="Logo"
-                className="h-20 w-20 rounded-xl border border-slate-200 object-contain p-1"
-              />
+                  <Image
+                    src={logo}
+                    alt="Logo"
+                    width={80}
+                    height={80}
+                    sizes="80px"
+                    className="h-20 w-20 rounded-xl border border-slate-200 object-contain p-1"
+                  />
             ) : (
               <div className="flex h-20 w-20 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 text-slate-400">
                 <ImageIcon className="h-5 w-5" />

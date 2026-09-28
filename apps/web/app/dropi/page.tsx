@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback, useSyncExternalStore } from 
 import { useRouter } from 'next/navigation';
 import { API_URL, apiFetch } from '@/lib/api';
 import { getUser } from '@/lib/auth';
+import ProductImage from '@/components/ProductImage';
 
 interface DropiGallery {
   url: string | null;
@@ -128,9 +129,6 @@ function seededShuffle(arr: DropiProduct[], seed: number): DropiProduct[] {
 }
 
 type View = 'grid' | 'list';
-
-const FALLBACK_IMG =
-  'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f3f4f6" width="100" height="100"/><text x="50" y="55" text-anchor="middle" fill="%239ca3af" font-size="12">Sin imagen</text></svg>';
 
 export default function DropiCatalogPage() {
   const router = useRouter();
@@ -400,14 +398,12 @@ export default function DropiCatalogPage() {
             </span>
           )}
           {img ? (
-            <img
-              src={img}
-              alt={p.name}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = FALLBACK_IMG;
-              }}
-            />
+                        <ProductImage
+                          src={img}
+                          alt={p.name}
+                          sizes="(max-width: 640px) 50vw, 25vw"
+                          className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-slate-300">
               <svg className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -851,14 +847,12 @@ export default function DropiCatalogPage() {
                     >
                       {renderBadges(p)}
                       {img ? (
-                        <img
-                          src={img}
-                          alt={p.name}
-                          className="h-full w-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = FALLBACK_IMG;
-                          }}
-                        />
+                      <ProductImage
+                        src={img}
+                        alt={p.name}
+                        sizes="160px"
+                        className="object-cover"
+                      />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-slate-300">
                           <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -988,13 +982,12 @@ Importar a mi tienda
                     return src ? (
                       <>
                         {renderBadges(selectedProduct)}
-                        <img
+                        <ProductImage
                           src={src}
                           alt={selectedProduct.name}
-                          className="h-full w-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                          }}
+                          sizes="(max-width: 768px) 100vw, 50vw"
+                          priority
+                          className="object-cover"
                         />
                       </>
                     ) : (
@@ -1015,14 +1008,12 @@ Importar a mi tienda
                           key={i}
                           className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-gray-100"
                         >
-                          <img
-                            src={thumbSrc}
-                            alt=""
-                            className="h-full w-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
-                          />
+                        <ProductImage
+                          src={thumbSrc}
+                          alt=""
+                          sizes="64px"
+                          className="object-cover"
+                        />
                         </div>
                       ) : null;
                     })}

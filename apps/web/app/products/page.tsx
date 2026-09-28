@@ -1,14 +1,17 @@
 import Link from "next/link";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, type Paginated } from "@/lib/api";
+import ProductImage from "@/components/ProductImage";
 
 export const dynamic = 'force-dynamic';
+
+const PAGE_SIZE = 24;
 
 interface ProductSummary {
   id: string;
   name: string;
   price: string | number;
   stock: number;
-  image: string;
+  image: string | null;
   slug: string;
   category?: { id: string; name: string };
 }
@@ -19,9 +22,11 @@ interface CategoryInfo {
   slug: string;
 }
 
-async function getProducts(categoryId?: string) {
-  const query = categoryId ? `?categoryId=${categoryId}` : "";
-  return apiFetch(`/products${query}`) as Promise<ProductSummary[]>;
+async function getProducts(categoryId?: string, page = 1) {
+  const params = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page) });
+  if (categoryId) params.set('categoryId', categoryId);
+
+  return apiFetch(`/products?${params.toString()}`) as Promise<Paginated<ProductSummary>>;
 }
 
 async function getCategory(id: string) {
@@ -46,10 +51,12 @@ export default async function ProductsPage({
   let error = "";
 
   try {
-    [products, category] = await Promise.all([
+    const [catalog, categoryInfo] = await Promise.all([
       getProducts(categoryId),
       categoryId ? getCategory(categoryId) : Promise.resolve(null),
     ]);
+    products = catalog.items ?? [];
+    category = categoryInfo;
   } catch {
     error = "Error al cargar los productos.";
   }
@@ -100,11 +107,11 @@ export default async function ProductsPage({
                 className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 hover:border-gray-200 flex flex-col"
               >
                 <div className="relative overflow-hidden aspect-[4/3] bg-gray-100">
-                  <img
+                  <ProductImage
                     src={product.image}
                     alt={product.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    loading="lazy"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                    className="object-cover transition-transform duration-500 group-hover:scale-110"
                   />
                   {product.stock <= 5 && product.stock > 0 && (
                     <span className="absolute top-3 left-3 bg-amber-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full">

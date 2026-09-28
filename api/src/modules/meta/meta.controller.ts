@@ -44,8 +44,7 @@ export class MetaController {
       ip,
       userAgent: req.headers['user-agent'],
       fbp: typeof req.cookies?._fbp === 'string' ? req.cookies._fbp : undefined,
-      fbc:
-        typeof req.cookies?._fbc === 'string' ? req.cookies._fbc : undefined,
+      fbc: typeof req.cookies?._fbc === 'string' ? req.cookies._fbc : undefined,
     };
 
     return this.metaService.track({ ...dto }, context);

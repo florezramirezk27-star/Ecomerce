@@ -6,6 +6,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 
@@ -53,6 +54,11 @@ export class UploadController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
+  // `memoryStorage` mantiene los 5 MB en el heap del proceso durante toda la
+  // subida. Con el limite global, 100 peticiones de 5 MB son 500 MB en vuelo
+  // desde una sola sesion. Es admin-only, asi que esto no es la defensa
+  // principal, pero acota el daño de una sesión de admin comprometida.
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),

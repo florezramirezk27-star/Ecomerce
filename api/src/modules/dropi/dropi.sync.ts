@@ -5,6 +5,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 import { DropiProductsService } from './dropi.products';
 import { DropiTrackingService } from './dropi.tracking';
 import { DropiCatalogBody } from './dropi.types';
@@ -29,6 +30,7 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
     private readonly products: DropiProductsService,
     private readonly prisma: PrismaService,
     private readonly tracking: DropiTrackingService,
+    private readonly cache: CatalogCacheService,
   ) {}
 
   onModuleInit() {
@@ -200,6 +202,14 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
           error: err.message,
         });
       }
+    }
+
+    // El sync escribe productos por fuera de ProductsService, asi que hay que
+    // invalidar a mano. Se hace una sola vez al final y no por producto: cada
+    // invalidacion es un SCAN y hacerlo por producto seria O(n) recorridos.
+    if (summary.updated > 0) {
+      await this.cache.invalidate('products');
+      await this.cache.invalidate('product');
     }
 
     return summary;

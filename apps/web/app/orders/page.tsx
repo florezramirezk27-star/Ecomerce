@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { isAuthenticated } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
+import ProductImage from "@/components/ProductImage";
 
 interface OrderItem {
   id: string;
@@ -267,11 +268,14 @@ export default function OrdersPage() {
                         key={item.id}
                         className="flex items-start gap-4 pb-3 border-b border-gray-200 last:border-b-0 last:pb-0"
                       >
-                        <img
-                          src={item.product.image}
-                          alt={item.product.name}
-                          className="w-16 h-16 object-cover rounded bg-white"
-                        />
+                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded bg-white">
+                          <ProductImage
+                            src={item.product.image}
+                            alt={item.product.name}
+                            sizes="64px"
+                            className="object-cover"
+                          />
+                        </div>
 
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-gray-900 truncate">

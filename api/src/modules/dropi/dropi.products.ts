@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 import { DropiClient } from './dropi.client';
 import { DropiAuthService } from './dropi.auth';
 import {
@@ -54,6 +55,7 @@ export class DropiProductsService {
     private readonly client: DropiClient,
     private readonly auth: DropiAuthService,
     private readonly prisma: PrismaService,
+    private readonly cache: CatalogCacheService,
   ) {}
 
   async fetchCatalog(body: DropiCatalogBody): Promise<DropiCatalogResponse> {
@@ -128,7 +130,7 @@ export class DropiProductsService {
     }
 
     const objects = Array.isArray(parsed.data?.objects)
-      ? parsed.data!.objects!
+      ? parsed.data.objects
       : Array.isArray(parsed.objects)
         ? parsed.objects
         : [];
@@ -298,7 +300,7 @@ export class DropiProductsService {
     if (!Array.isArray(items)) return [];
     const urls: string[] = [];
     for (const it of items) {
-      const mediaObject = it as DropiMediaItem;
+      const mediaObject = it;
       const u = this.mediaUrl(mediaObject.url || mediaObject.urlS3);
       if (u && !urls.includes(u)) urls.push(u);
     }
@@ -349,7 +351,7 @@ export class DropiProductsService {
       candidates.push(...(parsed.objects as DropiMediaItem[]));
     }
     if (Array.isArray(parsed.objects) === false) {
-      candidates.push(parsed as DropiMediaItem);
+      candidates.push(parsed);
     }
 
     const images: string[] = [];
@@ -465,6 +467,8 @@ export class DropiProductsService {
       );
     }
 
+    await this.invalidateCatalogCache();
+
     const token = this.auth.getOfficialToken();
     if (!token) {
       this.logger.warn(
@@ -510,5 +514,17 @@ export class DropiProductsService {
     }
 
     return product;
+  }
+
+  /**
+   * Invalida la cache del catalogo.
+   *
+   * Este servicio escribe productos con Prisma directamente, saltandose
+   * ProductsService, asi que la invalidacion de la cache no ocurre sola.
+   */
+  private async invalidateCatalogCache() {
+    await this.cache.invalidate('products');
+    await this.cache.invalidate('product');
+    await this.cache.invalidate('categories');
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/api";
 
@@ -91,11 +92,14 @@ export default function Footer() {
           <div className="text-center lg:col-span-4 lg:text-left">
             <Link href="/" className="flex items-center justify-center gap-3 lg:justify-start">
               {logo ? (
-                <img
-                  src={logo}
-                  alt="Kronio Market"
-                  className="h-12 w-auto max-w-[180px] object-contain rounded-xl"
-                />
+                  <Image
+                    src={logo}
+                    alt="Kronio Market"
+                    width={180}
+                    height={48}
+                    sizes="180px"
+                    className="h-12 w-auto max-w-[180px] object-contain rounded-xl"
+                  />
               ) : (
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-bold text-white shadow-lg shadow-blue-600/20">
                   K

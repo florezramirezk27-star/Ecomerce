@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, isAuthenticated } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
+import ProductImage from "@/components/ProductImage";
 import { getGuestCart, removeFromGuestCart, updateGuestCartQuantity, type GuestCartItem } from "@/lib/guest-cart";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
 import { DEPARTMENTS, MUNICIPALITIES } from "@/lib/colombia";
@@ -434,8 +435,13 @@ export default function CartPage() {
                     key={item.id}
                     className="flex items-stretch gap-4 sm:gap-6 p-4 sm:p-6 transition hover:bg-orange-50/50"
                   >
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 shrink-0">
-                      <img src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" />
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 shrink-0">
+                      <ProductImage
+                        src={item.product.image}
+                        alt={item.product.name}
+                        sizes="(max-width: 640px) 96px, 160px"
+                        className="object-cover"
+                      />
                     </div>
 
                     <div className="flex-1 min-w-0 flex flex-col justify-center py-0.5">
@@ -666,7 +672,14 @@ export default function CartPage() {
                     <div className="flex gap-3 overflow-x-auto scrollbar-none">
                       {order.items.slice(0, 5).map((item) => (
                         <div key={item.id} className="flex-shrink-0 flex items-center gap-2.5 bg-gray-50 rounded-lg px-3 py-2">
-                          <img src={item.product.image} alt={item.product.name} className="w-9 h-9 object-cover rounded-lg bg-white" />
+                          <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-white">
+                            <ProductImage
+                              src={item.product.image}
+                              alt={item.product.name}
+                              sizes="36px"
+                              className="object-cover"
+                            />
+                          </div>
                           <span className="text-xs text-gray-600 max-w-[120px] truncate font-medium">{item.product.name}</span>
                         </div>
                       ))}

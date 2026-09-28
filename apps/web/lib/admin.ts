@@ -1,6 +1,6 @@
 // Admin shared types and utilities
 
-import { refreshSession } from './api';
+import { getToken, refreshSession } from './api';
 
 export interface User {
   id: string;
@@ -122,7 +122,12 @@ export function isAdmin() {
 
   if (!user) return false;
 
-  return JSON.parse(user).role === 'ADMIN';
+  try {
+    return JSON.parse(user)?.role === 'ADMIN';
+  } catch {
+    localStorage.removeItem('user');
+    return false;
+  }
 }
 
 export const API_BASE =
@@ -130,9 +135,16 @@ export const API_BASE =
   '/api/proxy';
 
 export const getAuthHeader = (body?: BodyInit) => {
-  return {
+  const headers: Record<string, string> = {
     ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
   };
+
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return headers;
 };
 
 export const formatPrice = (price: string | number) => {
@@ -241,6 +253,7 @@ export const apiFetch = async (
   let response = await fetchWithRetry(`${API_BASE}${endpoint}`, {
     ...options,
     headers: buildHeaders(),
+    credentials: 'include',
   });
 
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && response.status === 403) {
@@ -252,6 +265,7 @@ export const apiFetch = async (
       response = await fetchWithRetry(`${API_BASE}${endpoint}`, {
         ...options,
         headers: buildHeaders(),
+        credentials: 'include',
       });
     }
   }

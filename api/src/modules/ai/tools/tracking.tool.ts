@@ -31,24 +31,46 @@ export class TrackingTool implements AgentTool<TrackingIn, TrackingOut> {
       let guideId = args.guideId;
       const orderId = args.orderId;
 
-      if (!guideId && orderId) {
-        const tracking = await this.prisma.orderTracking.findUnique({
-          where: { orderId },
+      // El LLM elige que identificador pasar, asi que la pertenencia de la orden
+      // se verifica siempre en base de datos. Sin esto, un invitado podria
+      // pedir el tracking de cualquier pedido del sistema escribiendo su id, y
+      // ademas modificarlo: ambas consultas iban sin acotar por propietario.
+      if (orderId) {
+        const owned = await this.prisma.order.findFirst({
+          where: { id: orderId, userId: this.ownerFilter(context) },
+          select: { id: true, tracking: { select: { dropiGuideId: true } } },
         });
-        if (tracking?.dropiGuideId) {
-          guideId = tracking.dropiGuideId;
-        } else {
+
+        if (!owned) {
+          this.logger.warn(
+            `TrackingTool: acceso denegado a la orden ${orderId} (userId=${context.userId ?? 'invitado'})`,
+          );
           return {
             success: false,
-            error: 'No se encontró guía de rastreo para esta orden',
+            error:
+              'No encontramos un pedido asociado a tu cuenta con ese identificador.',
           };
         }
+
+        // Una guia entregada por el usuario solo se consulta si pertenece a una
+        // orden suya; si no hay orden, se resuelve la guia contra el catalogo
+        // pero sin escribir nada en la base de datos.
+        if (!guideId) {
+          guideId = owned.tracking?.dropiGuideId ?? undefined;
+        }
+      }
+
+      if (!guideId && !orderId) {
+        return {
+          success: false,
+          error: 'Se requiere un número de guía o ID de orden',
+        };
       }
 
       if (!guideId) {
         return {
           success: false,
-          error: 'Se requiere un número de guía o ID de orden',
+          error: 'No se encontró guía de rastreo para esta orden',
         };
       }
 
@@ -62,6 +84,9 @@ export class TrackingTool implements AgentTool<TrackingIn, TrackingOut> {
         const trackingData = result.objects[0];
         const status = trackingData.status || 'UNKNOWN';
 
+        // Solo se escribe si la orden quedo verificada como propia. `orderId`
+        // se anula cuando no vino del usuario, para que una guia suelta no
+        // cree ni modifique el tracking de nadie.
         if (orderId) {
           await this.prisma.orderTracking.upsert({
             where: { orderId },
@@ -104,6 +129,15 @@ export class TrackingTool implements AgentTool<TrackingIn, TrackingOut> {
         error: 'Error al consultar el estado del pedido. Intenta de nuevo.',
       };
     }
+  }
+
+  /**
+   * Filtro de propietario. Un admin puede ver cualquier orden; el resto solo
+   * las suyas. Los invitados no tienen `userId`, y como `Order.userId` es
+   * obligatorio no pueden ser propietario de ninguna orden.
+   */
+  private ownerFilter(context: ToolContext): string | undefined {
+    return context.isAdmin ? undefined : (context.userId ?? '__sin_usuario__');
   }
 
   private mapDropiStatus(status: string): string {

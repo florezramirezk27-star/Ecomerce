@@ -9,6 +9,7 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import SectionHeader from "@/components/SectionHeader";
+import ProductImage from "@/components/ProductImage";
 
 interface Product {
   id: string;
@@ -36,9 +37,6 @@ function discountPct(price: string | number, oldPrice?: string | number | null) 
   return Math.round((1 - now / old) * 100);
 }
 
-const FALLBACK_IMG =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' fill='%23f3f4f6'%3E%3Crect width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' fill='%239ca3af' font-size='16' text-anchor='middle' dy='.3em'%3ESin imagen%3C/text%3E%3C/svg%3E";
-
 export default function ProductCarousel({
   products,
   title = "Productos",
@@ -55,10 +53,6 @@ export default function ProductCarousel({
   actionLabel?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  function handleImgError(e: React.SyntheticEvent<HTMLImageElement>) {
-    e.currentTarget.src = FALLBACK_IMG;
-  }
 
   function scrollByDir(dir: "left" | "right") {
     if (!scrollRef.current) return;
@@ -107,20 +101,19 @@ export default function ProductCarousel({
                 className="group/card relative flex min-w-[232px] max-w-[232px] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-2xl hover:shadow-blue-100/70"
               >
                 <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
-                  <img
+                  <ProductImage
                     src={product.image}
                     alt={product.name}
-                    onError={handleImgError}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-110"
-                    loading="lazy"
+                    sizes="232px"
+                    className="object-cover transition-transform duration-500 group-hover/card:scale-110"
                   />
 
                   {product.gallery && product.gallery.length > 0 && (
-                    <img
+                    <ProductImage
                       src={product.gallery[0]}
                       alt=""
-                      onError={handleImgError}
-                      className="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-300 group-hover/card:opacity-100 group-hover/card:scale-110"
+                      sizes="232px"
+                      className="object-cover opacity-0 transition-opacity duration-300 group-hover/card:opacity-100 group-hover/card:scale-110"
                     />
                   )}
 

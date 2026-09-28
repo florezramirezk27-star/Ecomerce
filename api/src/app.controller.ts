@@ -20,9 +20,14 @@ export class AppController {
   async health() {
     await this.prisma.$queryRaw`SELECT 1`;
 
+    // `status()` no hace round trip: este endpoint lo consulta el orquestador
+    // cada pocos segundos y no debe pagar un PING a Redis.
+    const redis = this.redis.status();
+
     return {
       status: 'ok',
       database: 'connected',
+      redis,
     };
   }
 
@@ -42,7 +47,7 @@ export class AppController {
     return {
       status: 'ok',
       database: 'connected',
-      redis: redisConnected ? 'connected' : 'not-configured',
+      redis: redisConnected ? 'connected' : this.redis.status(),
     };
   }
 }

@@ -1,5 +1,14 @@
 const isServer = typeof window === 'undefined';
 
+/** Forma paginada que devuelve el API para listados. */
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export const API_URL = isServer
   ? (process.env.API_URL || 'http://localhost:3001')
   : (process.env.NEXT_PUBLIC_API_URL || '/api/proxy');

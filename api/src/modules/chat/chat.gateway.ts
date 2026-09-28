@@ -7,6 +7,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ChatService } from './chat.service';
 import { AIService } from '../ai/ai.service';
 import { sendMessageSchema } from './schemas/chat.schema';
@@ -22,6 +23,7 @@ import { WsTicketStore } from '../../common/ws-ticket.store';
   },
 })
 @UseGuards(WsThrottlerGuard)
+@Throttle({ default: { limit: 10, ttl: 60_000 } })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;

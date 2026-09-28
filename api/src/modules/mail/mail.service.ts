@@ -99,7 +99,8 @@ export class MailService implements OnModuleInit {
       socket.once('error', (err) => {
         clearTimeout(timer);
         socket.destroy();
-        const raw = err instanceof Error ? err.message || err.name : String(err);
+        const raw =
+          err instanceof Error ? err.message || err.name : String(err);
         const code = (err as NodeJS.ErrnoException).code
           ? ` (code ${(err as NodeJS.ErrnoException).code})`
           : '';
@@ -743,9 +744,7 @@ export class MailService implements OnModuleInit {
     });
   }
 
-  async sendTestEmail(
-    to: string,
-  ): Promise<{
+  async sendTestEmail(to: string): Promise<{
     ok: boolean;
     smtpConfigured: boolean;
     mailerHost: string | null;
@@ -775,7 +774,8 @@ export class MailService implements OnModuleInit {
         mailerHost,
         smtpUser,
         to,
-        error: 'Falta el destinatario (ADMIN_EMAIL/ADMIN_GOOGLE_EMAIL o body.to)',
+        error:
+          'Falta el destinatario (ADMIN_EMAIL/ADMIN_GOOGLE_EMAIL o body.to)',
       };
     }
 

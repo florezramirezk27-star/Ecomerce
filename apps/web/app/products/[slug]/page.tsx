@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import ProductImage from "@/components/ProductImage";
 import { isAuthenticated } from "@/lib/auth";
 import { addToGuestCart } from "@/lib/guest-cart";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
@@ -59,15 +60,6 @@ export default function ProductPage() {
   } | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
-
-  const fallbackImg =
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600' fill='%23f3f4f6'%3E%3Crect width='600' height='600'/%3E%3Ctext x='50%25' y='50%25' fill='%239ca3af' font-size='18' text-anchor='middle' dy='.3em'%3ESin imagen%3C/text%3E%3C/svg%3E";
-
-  function handleImgError(
-    e: React.SyntheticEvent<HTMLImageElement>,
-  ) {
-    e.currentTarget.src = fallbackImg;
-  }
 
   const allImages = product
     ? [product.image, ...(product.gallery || [])].filter(Boolean)
@@ -352,6 +344,9 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
                   <div className="aspect-video h-full">
                     <iframe
                       src={selectedMedia.embed}
+                      title={`Video de ${product.name}`}
+                      loading="lazy"
+                      referrerPolicy="strict-origin-when-cross-origin"
                       className="w-full h-full"
                       allowFullScreen
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -370,11 +365,13 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
                   />
                 )
               ) : (
-                <img
+                <ProductImage
+                  key={selectedMedia?.src || product.image || "placeholder"}
                   src={selectedMedia?.src || product.image}
                   alt={product.name}
-                  onError={handleImgError}
-                  className="w-full h-full object-cover"
+                  priority
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  className="object-cover"
                 />
               )}
             </div>
@@ -408,11 +405,11 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
                           : "border-gray-200 hover:border-gray-400"
                       }`}
                     >
-                      <img
+                      <ProductImage
                         src={item.src}
                         alt={`${product.name} ${i + 1}`}
-                        onError={handleImgError}
-                        className="w-full h-full object-cover"
+                        sizes="64px"
+                        className="object-cover"
                       />
                     </button>
                   ),
@@ -681,11 +678,11 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
                 className="group bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all hover:-translate-y-1"
               >
                 <div className="aspect-square bg-gray-100 overflow-hidden">
-                  <img
+                  <ProductImage
                     src={sp.image}
                     alt={sp.name}
-                    onError={handleImgError}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    sizes="(max-width: 640px) 50vw, 25vw"
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>
                 <div className="p-3">

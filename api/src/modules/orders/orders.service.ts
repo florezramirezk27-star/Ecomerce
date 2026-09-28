@@ -65,8 +65,12 @@ export class OrdersService {
     });
 
     if (dto.idempotencyKey) {
-      const existing = await this.prisma.order.findUnique({
-        where: { idempotencyKey: dto.idempotencyKey },
+      // `findFirst` y no `findUnique`: la busqueda tiene que estar acotada por
+      // `userId`. Buscando solo por la clave, quien posea el UUID de otro
+      // usuario receive su orden completa con nombre, telefono, direccion y
+      // notas. La idempotencia es por cliente, no global.
+      const existing = await this.prisma.order.findFirst({
+        where: { idempotencyKey: dto.idempotencyKey, userId },
         include: { items: true },
       });
       if (existing) {
@@ -202,8 +206,10 @@ export class OrdersService {
       });
     } catch (err: any) {
       if (err?.code === 'P2002' && dto.idempotencyKey) {
-        const existing = await this.prisma.order.findUnique({
-          where: { idempotencyKey: dto.idempotencyKey },
+        // Mismo acotado por `userId` que la busqueda previa: esta rama tambien
+        // devuelve la orden al llamador, asi que arrastra el mismo riesgo de fuga.
+        const existing = await this.prisma.order.findFirst({
+          where: { idempotencyKey: dto.idempotencyKey, userId },
           include: { items: true },
         });
         if (existing) {
@@ -479,13 +485,13 @@ export class OrdersService {
     } else if (alreadyInDropi) {
       dropiResult = {
         success: true,
-        message: tracking!.lastEvent || 'Orden ya creada en Dropi',
-        orderId: tracking!.dropiOrderId,
-        carrier: tracking!.carrier ?? null,
-        raw: tracking!.rawResponse ?? null,
+        message: tracking.lastEvent || 'Orden ya creada en Dropi',
+        orderId: tracking.dropiOrderId,
+        carrier: tracking.carrier ?? null,
+        raw: tracking.rawResponse ?? null,
       };
       this.logger.log(
-        `Dropi ya procesado para ${order.id} (${tracking!.dropiOrderId}); se omite reenvío`,
+        `Dropi ya procesado para ${order.id} (${tracking.dropiOrderId}); se omite reenvío`,
       );
     } else {
       try {
@@ -522,9 +528,7 @@ export class OrdersService {
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'unknown error';
-        this.logger.error(
-          `Dropi: error creando orden ${order.id}: ${message}`,
-        );
+        this.logger.error(`Dropi: error creando orden ${order.id}: ${message}`);
         dropiResult = {
           success: false,
           message: `Dropi error: ${message}`,
@@ -667,9 +671,7 @@ export class OrdersService {
       throw new BadRequestException('Orden no encontrada');
     }
 
-    this.logger.log(
-      `Reprocesando orden ${order.id} (forceEmails=${force})`,
-    );
+    this.logger.log(`Reprocesando orden ${order.id} (forceEmails=${force})`);
     return this.processExistingOrder(
       order,
       order.user
@@ -852,8 +854,7 @@ export class OrdersService {
     }
 
     const customerEmail = order.shippingEmail || order.user?.email || null;
-    const customerName =
-      order.user?.name || order.shippingName || 'Cliente';
+    const customerName = order.user?.name || order.shippingName || 'Cliente';
 
     if (customerEmail) {
       const itemsForMail = order.items.map((item) => ({
@@ -897,12 +898,7 @@ export class OrdersService {
         process.env.ADMIN_EMAIL || process.env.ADMIN_GOOGLE_EMAIL || '';
       if (adminEmail) {
         void this.mailService
-          .sendOrderStatusEmail(
-            adminEmail,
-            'Admin',
-            order.id,
-            status,
-          )
+          .sendOrderStatusEmail(adminEmail, 'Admin', order.id, status)
           .then(
             () => {
               this.logger.log(

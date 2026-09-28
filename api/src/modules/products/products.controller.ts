@@ -14,6 +14,7 @@ import {
 import type { Request } from 'express';
 
 import { ProductsService } from './products.service';
+import { parsePagination } from '../../common/pipes/parse-pagination';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { createProductSchema, updateProductSchema } from '../../common/schemas';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -32,21 +33,20 @@ export class ProductsController {
     @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
     @Query('sort') sort?: 'priceAsc' | 'priceDesc',
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
+    @Query('page') pageParam?: string,
+    @Query('limit') limitParam?: string,
     @Query('onSale') onSale?: string,
   ) {
     const isAdmin = (req as any).user?.role === 'ADMIN';
-    const pageNumber = page ? Number(page) : undefined;
-    const limitNumber = limit ? Number(limit) : undefined;
+    const { page, limit } = parsePagination(pageParam, limitParam);
     const onSaleBool = onSale === 'true';
 
     return this.productsService.findAll(
       search,
       categoryId,
       sort,
-      pageNumber,
-      limitNumber,
+      page,
+      limit,
       onSaleBool,
       isAdmin,
     );

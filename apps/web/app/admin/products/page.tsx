@@ -12,6 +12,7 @@ import {
   EmptyState,
   LoadingState,
   PageHeader,
+  Pagination,
   SearchInput,
   Table,
   Td,
@@ -20,8 +21,21 @@ import {
   TRow,
 } from '@/components/admin/ui';
 
+/** `/products` devuelve una pagina, no un array plano. */
+interface ProductsResponse {
+  items: Product[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+const PAGE_SIZE = 20;
+
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -30,23 +44,37 @@ export default function AdminProductsPage() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/immutability
-    loadProducts();
-  }, []);
+    let cancelled = false;
 
-  async function loadProducts() {
-    try {
-      setLoading(true);
-      const data = await apiFetch('/products');
-      setProducts(data);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Error al cargar productos',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
+    (async () => {
+      try {
+        setLoading(true);
+        const data: ProductsResponse = await apiFetch(
+          `/products?page=${page}&limit=${PAGE_SIZE}`,
+        );
+        if (cancelled) return;
+
+        // `data` es la pagina, no la lista. Antes se asignaba el objeto entero a
+        // `products` y el `.filter` de mas abajo reventaba en runtime.
+        setProducts(data.items ?? []);
+        setTotalPages(data.totalPages ?? 1);
+        setError('');
+      } catch (err) {
+        if (cancelled) return;
+        setError(
+          err instanceof Error ? err.message : 'Error al cargar productos',
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    // Sin esta guarda, al cambiar de pagina rapido una respuesta lenta de la
+    // pagina anterior podria llegar despues y pisar la que ya sepidio.
+    return () => {
+      cancelled = true;
+    };
+  }, [page]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -56,13 +84,21 @@ export default function AdminProductsPage() {
       const result: any = await apiFetch(`/products/${id}`, {
         method: 'DELETE',
       });
-      setProducts((prev) => prev.filter((p) => p.id !== id));
+      const restantes = products.filter((p) => p.id !== id);
+      setProducts(restantes);
       setDeleteConfirm(null);
       setSuccess(
         result?.archived
           ? `"${result.name || 'Producto'}" tiene pedidos asociados, por eso no se puede borrar su historial. Fue desactivado y ya no aparece en la tienda.`
           : 'Producto eliminado correctamente.',
       );
+
+      // Si era el ultimo producto de esta pagina y no es la primera, la pagina
+      // ya no existe. Retroceder carga la anterior en vez de dejar una tabla
+      // vacia con un "no hay productos" que no es cierto.
+      if (restantes.length === 0 && page > 1) {
+        setPage((prev) => prev - 1);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Error al eliminar producto',
@@ -281,6 +317,18 @@ export default function AdminProductsPage() {
           </>
         )}
       </Card>
+
+      {!loading && totalPages > 1 && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onChange={(next) => {
+            setPage(next);
+            setSuccess('');
+            setError('');
+          }}
+        />
+      )}
 
       <ConfirmModal
         open={!!deleteConfirm}

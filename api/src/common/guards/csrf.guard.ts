@@ -35,6 +35,11 @@ const CSRF_EXCLUDED_PATHS = new Set([
   '/auth/logout',
   '/chat/message',
   '/chat/history',
+  // Excepcion exacta, no por prefijo: el webhook de Dropi lo firma un servidor
+  // con HMAC, no un navegador con cookie de sesion, asi que el doble submit no
+  // aplica. Excluir `/dropi/` entero habria dejado sin CSRF al resto de
+  // endpoints de Dropi, que si van autenticados por cookie.
+  '/dropi/webhook',
 ]);
 
 @Injectable()

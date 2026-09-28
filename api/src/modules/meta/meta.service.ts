@@ -34,9 +34,7 @@ export interface MetaUserContext {
 }
 
 function sha256(value: string): string {
-  return createHash('sha256')
-    .update(value.trim().toLowerCase())
-    .digest('hex');
+  return createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
 }
 
 function normalizePhone(phone: string): string {

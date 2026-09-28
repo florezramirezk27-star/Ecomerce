@@ -8,6 +8,7 @@ import {
   formatPrice,
   Product,
 } from '@/lib/admin';
+import ProductImage from '@/components/ProductImage';
 
 interface PaginationInfo {
   total: number;
@@ -220,14 +221,12 @@ export default function ProductSearchPage() {
                   key={product.id}
                   className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
                 >
-                <img
-                  src={
-                    product.image ||
-                    'https://via.placeholder.com/640x480?text=Sin+imagen'
-                  }
-                  alt={product.name}
-                  className="h-64 w-full object-cover"
-                />
+                    <ProductImage
+                      src={product.image}
+                      alt={product.name}
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      className="h-64 w-full object-cover"
+                    />
                 <div className="p-6">
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                     {product.category?.name || 'Sin categoría'}

@@ -1,12 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
+import { MAX_PAGE_SIZE } from '../../common/pipes/parse-pagination';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
+/** Tope duro de resultados por pagina. */
+export const DEFAULT_PAGE_SIZE = 20;
+
+/**
+ * Columnas del listado. Excluye `description`, `gallery`, `videos` y `customCode`,
+ * que son las columnas pesadas y que el listado no usa: sin `select` explicito
+ * cada fila arrastra la imagen completa del catalogo por la red.
+ */
+const listSelect = {
+  id: true,
+  name: true,
+  slug: true,
+  price: true,
+  oldPrice: true,
+  image: true,
+  stock: true,
+  active: true,
+  dropiProductId: true,
+  createdAt: true,
+  categoryId: true,
+  category: { select: { id: true, name: true, slug: true } },
+} satisfies Prisma.ProductSelect;
+
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CatalogCacheService,
+  ) {}
 
   async findAll(
     search?: string,
@@ -52,104 +80,113 @@ export class ProductsService {
       ? {
           price: sort === 'priceAsc' ? 'asc' : 'desc',
         }
-      : undefined;
+      : { createdAt: 'desc' };
 
-    const shouldPaginate = Boolean(page || limit);
-
-    if (!shouldPaginate) {
-      return this.prisma.product.findMany({
-        where,
-        orderBy,
-        include: {
-          category: true,
-        },
-      });
-    }
-
-    const take = limit && limit > 0 ? limit : 20;
-    const currentPage = page && page > 0 ? page : 1;
+    // Paginacion siempre activa. Antes, sin `page` ni `limit` la consulta
+    // devolvia la tabla completa, y `?limit=1000000` no estaba acotado.
+    const take = Math.min(
+      Math.max(1, Math.trunc(Number(limit) || DEFAULT_PAGE_SIZE)),
+      MAX_PAGE_SIZE,
+    );
+    const currentPage = Math.max(1, Math.trunc(Number(page) || 1));
     const skip = (currentPage - 1) * take;
 
-    const [total, items] = await Promise.all([
-      this.prisma.product.count({ where }),
-      this.prisma.product.findMany({
-        where,
-        orderBy,
-        skip,
-        take,
-        include: {
-          category: true,
-        },
-      }),
-    ]);
+    return this.cache.remember(
+      'products',
+      [search, categoryId, sort, onSale, includeInactive, currentPage, take],
+      async () => {
+        const [total, items] = await Promise.all([
+          this.prisma.product.count({ where }),
+          this.prisma.product.findMany({
+            where,
+            orderBy,
+            skip,
+            take,
+            select: listSelect,
+          }),
+        ]);
 
-    const totalPages = Math.max(1, Math.ceil(total / take));
-
-    return {
-      items,
-      total,
-      page: currentPage,
-      limit: take,
-      totalPages,
-    };
+        return {
+          items,
+          total,
+          page: currentPage,
+          limit: take,
+          totalPages: Math.max(1, Math.ceil(total / take)),
+        };
+      },
+    );
   }
 
   async findOne(idOrSlug: string, includeInactive = false) {
-    const where: any = {};
-    if (!includeInactive) {
-      where.active = true;
-    }
+    return this.cache.remember(
+      'product',
+      [idOrSlug, includeInactive],
+      async () => {
+        const where: any = {};
+        if (!includeInactive) {
+          where.active = true;
+        }
 
-    // Try by ID first, then by slug
-    let product = await this.prisma.product.findFirst({
-      where: { ...where, id: idOrSlug },
-      include: { category: true },
-    });
+        // Try by ID first, then by slug
+        let product = await this.prisma.product.findFirst({
+          where: { ...where, id: idOrSlug },
+          include: { category: true },
+        });
 
-    if (!product) {
-      product = await this.prisma.product.findFirst({
-        where: { ...where, slug: idOrSlug },
-        include: { category: true },
-      });
-    }
+        if (!product) {
+          product = await this.prisma.product.findFirst({
+            where: { ...where, slug: idOrSlug },
+            include: { category: true },
+          });
+        }
 
-    if (!product) return null;
+        if (!product) return null;
 
-    const similar = await this.prisma.product.findMany({
-      where: {
-        categoryId: product.categoryId,
-        id: { not: product.id },
-        active: true,
+        const similar = await this.prisma.product.findMany({
+          where: {
+            categoryId: product.categoryId,
+            id: { not: product.id },
+            active: true,
+          },
+          take: 8,
+          orderBy: { createdAt: 'desc' },
+          select: listSelect,
+        });
+
+        return { ...product, similarProducts: similar };
       },
-      take: 8,
-      orderBy: { createdAt: 'desc' },
-      include: { category: true },
-    });
-
-    return { ...product, similarProducts: similar };
+    );
   }
 
-  create(dto: CreateProductDto) {
-    return this.prisma.product.create({
+  async create(dto: CreateProductDto) {
+    const product = await this.prisma.product.create({
       data: dto,
       include: {
         category: true,
       },
     });
+    await this.cache.invalidate('products');
+    await this.cache.invalidate('product');
+    await this.cache.invalidate('categories');
+    return product;
   }
 
-  update(id: string, dto: UpdateProductDto) {
-    return this.prisma.product.update({
+  async update(id: string, dto: UpdateProductDto) {
+    const product = await this.prisma.product.update({
       where: { id },
       data: dto as any,
       include: {
         category: true,
       },
     });
+    await this.cache.invalidate('products');
+    await this.cache.invalidate('product');
+    await this.cache.invalidate('categories');
+    return product;
   }
 
   async remove(id: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.cartItem.deleteMany({ where: { productId: id } });
       await tx.productEmbedding.deleteMany({ where: { productId: id } });
 
@@ -168,5 +205,10 @@ export class ProductsService {
 
       return tx.product.delete({ where: { id } });
     });
+
+    await this.cache.invalidate('products');
+    await this.cache.invalidate('product');
+    await this.cache.invalidate('categories');
+    return result;
   }
 }

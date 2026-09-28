@@ -3,12 +3,16 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Request } from 'express';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { SessionCacheService } from '../session-cache.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   private readonly logger = new Logger(JwtStrategy.name);
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sessionCache: SessionCacheService,
+  ) {
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret || jwtSecret === 'dev-secret-key') {
       Logger.error(
@@ -28,20 +32,36 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ]),
       ignoreExpiration: false,
       secretOrKey: jwtSecret,
+      // Fijar el algoritmo evita depender del default de la libreria y cierra el
+      // margen de confusion de algoritmos.
+      algorithms: ['HS256'],
     });
   }
 
   async validate(payload: any) {
+    if (!payload.sessionId) {
+      throw new UnauthorizedException('Sesión inválida');
+    }
+
+    // Camino rapido: la sesion ya fue validada contra la base de datos en un
+    // request reciente y sigue viva segun su TTL. Evita 2 queries por request.
+    const cached = await this.sessionCache.get(payload.sessionId);
+    if (cached && cached.userId === payload.sub) {
+      return {
+        id: cached.userId,
+        email: cached.email,
+        name: cached.name,
+        role: cached.role,
+        sessionId: payload.sessionId,
+      };
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
     });
 
     if (!user) {
       throw new UnauthorizedException('Usuario no encontrado');
-    }
-
-    if (!payload.sessionId) {
-      throw new UnauthorizedException('Sesión inválida');
     }
 
     const session = await this.prisma.session.findUnique({
@@ -55,6 +75,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     ) {
       throw new UnauthorizedException('Sesión expirada o inválida');
     }
+
+    await this.sessionCache.set(payload.sessionId, {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      expiresAt: session.expiresAt.getTime(),
+    });
 
     return {
       id: user.id,

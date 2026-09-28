@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import Image from "next/image";
+import { apiFetch, type Paginated } from "@/lib/api";
 import ProductCarousel from "@/components/ProductCarousel";
 import PromoGrid from "@/components/PromoGrid";
 import VideoHero from "@/components/VideoHero";
@@ -39,9 +40,11 @@ export default function Home() {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = (await apiFetch("/products")) as ProductSummary[];
+        const data = (await apiFetch(
+          "/products?limit=60",
+        )) as Paginated<ProductSummary>;
 
-        setProducts(data);
+        setProducts(data.items ?? []);
       } catch (err) {
         setError(
           err instanceof Error
@@ -157,19 +160,24 @@ export default function Home() {
           <div className="grid items-center gap-12 lg:grid-cols-2">
             {/* Image collage */}
             <div className="relative mx-auto w-full max-w-xl lg:mx-0">
-              <div className="group block overflow-hidden rounded-3xl border border-gray-100 shadow-2xl shadow-gray-200/60">
-                <img
+              <div className="group relative block aspect-[4/3] overflow-hidden rounded-3xl border border-gray-100 shadow-2xl shadow-gray-200/60">
+                <Image
                   src="https://aveonline.co/wp-content/uploads/2024/08/IMG_3016.jpeg"
-                  alt="Env&iacute;os contra entrega en e-commerce"
-                  className="aspect-[4/3] w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  alt="Envíos contra entrega en e-commerce"
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 90vw, 45vw"
+                  className="object-cover transition-transform duration-700 group-hover:scale-105"
                 />
               </div>
 
-              <div className="absolute -bottom-10 -right-2 hidden w-44 overflow-hidden rounded-2xl border-4 border-white shadow-xl md:block lg:-right-8">
-                <img
+              <div className="absolute -bottom-10 -right-2 hidden aspect-square w-44 overflow-hidden rounded-2xl border-4 border-white shadow-xl md:block lg:-right-8">
+                <Image
                   src="https://images.pexels.com/photos/6699397/pexels-photo-6699397.jpeg?auto=compress&cs=tinysrgb&w=600"
                   alt="Mensajero entregando un paquete"
-                  className="aspect-square w-full object-cover transition-transform duration-500 hover:scale-105"
+                  fill
+                  sizes="176px"
+                  className="object-cover transition-transform duration-500 hover:scale-105"
                 />
               </div>
 

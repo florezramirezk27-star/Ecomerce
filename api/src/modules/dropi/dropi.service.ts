@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { z } from 'zod';
 import { DropiAuthService } from './dropi.auth';
 import { DropiProductsService } from './dropi.products';
 import { DropiOrdersService } from './dropi.orders';
@@ -17,8 +18,40 @@ import {
   DropiTrackingData,
 } from './dropi.types';
 
+/**
+ * Forma maxima del payload de webhook que se acepta.
+ *
+ * Antes se aceptaba `any` sin limite y `rawResponse` guardaba el cuerpo entero.
+ * Ahora el cuerpo se acota, lo que evita que un payload enorme se quede
+ * persistido en la base de datos.
+ */
+const webhookPayloadSchema = z
+  .object({
+    order_local_id: z.string().max(64).optional(),
+    orderId: z.string().max(64).optional(),
+    local_order_id: z.string().max(64).optional(),
+    order_id: z.string().max(64).optional(),
+    guide: z.string().max(64).optional(),
+    guide_id: z.string().max(64).optional(),
+    guideId: z.string().max(64).optional(),
+    num_guia: z.string().max(64).optional(),
+    guia: z.string().max(64).optional(),
+    tracking_number: z.string().max(64).optional(),
+    status: z.string().max(64).optional(),
+    estado: z.string().max(64).optional(),
+    new_status: z.string().max(64).optional(),
+    last_event: z.string().max(500).optional(),
+    novedad: z.string().max(500).optional(),
+  })
+  .catchall(z.unknown());
+
+/** Formato de identificador que usa Prisma para los pedidos. */
+const CUID_PATTERN = /^c[0-9a-z]{20,32}$/;
+
 @Injectable()
 export class DropiService {
+  private readonly logger = new Logger(DropiService.name);
+
   constructor(
     private readonly auth: DropiAuthService,
     private readonly products: DropiProductsService,
@@ -124,14 +157,24 @@ export class DropiService {
     return this.sync.syncStock(targetIds);
   }
 
-  async handleWebhook(payload: any): Promise<{ received: boolean }> {
-    const orderId = this.findField(payload, [
+  async handleWebhook(payload: unknown): Promise<{ received: boolean }> {
+    const parsed = webhookPayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      this.logger.warn(
+        `Webhook de Dropi con payload invalido: ${parsed.error.issues[0]?.message}`,
+      );
+      return { received: false };
+    }
+
+    const body = parsed.data as Record<string, unknown>;
+
+    const orderId = this.findField(body, [
       'order_local_id',
       'orderId',
       'local_order_id',
       'order_id',
     ]);
-    const guideId = this.findField(payload, [
+    const guideId = this.findField(body, [
       'guide',
       'guide_id',
       'guideId',
@@ -139,17 +182,26 @@ export class DropiService {
       'guia',
       'tracking_number',
     ]);
-    const status = this.findField(payload, ['status', 'estado', 'new_status']);
+    const status = this.findField(body, ['status', 'estado', 'new_status']);
 
     if (!orderId) {
       return { received: false };
     }
 
+    // Los pedidos usan CUID. Rechazar cualquier otro formato evita que un
+    // payload manipulado apunte a filas ajenas por colision de clave.
+    if (!CUID_PATTERN.test(orderId)) {
+      this.logger.warn(`Webhook de Dropi con order_id invalido: ${orderId}`);
+      return { received: false };
+    }
+
+    const lastEvent = this.findField(body, ['last_event', 'novedad']);
+
     await this.tracking.upsertTracking(orderId, {
       dropiGuideId: guideId,
       status: status || 'UNKNOWN',
-      lastEvent: payload?.last_event || payload?.novedad || null,
-      rawResponse: payload,
+      lastEvent,
+      rawResponse: body,
     });
 
     if (status) {

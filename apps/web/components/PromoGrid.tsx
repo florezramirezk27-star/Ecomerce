@@ -10,6 +10,7 @@ import {
   Zap,
 } from "lucide-react";
 import SectionHeader from "@/components/SectionHeader";
+import ProductImage from "@/components/ProductImage";
 
 interface Product {
   id: string;
@@ -38,8 +39,6 @@ function discountPct(product: Product) {
   return Math.round((1 - now / old) * 100);
 }
 
-const FALLBACK_IMG =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' fill='%23fff1f2'%3E%3Crect width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' fill='%23fb7185' font-size='16' text-anchor='middle' dy='.3em'%3ESin imagen%3C/text%3E%3C/svg%3E";
 
 export default function PromoGrid({ products }: { products: Product[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -49,10 +48,6 @@ export default function PromoGrid({ products }: { products: Product[] }) {
     (max, p) => Math.max(max, discountPct(p)),
     0,
   );
-
-  function handleImgError(e: React.SyntheticEvent<HTMLImageElement>) {
-    e.currentTarget.src = FALLBACK_IMG;
-  }
 
   function scrollByDir(dir: "left" | "right") {
     if (!scrollRef.current) return;
@@ -132,13 +127,12 @@ export default function PromoGrid({ products }: { products: Product[] }) {
                   onMouseEnter={() => setQuickViewId(product.id)}
                 >
                   <div className="relative aspect-[4/3] overflow-hidden bg-rose-50">
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      onError={handleImgError}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-110"
-                      loading="lazy"
-                    />
+                  <ProductImage
+                    src={product.image}
+                    alt={product.name}
+                    sizes="(max-width: 640px) 100vw, 33vw"
+                    className="object-cover transition-transform duration-500 group-hover/card:scale-110"
+                  />
 
                     {discount > 0 && (
                       <span className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-full bg-gradient-to-r from-rose-500 to-red-500 px-3 py-1.5 text-sm font-extrabold text-white shadow-lg shadow-rose-500/40">

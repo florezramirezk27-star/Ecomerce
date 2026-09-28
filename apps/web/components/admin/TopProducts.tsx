@@ -4,6 +4,7 @@ import { ShoppingCart } from 'lucide-react';
 import type { DashboardTopProduct } from '@/lib/admin';
 
 import { Badge, Card } from '@/components/admin/ui';
+import ProductImage from '@/components/ProductImage';
 
 interface TopProductsProps {
   products: DashboardTopProduct[];
@@ -53,11 +54,11 @@ export default function TopProducts({ products, formatPrice }: TopProductsProps)
             >
               <div className="flex items-center gap-3">
                 <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                  <img
+                  <ProductImage
                     src={imgSrc}
                     alt={product.name}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
+                    sizes="56px"
+                    className="object-cover"
                   />
                   <div className="absolute -left-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">
                     {i + 1}

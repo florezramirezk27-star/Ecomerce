@@ -110,6 +110,12 @@ model Product {
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  @@index([active])
+  @@index([categoryId, active])
+  @@index([price])
+  @@index([active, createdAt])
+  @@index([dropiProductId])
 }
 
 model ProductEmbedding {
@@ -196,8 +202,9 @@ model Order {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
-  @@index([status])
+  @@index([status, createdAt])
   @@index([createdAt])
+  @@index([userId, createdAt])
 }
 
 model OrderItem {

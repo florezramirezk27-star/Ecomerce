@@ -24,6 +24,9 @@ import { AIModule } from './modules/ai/ai.module';
 import { MetaModule } from './modules/meta/meta.module';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { RedisModule } from './common/redis/redis.module';
+import { RedisService } from './common/redis/redis.service';
+import { RedisThrottlerStorage } from './common/redis/redis-throttler.storage';
+import { CacheModule } from './common/cache/cache.module';
 
 @Module({
   imports: [
@@ -32,12 +35,22 @@ import { RedisModule } from './common/redis/redis.module';
       envFilePath: '.env',
     }),
     RedisModule,
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
+    CacheModule,
+    ThrottlerModule.forRootAsync({
+      inject: [RedisService],
+      useFactory: (redis: RedisService) => ({
+        // El storage por defecto de Nest es un Map en memoria que nunca se poda
+        // y crea un setTimeout por request. Con Redis el limite es global entre
+        // réplicas y cada ventana expira sola.
+        storage: new RedisThrottlerStorage(redis),
+        throttlers: [
+          {
+            ttl: 60000,
+            limit: 100,
+          },
+        ],
+      }),
+    }),
     PrismaModule,
     UsersModule,
     AuthModule,

@@ -95,9 +95,7 @@ export class PresenceService implements OnModuleDestroy {
     if (!meta) return;
 
     const orphans = Object.keys(meta).filter((id) => {
-      const firstSeenAt = Number(
-        JSON.parse(meta[id] || '{}').firstSeenAt ?? 0,
-      );
+      const firstSeenAt = Number(JSON.parse(meta[id] || '{}').firstSeenAt ?? 0);
       return Number.isFinite(firstSeenAt) && firstSeenAt < cutoff;
     });
 
@@ -129,8 +127,11 @@ export class PresenceService implements OnModuleDestroy {
     if (this.redis.isEnabled()) {
       const stored = await this.redis.sortedSetAdd(SCORE_KEY, visitorId, now);
       if (stored) {
-        const existing = await this.redis.getHashAll(META_KEY);
-        const previous = existing?.[visitorId];
+        // `HGET` y no `HGETALL`: solo hace falta el campo de ESTE visitante.
+        // Traer el hash entero hacia que el coste de cada latido creciera con
+        // el numero de visitantes activos, y con 1000 usuarios concurrentes
+        // cada ronda de latidos arrastraba el estado de los 999 otros.
+        const previous = await this.redis.getHashField(META_KEY, visitorId);
         let firstSeenAt = now;
         if (previous) {
           const parsed = this.parseMeta(previous);
@@ -237,7 +238,10 @@ export class PresenceService implements OnModuleDestroy {
           return this.buildSnapshot(
             online,
             range
-              .map(([visitorId, score]) => ({ visitorId, score: Number(score) }))
+              .map(([visitorId, score]) => ({
+                visitorId,
+                score: Number(score),
+              }))
               .filter((row) => Number.isFinite(row.score)),
             metaRaw,
             'redis',

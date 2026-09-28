@@ -5,10 +5,7 @@ import { Strategy, StrategyOptions, Profile } from 'passport-facebook';
 type DoneFn = (error: any, user?: any) => void;
 
 @Injectable()
-export class FacebookStrategy extends PassportStrategy(
-  Strategy,
-  'facebook',
-) {
+export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
   constructor() {
     super({
       clientID: process.env.FACEBOOK_CLIENT_ID,
@@ -31,9 +28,7 @@ export class FacebookStrategy extends PassportStrategy(
     const user = {
       email,
       name:
-        profile.displayName ||
-        email?.split('@')[0] ||
-        'Usuario de Facebook',
+        profile.displayName || email?.split('@')[0] || 'Usuario de Facebook',
       facebookId: profile.id,
       picture: photo,
     };

@@ -286,7 +286,13 @@ export class DropiTrackingService {
   }
 
   async syncDeletedOrders(): Promise<
-    { orderId: string; dropiOrderId: string; previous: string; current: string; reason: string }[]
+    {
+      orderId: string;
+      dropiOrderId: string;
+      previous: string;
+      current: string;
+      reason: string;
+    }[]
   > {
     const pending = await this.prisma.order.findMany({
       where: {

@@ -10,17 +10,11 @@ export class CartService {
       throw new BadRequestException('Cantidad inválida');
     }
 
-    let cart = await this.prisma.cart.findUnique({
+    const cart = await this.prisma.cart.upsert({
       where: { userId },
+      create: { userId },
+      update: {},
     });
-
-    if (!cart) {
-      cart = await this.prisma.cart.create({
-        data: {
-          userId,
-        },
-      });
-    }
 
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -38,34 +32,18 @@ export class CartService {
       throw new BadRequestException('Stock insuficiente');
     }
 
-    const existingItem = await this.prisma.cartItem.findFirst({
-      where: {
-        cartId: cart.id,
-        productId,
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const item = await tx.cartItem.upsert({
+        where: { cartId_productId: { cartId: cart.id, productId } },
+        create: { cartId: cart.id, productId, quantity },
+        update: { quantity: { increment: quantity } },
+      });
 
-    if (existingItem) {
-      if (existingItem.quantity + quantity > product.stock) {
+      if (item.quantity > product.stock) {
         throw new BadRequestException('Stock insuficiente');
       }
 
-      return this.prisma.cartItem.update({
-        where: {
-          id: existingItem.id,
-        },
-        data: {
-          quantity: existingItem.quantity + quantity,
-        },
-      });
-    }
-
-    return this.prisma.cartItem.create({
-      data: {
-        cartId: cart.id,
-        productId,
-        quantity,
-      },
+      return item;
     });
   }
 
