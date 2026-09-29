@@ -154,59 +154,6 @@ export default function ProductPage() {
     }
   };
 
-  const handleBuyNow = async () => {
-    if (!product || !inStock) return;
-
-    if (!isAuthenticated()) {
-      addToGuestCart({
-        productId: product.id,
-        name: product.name,
-        price: product.price,
-        image: product.image,
-        slug: product.slug,
-        quantity,
-      });
-      void trackMetaEvent("AddToCart", {
-        content_ids: [product.id],
-        content_name: product.name,
-        content_type: "product",
-        value: Number(product.price) * quantity,
-        currency: "COP",
-      });
-      router.push("/cart");
-      return;
-    }
-
-    setCartLoading(true);
-    try {
-      await apiFetch("/cart/add", {
-        method: "POST",
-        body: JSON.stringify({
-          productId: product?.id,
-          quantity,
-        }),
-      });
-      void trackMetaEvent("AddToCart", {
-        content_ids: [product.id],
-        content_name: product.name,
-        content_type: "product",
-        value: Number(product.price) * quantity,
-        currency: "COP",
-      });
-      router.push("/cart");
-    } catch (err) {
-      setCartMessage({
-        type: "error",
-        text:
-          err instanceof Error
-            ? err.message
-            : "Error al agregar al carrito",
-      });
-    } finally {
-      setCartLoading(false);
-    }
-  };
-
   if (loading) {
     return (
       <main className="min-h-screen bg-orange-50 flex items-center justify-center">
@@ -337,14 +284,17 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
         </button>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-          <div className="space-y-4">
+          {/* Columna de la imagen. Al ser un grid item con `align-items:stretch`
+              (el default) ya mide lo que mide la columna de info, y `flex-1`
+              reparte ese alto entre la imagen y las miniaturas de abajo.
+              `min-h-*` es lo que impide que en movil colapse: ahi son dos
+              filas, la imagen es el unico contenido en flujo de la primera y
+              su alto minimo seria cero. */}
+          <div className="flex flex-col gap-4">
             {/* `relative` no es cosmetico: ProductImage va con fill, que es
                 position:absolute con inset:0. Sin un ancestro posicionado se
-                mide contra el viewport entero y la imagen se sale de la
-                tarjeta. `aspect-square` en vez de `h-full` porque un
-                porcentaje de altura sin un padre de altura definida no ancla
-                nada. */}
-            <div className="relative bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 aspect-square">
+                mide contra el viewport entero y se sale de la tarjeta. */}
+            <div className="relative flex-1 min-h-[280px] md:min-h-[380px] bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200">
               {selectedMedia?.kind === "video" ? (
                 selectedMedia.embed ? (
                   <div className="w-full h-full">
@@ -601,17 +551,6 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
                 ) : (
                   "Producto agotado"
                 )}
-              </button>
-
-              <button
-                onClick={handleBuyNow}
-                disabled={!inStock || cartLoading}
-                className="w-full py-4 px-6 rounded-xl font-bold text-blue-700 border-2 border-blue-200 hover:border-blue-500 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Comprar ahora
               </button>
             </div>
 
