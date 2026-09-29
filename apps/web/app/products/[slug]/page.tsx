@@ -590,34 +590,34 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
               <h3 className="text-xs font-semibold text-gray-900 mb-3 uppercase tracking-wider">
                 Lo que necesitas saber
               </h3>
-              {/* Un beneficio por linea: icono, titulo, detalle y fecha en la
-                  misma fila. `flex-wrap` mas `basis-40` en el grupo de textos
-                  deja que la fecha baje a su propia linea en pantallas
-                  estrechas, en vez de partirse o quedar cortada. */}
-              <div className="space-y-2">
+              {/* Iconos en fila y el texto de cada uno debajo, en tres columnas.
+                  El texto va centrado para que las tres columnas queden
+                  simetricas; a la izquierda con celdas estrechas se leen como
+                  un bloque de texto desalineado. */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {beneficios.map((b) => (
                   <div
                     key={b.titulo}
-                    className="flex flex-wrap items-center gap-x-2.5 gap-y-1"
+                    className="flex flex-col items-center text-center gap-1.5"
                   >
                     <span
-                      className={`w-7 h-7 shrink-0 rounded-full bg-gradient-to-br ${b.gradiente} shadow-sm flex items-center justify-center`}
+                      className={`w-9 h-9 shrink-0 rounded-full bg-gradient-to-br ${b.gradiente} shadow-sm flex items-center justify-center`}
                     >
                       <svg
-                        className="w-3.5 h-3.5 text-white"
+                        className="w-4 h-4 text-white"
                         fill="currentColor"
                         viewBox="0 0 24 24"
                       >
                         <path d={b.icono} />
                       </svg>
                     </span>
-                    <div className="flex flex-1 basis-40 flex-wrap items-baseline gap-x-2">
-                      <p className="text-sm font-semibold text-gray-800">
-                        {b.titulo}
-                      </p>
-                      <p className="text-xs text-gray-500">{b.detalle}</p>
-                    </div>
-                    <span className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+                    <p className="text-xs font-semibold text-gray-800 leading-tight">
+                      {b.titulo}
+                    </p>
+                    <p className="text-[11px] text-gray-500 leading-tight">
+                      {b.detalle}
+                    </p>
+                    <span className="text-[9px] sm:text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
                       Llega {formatDateRange(b.rango[0], b.rango[1])}
                     </span>
                   </div>
