@@ -1,8 +1,32 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import ProductCarousel from "../ProductCarousel";
+
+/**
+ * El asistente vive en el layout raiz, asi que sin esto aparece tambien en
+ * las pantallas donde no sirve de nada. En login y registro estorba: el
+ * visitante esta a punto de dejar sus datos y un boton flotante encima de la
+ * esquina compite con el formulario. En la pagina de recuperacion pasa lo
+ * mismo. Tampoco se monta en admin ni en dropi, que son paneles de trabajo.
+ */
+const HIDDEN_PATHS = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/admin",
+  "/dropi",
+];
+
+function isChatHidden(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return HIDDEN_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  );
+}
 
 interface Product {
   id: string;
@@ -54,7 +78,14 @@ interface ChatHistoryResponse {
 }
 
 export default function StoreChat() {
-  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const hidden = isChatHidden(pathname);
+  // En vez de un booleano mas un efecto que lo cierre al navegar, se guarda
+  // en QUE ruta se abrio. El panel esta abierto solo si esa ruta sigue siendo
+  // la actual, asi que cambiar de pagina lo cierra por comparacion, sin
+  // setState dentro de un efecto.
+  const [openedOn, setOpenedOn] = useState<string | null>(null);
+  const open = openedOn !== null && openedOn === pathname;
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [initialSessionId] = useState<string | null>(() =>
@@ -88,7 +119,9 @@ export default function StoreChat() {
   }, [messages, loading]);
 
   useEffect(() => {
-    if (!initialSessionId) return;
+    // En las paginas ocultas no hace falta ni pedir el historial: el chat no
+    // se va a montar, asi que la peticion seria trabajo tirado.
+    if (!initialSessionId || hidden) return;
 
     let cancelled = false;
 
@@ -135,7 +168,7 @@ export default function StoreChat() {
     return () => {
       cancelled = true;
     };
-  }, [initialSessionId, initialGuestSecret]);
+  }, [initialSessionId, initialGuestSecret, hidden]);
 
   async function sendMessage(event: FormEvent) {
     event.preventDefault();
@@ -237,12 +270,17 @@ export default function StoreChat() {
     setMessages([]);
   }
 
+  // Va despues de todos los hooks: si se hiciera antes, React se quejaria de
+  // que el numero de hooks cambia entre un render y el siguiente cuando se
+  // navega de una pagina visible a una oculta.
+  if (hidden) return null;
+
   return (
     <>
       {/* Botón flotante */}
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpenedOn(open ? null : pathname)}
         className="fixed bottom-6 right-6 z-50 flex h-16 w-16 items-center justify-center rounded-full bg-gray-900 text-white shadow-2xl transition hover:scale-105 hover:bg-gray-800"
         aria-label="Abrir asistente"
       >
