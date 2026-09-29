@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
+import { frontendUrl } from '../../common/config/origins';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { sessionLifetimeMs } from '../../common/token-expiry';
@@ -427,7 +428,7 @@ export class AuthService {
       resetTokenExpiry: expiry,
     });
 
-    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
+    const resetLink = `${frontendUrl()}/reset-password?token=${token}`;
 
     await this.mailService.sendPasswordResetEmail(
       user.email,

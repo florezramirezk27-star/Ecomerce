@@ -15,6 +15,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { RedisService } from './common/redis/redis.service';
+import { isOriginAllowed } from './common/config/origins';
 
 async function bootstrap() {
   const server = express();
@@ -58,7 +59,7 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (isOriginAllowed(origin, allowedOrigins)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));

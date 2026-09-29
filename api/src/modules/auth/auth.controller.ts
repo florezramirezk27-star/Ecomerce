@@ -25,6 +25,7 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { WsTicketStore } from '../../common/ws-ticket.store';
 import { accessTokenLifetimeMs } from '../../common/token-expiry';
 import { createCsrfToken, setCsrfCookie } from '../../common/csrf';
+import { frontendUrl } from '../../common/config/origins';
 import {
   loginSchema,
   registerSchema,
@@ -188,11 +189,11 @@ export class AuthController {
         result.user,
       );
 
-      const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/google/callback?code=${encodeURIComponent(code)}`;
+      const redirectUrl = `${frontendUrl(req)}/auth/google/callback?code=${encodeURIComponent(code)}`;
       return res.redirect(redirectUrl);
     } catch {
       return res.redirect(
-        `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=google_auth_failed`,
+        `${frontendUrl(req)}/login?error=google_auth_failed`,
       );
     }
   }
@@ -212,11 +213,11 @@ export class AuthController {
         result.user,
       );
 
-      const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/facebook/callback?code=${encodeURIComponent(code)}`;
+      const redirectUrl = `${frontendUrl(req)}/auth/facebook/callback?code=${encodeURIComponent(code)}`;
       return res.redirect(redirectUrl);
     } catch {
       return res.redirect(
-        `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=facebook_auth_failed`,
+        `${frontendUrl(req)}/login?error=facebook_auth_failed`,
       );
     }
   }

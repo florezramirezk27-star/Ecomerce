@@ -14,11 +14,25 @@ import { sendMessageSchema } from './schemas/chat.schema';
 import { WsThrottlerGuard } from '../../common/guards/ws-throttler.guard';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WsTicketStore } from '../../common/ws-ticket.store';
+import { isOriginAllowed } from '../../common/config/origins';
 
 @WebSocketGateway({
   namespace: '/chat',
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    // El puerto del frontend se mueve en desarrollo, asi que se delega el
+    // criterio a la misma regla que usa el CORS de HTTP en `main.ts`.
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, ok?: boolean) => void,
+    ) => {
+      const allowed = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+        .split(',')
+        .map((o) => o.trim());
+      callback(
+        null,
+        isOriginAllowed(origin, allowed),
+      );
+    },
     credentials: true,
   },
 })

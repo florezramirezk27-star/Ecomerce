@@ -7,9 +7,12 @@
     "scripts": {
         "dev": "pnpm kill:ports && concurrently -n api,web -c blue,green \"pnpm --dir api start:dev\" \"pnpm --dir apps/web dev\"",
         "kill:ports": "powershell -NoProfile -Command \"Get-NetTCPConnection -LocalPort 3000,3001,3002 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\" & exit /b 0",
+        "kill:web": "powershell -NoProfile -Command \"Get-NetTCPConnection -LocalPort 3000,3002 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\" & exit /b 0",
         "dev:api": "pnpm --dir api start:dev",
+        "predev:web": "pnpm kill:web",
         "dev:web": "pnpm --dir apps/web dev",
         "api": "pnpm --dir api start:dev",
+        "preweb": "pnpm kill:web",
         "web": "pnpm --dir apps/web dev",
         "build": "pnpm --dir api build && pnpm --dir apps/web build",
         "test": "pnpm --dir api test",
