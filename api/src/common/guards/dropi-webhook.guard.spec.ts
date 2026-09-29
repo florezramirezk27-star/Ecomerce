@@ -206,7 +206,13 @@ describe('DropiWebhookGuard', () => {
     it('acepta la firma y la recuerda en memoria', async () => {
       const guard = new DropiWebhookGuard(redisCaido);
       const ts = String(Date.now());
-      const raw = JSON.stringify({ orderId: 'cabc123' });
+      // Cuerpo propio de este test. El almacen local de nonces es global al
+      // modulo, asi que dos tests con la misma marca de tiempo y el mismo
+      // cuerpo generan la misma firma y el mismo nonce: el segundo fallaria por
+      // el nonce que grabo el primero, y solo cuando caen en el mismo
+      // milisegundo. Un fallo intermitente que hace creer que el anti-replay
+      // esta roto cuando lo que esta mal es el test.
+      const raw = JSON.stringify({ orderId: 'orden-propia-1' });
       const context = makeContext({
         body: JSON.parse(raw),
         rawBody: raw,

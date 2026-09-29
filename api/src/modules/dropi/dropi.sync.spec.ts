@@ -162,6 +162,53 @@ describe('DropiSyncService: sincronizacion de stock', () => {
     expect(missing[0].error).toContain('ausente');
   });
 
+  it('dice el nombre de los saltados, no solo cuantos', async () => {
+    // El sintoma real: el logAutomatico decia "2 sin datos en Dropi" y no habia
+    // forma de saber cuales sin conectarse a Dropi a mano. Un producto asi, si
+    // sigue activo en la web, se vende y su pedido lo rechaza Dropi.
+    const { service } = makeSync({
+      byId: { 1734566: dropiProduct(1734566, 100) },
+    });
+
+    const summary = await service.syncStock();
+
+    expect(summary.skippedNames).toHaveLength(2);
+    expect(summary.skippedNames[0]).toContain('Kit Microfono');
+    expect(summary.skippedNames[0]).toContain('241380');
+    expect(summary.skippedNames[1]).toContain('Brasier Copa');
+    expect(summary.skippedNames[0]).toContain('ya no existe');
+  });
+
+  it('nombra tambien los que fallaron al leer de Dropi', async () => {
+    const { service } = makeSync({
+      byId: {
+        1734566: dropiProduct(1734566, 100),
+        291738: dropiProduct(291738, 4),
+      },
+      throwOn: [241380],
+    });
+
+    const summary = await service.syncStock();
+
+    expect(summary.errorNames).toHaveLength(1);
+    expect(summary.errorNames[0]).toContain('Kit Microfono');
+    expect(summary.errorNames[0]).toContain('timeout');
+  });
+
+  it('distingue saltado por seleccion de saltado por catalogo', async () => {
+    // `skipped` mezcla dos causas muy distintas: no estaba en la seleccion de
+    // esta corrida, o Dropi no lo tiene. La segunda es la grave.
+    const { service } = makeSync({
+      byId: { 1734566: dropiProduct(1734566, 100) },
+    });
+
+    const summary = await service.syncStock([1734566]);
+
+    expect(summary.skipped).toBe(2);
+    expect(summary.skippedNames).toHaveLength(2);
+    expect(summary.skippedNames.join(' ')).toContain('fuera de la seleccion');
+  });
+
   it('sigue con los demas productos si uno falla', async () => {
     const { service, updates } = makeSync({
       byId: {

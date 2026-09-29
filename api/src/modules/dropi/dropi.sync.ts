@@ -14,6 +14,13 @@ export interface StockSyncSummary {
   updated: number;
   errors: number;
   skipped: number;
+  /**
+   * Nombres de lo que no se pudo sincronizar. Sin esto el logAutomatico solo
+   * decia "2 sin datos en Dropi" y no habia forma de saber quais eran sin
+   * conectarse a Dropi a mano: el unico sintoma es un numero.
+   */
+  skippedNames: string[];
+  errorNames: string[];
   details: { id: number; name: string; updated: boolean; error?: string }[];
   /**
    * Productos cuyo precio local quedo por debajo del minimo que exige Dropi.
@@ -71,6 +78,16 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
         `Stock sync automático: ${summary.checked} revisados, ${summary.updated} actualizados, ${summary.errors} errores, ${summary.skipped} sin datos en Dropi`,
       );
 
+      // Los numeros solos no dicen nada. Un "2 sin datos en Dropi" obliga a
+      // conectarse a Dropi a mano para descubrir quais son, y si son productos
+      // que siguen activos el cliente compra algo que no se puede enviar.
+      for (const nombre of summary.skippedNames) {
+        this.logger.warn(`Stock sync: sin datos en Dropi -> ${nombre}`);
+      }
+      for (const nombre of summary.errorNames) {
+        this.logger.error(`Stock sync: fallo al leer de Dropi -> ${nombre}`);
+      }
+
       if (summary.priceWarnings.length > 0) {
         this.logger.warn(
           `Stock sync: ${summary.priceWarnings.length} producto(s) por debajo del precio minimo de Dropi: ${summary.priceWarnings.map((w) => `${w.name} (${w.local} < ${w.suggested})`).join('; ')}`,
@@ -116,6 +133,8 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
         updated: 0,
         errors: 0,
         skipped: 0,
+        skippedNames: [],
+        errorNames: [],
         details: [],
         priceWarnings: [],
       };
@@ -132,6 +151,8 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
       updated: 0,
       errors: 0,
       skipped: 0,
+      skippedNames: [],
+      errorNames: [],
       details: [],
       priceWarnings: [],
     };
@@ -142,6 +163,9 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
 
       if (!wanted.has(dropiId)) {
         summary.skipped++;
+        summary.skippedNames.push(
+          `${local.name} (${dropiId}, fuera de la seleccion)`,
+        );
         continue;
       }
 
@@ -155,6 +179,7 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
         dropiProduct = await this.products.getProductById(dropiId);
       } catch (err: any) {
         summary.errors++;
+        summary.errorNames.push(`${local.name} (${dropiId}): ${err.message}`);
         summary.details.push({
           id: dropiId,
           name: local.name,
@@ -166,6 +191,9 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
 
       if (!dropiProduct) {
         summary.skipped++;
+        summary.skippedNames.push(
+          `${local.name} (${dropiId}): ya no existe en el catalogo de Dropi`,
+        );
         summary.details.push({
           id: dropiId,
           name: local.name,
@@ -209,6 +237,7 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
         }
       } catch (err: any) {
         summary.errors++;
+        summary.errorNames.push(`${local.name} (${dropiId}): ${err.message}`);
         summary.details.push({
           id: dropiId,
           name: local.name,
