@@ -20,7 +20,7 @@ export const CONSENT_STORAGE_KEY = "kronio.consent";
  * volvera a preguntar a todos los visitantes. Sin esto, agregar un proveedor
  * nuevo no podria pedir permiso a quien ya habia aceptado.
  */
-export const CONSENT_VERSION = 1;
+export const CONSENT_VERSION = 2;
 
 export type ConsentCategory = "essentials" | "tracking";
 

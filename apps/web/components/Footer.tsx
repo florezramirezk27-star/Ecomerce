@@ -87,8 +87,8 @@ export default function Footer() {
 
   return (
     <footer className="bg-slate-950 text-slate-300">
-      <div className="mx-auto max-w-7xl px-4 py-16 md:px-10">
-        <div className="grid grid-cols-1 gap-12 lg:grid-cols-12">
+      <div className="mx-auto max-w-7xl px-4 py-10 md:px-10 md:py-12">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
           {/* Brand */}
           <div className="text-center lg:col-span-4 lg:text-left">
             <Link href="/" className="flex items-center justify-center gap-3 lg:justify-start">
@@ -98,21 +98,21 @@ export default function Footer() {
                     alt="Kronio Market"
                     width={180}
                     height={48}
-                    sizes="180px"
-                    className="h-12 w-auto max-w-[180px] object-contain rounded-xl"
+                    sizes="160px"
+                    className="h-10 w-auto max-w-[160px] object-contain rounded-lg"
                   />
               ) : (
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-bold text-white shadow-lg shadow-blue-600/20">
                   K
                 </div>
               )}
-              <span className="text-xl font-bold text-white">Kronio Market</span>
+              <span className="text-lg font-bold text-white">Kronio Market</span>
             </Link>
-            <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed text-slate-400 lg:mx-0">
+            <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-slate-400 lg:mx-0">
               Tu tienda en l&iacute;nea de confianza en Colombia. Productos de calidad con
               env&iacute;os a todo el pa&iacute;s y compra 100% segura.
             </p>
-            <div className="mt-6 flex justify-center gap-3 lg:justify-start">
+            <div className="mt-5 flex justify-center gap-2.5 lg:justify-start">
               {SOCIAL.map((s) => (
                 <a
                   key={s.name}
@@ -120,7 +120,7 @@ export default function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={s.name}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-slate-300 transition-all hover:-translate-y-0.5 hover:text-white ${s.hover}`}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-slate-300 transition-all hover:-translate-y-0.5 hover:text-white ${s.hover}`}
                 >
                   {s.icon}
                 </a>
@@ -131,7 +131,7 @@ export default function Footer() {
           {/* Links: Tienda */}
           <div className="text-center lg:col-span-2 lg:text-left">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-white">Tienda</h3>
-            <ul className="mt-4 space-y-3">
+            <ul className="mt-3 space-y-2">
               {LINKS.tienda.map((l) => (
                 <li key={l.label}>
                   <Link
@@ -150,7 +150,7 @@ export default function Footer() {
             <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
               Informaci&oacute;n legal
             </h3>
-            <ul className="mt-4 space-y-3">
+            <ul className="mt-3 space-y-2">
               {LINKS.ayuda.map((l) => (
                 <li key={l.label}>
                   <Link
@@ -167,7 +167,7 @@ export default function Footer() {
           {/* Contact */}
           <div className="text-center lg:col-span-3 lg:text-left">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-white">Contacto</h3>
-            <ul className="mt-4 space-y-4">
+            <ul className="mt-3 space-y-3">
               <li className="flex items-start justify-center gap-3 lg:justify-start">
                 <svg className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -196,7 +196,7 @@ export default function Footer() {
         </div>
 
         {/* Payments + trust */}
-        <div className="mt-12 flex flex-col gap-6 border-t border-slate-800 pt-8 text-center md:flex-row md:items-center md:justify-between md:text-left">
+        <div className="mt-8 flex flex-col gap-4 border-t border-slate-800 pt-5 text-center md:flex-row md:items-center md:justify-between md:text-left">
           <div className="flex flex-wrap items-center justify-center gap-2">
             <span className="mr-2 text-xs font-medium uppercase tracking-wider text-slate-500">
               Medios de pago
@@ -246,13 +246,15 @@ export default function Footer() {
             <p className="text-xs text-slate-600">
               NIT 000.000.000-0 &middot; Bogot&aacute;, Colombia
             </p>
-            {/* Retirar el consentimiento tiene que ser tan facil como darlo. */}
+            {/* Retirar el consentimiento tiene que ser tan facil como darlo,
+                y|Se tiene que ver. Un texto gris de 12px al fondo de un pie
+                largo es, en la practica, un enlace que no existe. */}
             <button
               type="button"
               onClick={openCookiePreferences}
-              className="flex items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-blue-400"
+              className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-blue-500 hover:bg-slate-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
             >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 3a9 9 0 109 9 4.5 4.5 0 01-4.5-4.5A4.5 4.5 0 0112 3z" />
               </svg>
               Configurar cookies

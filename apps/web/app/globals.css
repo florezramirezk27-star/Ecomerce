@@ -13,6 +13,8 @@
   --animate-marquee: marquee 20s linear infinite;
   --animate-fade-in-up: fade-in-up 0.6s ease-out forwards;
   --animate-cookie-in: cookie-in 0.3s ease-out;
+  --animate-cookie-fade: cookie-fade 0.2s ease-out;
+  --animate-cookie-rise: cookie-rise 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Entrada del aviso de cookies: sube desde el borde inferior. */
@@ -27,8 +29,33 @@
   }
 }
 
+/* Fondo del panel de preferencias. */
+@keyframes cookie-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* El panel entra desde abajo en movil y se escala desde el centro en
+   escritorio, que es donde esta el origen de la transformacion. */
+@keyframes cookie-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-cookie-in {
+  .animate-cookie-in,
+  .animate-cookie-fade,
+  .animate-cookie-rise {
     animation: none;
   }
 }
