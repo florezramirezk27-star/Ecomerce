@@ -433,21 +433,24 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
             )}
 
             <div>
-              <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight leading-tight">
                 {product.name}
               </h1>
               {product.description && (
-                <p className="text-gray-600 mt-3 leading-relaxed">
+                <p className="text-gray-600 mt-2.5 leading-relaxed">
                   {product.description}
                 </p>
               )}
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="text-3xl font-extrabold text-gray-900">
+            {/* El precio baja una escala y el titulo tambien, para que no
+                compitan los dos. Antes los dos eran text-3xl font-extrabold y
+                la mirada no sabia donde starting. */}
+            <div className="flex items-end gap-3 flex-wrap">
+              <div className="text-4xl font-extrabold text-gray-900 tracking-tight tabular-nums">
                 {priceFormatted}
               </div>
-              <span className="inline-flex items-center gap-1 text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full">
+              <span className="mb-1.5 inline-flex items-center gap-1 text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 px-2.5 py-1 rounded-full">
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                 </svg>
@@ -457,9 +460,14 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
 
             <CountdownTimer />
 
-            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-              <div className="flex items-center justify-between mb-2.5">
-                <span className="text-sm text-gray-600 font-medium">
+            {/* Todo lo que ejecuta la compra vive en un solo panel: antes eran
+                dos cajas (Disponibilidad y Cantidad) mas el boton suelto, y tres
+                cajas apiladas se leen como adorno en vez de como una accion.
+                Separadas por lineas de 1px, el panel se lee como una sola
+                ficha con secciones. */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-gray-700">
                   Disponibilidad
                 </span>
                 <span
@@ -492,30 +500,35 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
                 </span>
               </div>
               {inStock && (
-                <div className="w-full bg-gray-100 rounded-full h-1.5">
-                  <div
-                    className={`h-1.5 rounded-full transition-all duration-500 ${
-                      product.stock <= 10
-                        ? "bg-red-500"
-                        : product.stock <= 20
-                          ? "bg-orange-400"
-                          : "bg-green-500"
-                    }`}
-                    style={{ width: `${stockPercent}%` }}
-                  />
+                <div className="px-5 pb-4">
+                  <div className="w-full bg-gray-100 rounded-full h-1.5">
+                    <div
+                      className={`h-1.5 rounded-full transition-all duration-500 ${
+                        product.stock <= 10
+                          ? "bg-red-500"
+                          : product.stock <= 20
+                            ? "bg-orange-400"
+                            : "bg-green-500"
+                      }`}
+                      style={{ width: `${stockPercent}%` }}
+                    />
+                  </div>
                 </div>
               )}
-            </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-                <span className="text-sm font-semibold text-gray-800">
-                  Cantidad
-                </span>
-              </div>
-              <div className="px-5 py-3.5 flex items-center justify-between">
-                <span className="text-xs text-gray-500">Selecciona cuántas unidades quieres</span>
-                <div className="flex items-center gap-3">
+              {/* El texto largo pasa a su propia linea en vez de competir con
+                  el stepper por el ancho; con `min-w-0` el texto cede antes que
+                  los botones, que son los que no deben deformarse. */}
+              <div className="px-5 py-3.5 border-t border-gray-100 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="text-sm font-semibold text-gray-800">
+                    Cantidad
+                  </span>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Selecciona cuántas unidades quieres
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
                   <button
                     type="button"
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
@@ -541,48 +554,52 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
                   </button>
                 </div>
               </div>
-            </div>
 
-            {cartMessage && (
-              <div
-                className={`p-4 rounded-lg text-sm ${
-                  cartMessage.type === "success"
-                    ? "bg-green-50 text-green-700 border border-green-200"
-                    : "bg-red-50 text-red-700 border border-red-200"
-                }`}
-              >
-                {cartMessage.text}
+              {cartMessage && (
+                <div
+                  className={`mx-5 mb-3 p-3 rounded-lg text-sm ${
+                    cartMessage.type === "success"
+                      ? "bg-green-50 text-green-700 border border-green-200"
+                      : "bg-red-50 text-red-700 border border-red-200"
+                  }`}
+                >
+                  {cartMessage.text}
+                </div>
+              )}
+
+              {/* El boton va dentro del panel, con su propio padding para que
+                  quede a la misma medida que las filas de arriba. `rounded-lg`
+                  y no `rounded-xl` porque ya no esta suelto en la pagina: el
+                  radio grande solo se nota pegado al borde del panel. */}
+              <div className="p-3">
+                <button
+                  onClick={handleAddToCart}
+                  disabled={!inStock || cartLoading}
+                  className={`w-full py-3.5 px-6 rounded-lg font-semibold text-white transition-all duration-200 flex items-center justify-center gap-2 ${
+                    inStock
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm shadow-blue-600/20 hover:shadow-md hover:shadow-blue-600/30 active:scale-[0.99]"
+                      : "bg-gray-400 cursor-not-allowed"
+                  } ${
+                    cartLoading ? "opacity-75 cursor-wait" : ""
+                  }`}
+                >
+                  {cartLoading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Agregando...
+                    </>
+                  ) : inStock ? (
+                    <>
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                      </svg>
+                      Agregar al carrito
+                    </>
+                  ) : (
+                    "Producto agotado"
+                  )}
+                </button>
               </div>
-            )}
-
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={handleAddToCart}
-                disabled={!inStock || cartLoading}
-                className={`w-full py-4 px-6 rounded-xl font-bold text-white transition-all duration-200 flex items-center justify-center gap-2 shadow-lg ${
-                  inStock
-                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-blue-600/25 hover:shadow-blue-600/40 active:scale-[0.99]"
-                    : "bg-gray-400 cursor-not-allowed"
-                } ${
-                  cartLoading ? "opacity-75 cursor-wait" : ""
-                }`}
-              >
-                {cartLoading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Agregando...
-                  </>
-                ) : inStock ? (
-                  <>
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
-                    </svg>
-                    Agregar al carrito
-                  </>
-                ) : (
-                  "Producto agotado"
-                )}
-              </button>
             </div>
 
 
@@ -590,38 +607,46 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
               <h3 className="text-xs font-semibold text-gray-900 mb-3 uppercase tracking-wider">
                 Lo que necesitas saber
               </h3>
-              {/* Iconos en fila y el texto de cada uno debajo, en tres columnas.
-                  El texto va centrado para que las tres columnas queden
-                  simetricas; a la izquierda con celdas estrechas se leen como
-                  un bloque de texto desalineado. */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                {beneficios.map((b) => (
-                  <div
-                    key={b.titulo}
-                    className="flex flex-col items-center text-center gap-1.5"
-                  >
-                    <span
-                      className={`w-9 h-9 shrink-0 rounded-full bg-gradient-to-br ${b.gradiente} shadow-sm flex items-center justify-center`}
+              {/* Los tres iconos en fila unidos por una linea, como linea de
+                  tiempo. La linea va de 1/6 a 5/6 del ancho, que con tres
+                  columnas iguales es justo el centro del primer y del ultimo
+                  icono, y pasa por debajo del intermedio. Los iconos llevan un
+                  anillo del color del fondo, asi que la linea se ve entrar y
+                  salir de cada nodo en vez de cruzarlos por encima. */}
+              <div className="relative">
+                <div
+                  aria-hidden="true"
+                  className="absolute left-[16.666%] right-[16.666%] top-[18px] h-0.5 rounded-full bg-gradient-to-r from-blue-200 via-emerald-200 to-purple-200"
+                />
+                <div className="relative grid grid-cols-3 gap-2 sm:gap-3">
+                  {beneficios.map((b) => (
+                    <div
+                      key={b.titulo}
+                      className="flex flex-col items-center text-center gap-1.5"
                     >
-                      <svg
-                        className="w-4 h-4 text-white"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
+                      <span
+                        className={`w-9 h-9 shrink-0 rounded-full bg-gradient-to-br ${b.gradiente} ring-4 ring-orange-50 shadow-sm flex items-center justify-center`}
                       >
-                        <path d={b.icono} />
-                      </svg>
-                    </span>
-                    <p className="text-xs font-semibold text-gray-800 leading-tight">
-                      {b.titulo}
-                    </p>
-                    <p className="text-[11px] text-gray-500 leading-tight">
-                      {b.detalle}
-                    </p>
-                    <span className="text-[9px] sm:text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                      Llega {formatDateRange(b.rango[0], b.rango[1])}
-                    </span>
-                  </div>
-                ))}
+                        <svg
+                          className="w-4 h-4 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d={b.icono} />
+                        </svg>
+                      </span>
+                      <p className="text-xs font-semibold text-gray-800 leading-tight">
+                        {b.titulo}
+                      </p>
+                      <p className="text-[11px] text-gray-500 leading-tight">
+                        {b.detalle}
+                      </p>
+                      <span className="text-[9px] sm:text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                        Llega {formatDateRange(b.rango[0], b.rango[1])}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             </div>
