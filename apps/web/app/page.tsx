@@ -136,30 +136,32 @@ export default function Home() {
         <div className="pointer-events-none absolute -top-32 -right-32 h-96 w-96 rounded-full bg-blue-100/50 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-orange-100/50 blur-3xl" />
 
-        <div className="relative mx-auto max-w-7xl px-6 py-16 md:py-24">
+        <div className="relative mx-auto max-w-7xl px-6 py-12 md:py-16">
           {/* Header */}
-          <div className="mx-auto mb-14 max-w-3xl text-center">
+          <div className="mx-auto mb-10 max-w-3xl text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-blue-700">
               <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
               Sobre nosotros
             </span>
-            <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-gray-900 md:text-4xl">
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-gray-900 md:text-4xl">
               Nuestra{" "}
               <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                 raz&oacute;n de ser
               </span>
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-base text-gray-500">
+            <p className="mx-auto mt-3 max-w-xl text-base text-gray-500">
               Una tienda en l&iacute;nea pensada para todos los colombianos: pagas al
               recibir tu pedido, en cualquier rinc&oacute;n del pa&iacute;s.
             </p>
           </div>
 
           {/* Images + Misión/Visión */}
-          <div className="grid items-center gap-12 lg:grid-cols-2">
+          <div className="grid items-center gap-8 lg:grid-cols-2">
             {/* Image collage */}
             <div className="relative mx-auto w-full max-w-xl lg:mx-0">
-              <div className="group relative block aspect-[4/3] overflow-hidden rounded-3xl border border-gray-100 shadow-2xl shadow-gray-200/60">
+              {/* 16/10 en vez de 4/3: la foto es de gente delivering, no de
+                  producto, asi que pierde alto sin que se note recortada. */}
+              <div className="group relative block aspect-[16/10] overflow-hidden rounded-3xl border border-gray-100 shadow-2xl shadow-gray-200/60">
                 <Image
                   src="https://aveonline.co/wp-content/uploads/2024/08/IMG_3016.jpeg"
                   alt="Envíos contra entrega en e-commerce"
@@ -170,12 +172,12 @@ export default function Home() {
                 />
               </div>
 
-              <div className="absolute -bottom-10 -right-2 hidden aspect-square w-44 overflow-hidden rounded-2xl border-4 border-white shadow-xl md:block lg:-right-8">
+              <div className="absolute -bottom-8 -right-2 hidden aspect-square w-40 overflow-hidden rounded-2xl border-4 border-white shadow-xl md:block lg:-right-8">
                 <Image
                   src="https://images.pexels.com/photos/6699397/pexels-photo-6699397.jpeg?auto=compress&cs=tinysrgb&w=600"
                   alt="Mensajero entregando un paquete"
                   fill
-                  sizes="176px"
+                  sizes="160px"
                   className="object-cover transition-transform duration-500 hover:scale-105"
                 />
               </div>
@@ -206,11 +208,11 @@ export default function Home() {
             </div>
 
             {/* Misión / Visión */}
-            <div className="space-y-6">
-              <div className="group relative overflow-hidden rounded-3xl border border-gray-100 bg-gradient-to-br from-blue-50/60 to-white p-8 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-100/60">
-                <div className="mb-5 flex items-center gap-4">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25 transition-transform group-hover:scale-105">
-                    <Target className="h-6 w-6" />
+            <div className="space-y-5">
+              <div className="group relative overflow-hidden rounded-3xl border border-gray-100 bg-gradient-to-br from-blue-50/60 to-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-100/60">
+                <div className="mb-4 flex items-center gap-4">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25 transition-transform group-hover:scale-105">
+                    <Target className="h-5 w-5" />
                   </span>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
@@ -227,10 +229,10 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="group relative overflow-hidden rounded-3xl border border-gray-100 bg-gradient-to-br from-indigo-50/60 to-white p-8 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-100/60">
-                <div className="mb-5 flex items-center gap-4">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-transform group-hover:scale-105">
-                    <Eye className="h-6 w-6" />
+              <div className="group relative overflow-hidden rounded-3xl border border-gray-100 bg-gradient-to-br from-indigo-50/60 to-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-100/60">
+                <div className="mb-4 flex items-center gap-4">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-transform group-hover:scale-105">
+                    <Eye className="h-5 w-5" />
                   </span>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">

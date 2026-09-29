@@ -294,6 +294,8 @@ if (product) {
 
 const selectedMedia = mediaItems[selectedIndex] ?? null;
 
+const isVideo = selectedMedia?.kind === "video";
+
   return (
     <main className="min-h-screen bg-orange-50">
       <div className="bg-white border-b border-gray-200">
@@ -340,8 +342,22 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
           <div className="flex flex-col gap-4">
             {/* `relative` no es cosmetico: ProductImage va con fill, que es
                 position:absolute con inset:0. Sin un ancestro posicionado se
-                mide contra el viewport entero y se sale de la tarjeta. */}
-            <div className="relative flex-1 min-h-[280px] md:min-h-[380px] bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200">
+                mide contra el viewport entero y se sale de la tarjeta.
+
+                El video no usa `flex-1`: un video es 16:9, y estirarlo hasta
+                copiar el alto de la columna de Informacion solo dejaba franjas
+                negras. Con altura fija se ve mas compacto y el resto de la
+                columna sube, en vez de dejar un hueco vacio debajo. */}
+            <div
+              className={
+                isVideo
+                  ? "relative min-h-[168px] md:min-h-[290px] bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200"
+                  : "relative flex-1 min-h-[280px] md:min-h-[380px] bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200"
+              }
+            >
+              {/* Se repite `selectedMedia?.kind === "video"` en vez de usar
+                  `isVideo`: es esa comparacion en linea la que le dice a
+                  TypeScript que `selectedMedia` no es null dentro de la rama. */}
               {selectedMedia?.kind === "video" ? (
                 selectedMedia.embed ? (
                   <div className="w-full h-full">

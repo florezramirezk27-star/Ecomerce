@@ -238,11 +238,11 @@ export default function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-slate-800 pt-6 sm:flex-row">
+        <div className="mt-6 flex flex-col items-center justify-between gap-2.5 border-t border-slate-800 pt-4 sm:flex-row">
           <p className="text-xs text-slate-500">
             &copy; {new Date().getFullYear()} Kronio Market. Todos los derechos reservados.
           </p>
-          <div className="flex flex-col items-center gap-1.5 sm:flex-row sm:gap-4">
+          <div className="flex flex-col items-center gap-1.5 sm:flex-row sm:items-center sm:gap-3">
             <p className="text-xs text-slate-600">
               NIT 000.000.000-0 &middot; Bogot&aacute;, Colombia
             </p>
