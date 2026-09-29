@@ -1006,7 +1006,7 @@ Importar a mi tienda
                       return thumbSrc ? (
                         <div
                           key={i}
-                          className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-gray-100"
+                          className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-gray-100"
                         >
                         <ProductImage
                           src={thumbSrc}

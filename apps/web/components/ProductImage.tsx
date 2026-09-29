@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Image, { type ImageProps } from "next/image";
 
 /**
@@ -21,7 +21,15 @@ function isOptimizable(src: string) {
 type Props = Omit<ImageProps, "src" | "alt" | "onError"> & {
   src?: string | null;
   alt: string;
-  /** `fill` para contenedores con aspecto fijo; `width`/`height` si no. */
+  /**
+   * `fill` para contenedores con aspecto fijo; `width`/`height` si no.
+   *
+   * Con `fill` (el valor por defecto) la imagen sale como `position:absolute`
+   * con `inset:0`, o sea que se ancla en el PRIMER ancestro posicionado. Si el
+   * contenedor inmediato no tiene `relative`, la imagen se mide contra el
+   * viewport y se sale de la tarjeta. El contenedor necesita las dos cosas:
+   * `relative` y una altura definida (`aspect-square`, `aspect-[4/3]`, `h-20`).
+   */
   fill?: boolean;
   sizes?: string;
   /** `true` solo para la imagen LCP de la cabecera; el resto debe ser lazy. */
@@ -48,6 +56,23 @@ export default function ProductImage({
   ...rest
 }: Props) {
   const [failed, setFailed] = useState(false);
+
+  // Fallo silencioso: ni React ni TypeScript se quejan si el contenedor no
+  // tiene `relative`, la imagen simplemente se dibuja del tamaño del viewport
+  // encima de la pagina. Solo se nota mirando el resultado, y asi se colaron
+  // cinco usos. Se avisa en desarrollo, no en produccion.
+  const checkParent = useCallback(
+    (el: HTMLImageElement | null) => {
+      if (!fill || !el?.parentElement) return;
+      if (process.env.NODE_ENV === "production") return;
+      if (getComputedStyle(el.parentElement).position === "static") {
+        console.error(
+          `[ProductImage] "${alt}" va con fill (position:absolute) pero su contenedor no tiene \`relative\`. Anade \`relative\` y una altura fija al contenedor.`,
+        );
+      }
+    },
+    [fill, alt],
+  );
 
   const usable = typeof src === "string" && src.length > 0 && !failed;
 
@@ -90,6 +115,7 @@ export default function ProductImage({
       className={className}
       style={style}
       onError={() => setFailed(true)}
+      ref={checkParent}
       {...rest}
     />
   );

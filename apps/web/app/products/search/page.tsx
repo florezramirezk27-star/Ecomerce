@@ -221,12 +221,16 @@ export default function ProductSearchPage() {
                   key={product.id}
                   className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
                 >
+                  {/* relative + proporcion fija: ProductImage va con fill
+                      (position:absolute). Sin esto se mide contra el viewport. */}
+                  <div className="relative aspect-[4/3] bg-slate-50">
                     <ProductImage
                       src={product.image}
                       alt={product.name}
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      className="h-64 w-full object-cover"
+                      className="object-cover"
                     />
+                  </div>
                 <div className="p-6">
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                     {product.category?.name || 'Sin categoría'}

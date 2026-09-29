@@ -337,11 +337,17 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
         </button>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-          <div className="space-y-4 h-full">
-<div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 h-full">
+          <div className="space-y-4">
+            {/* `relative` no es cosmetico: ProductImage va con fill, que es
+                position:absolute con inset:0. Sin un ancestro posicionado se
+                mide contra el viewport entero y la imagen se sale de la
+                tarjeta. `aspect-square` en vez de `h-full` porque un
+                porcentaje de altura sin un padre de altura definida no ancla
+                nada. */}
+            <div className="relative bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 aspect-square">
               {selectedMedia?.kind === "video" ? (
                 selectedMedia.embed ? (
-                  <div className="aspect-video h-full">
+                  <div className="w-full h-full">
                     <iframe
                       src={selectedMedia.embed}
                       title={`Video de ${product.name}`}
@@ -399,7 +405,7 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
                       key={item.src}
                       type="button"
                       onClick={() => setSelectedIndex(i)}
-                      className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                      className={`relative shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
                         selectedIndex === i
                           ? "border-blue-500 ring-2 ring-blue-200"
                           : "border-gray-200 hover:border-gray-400"
@@ -677,7 +683,7 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
                 href={`/products/${sp.slug}`}
                 className="group bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all hover:-translate-y-1"
               >
-                <div className="aspect-square bg-gray-100 overflow-hidden">
+                <div className="relative aspect-square bg-gray-100 overflow-hidden">
                   <ProductImage
                     src={sp.image}
                     alt={sp.name}
