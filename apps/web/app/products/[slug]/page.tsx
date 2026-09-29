@@ -604,7 +604,7 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
 
 
             <div className="border-t border-gray-200 pt-4">
-              <h3 className="text-xs font-semibold text-gray-900 mb-3 uppercase tracking-wider">
+              <h3 className="text-xs font-semibold text-gray-900 mb-4 uppercase tracking-wider text-center">
                 Lo que necesitas saber
               </h3>
               {/* Los tres iconos en fila unidos por una linea, como linea de
@@ -641,8 +641,12 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
                       <p className="text-[11px] text-gray-500 leading-tight">
                         {b.detalle}
                       </p>
-                      <span className="text-[9px] sm:text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                        Llega {formatDateRange(b.rango[0], b.rango[1])}
+                      {/* Sin el "Llega" delante. Ese prefijo era lo que
+                          obligaba a la pillora a letra diminuta: con tres
+                          columnas y `whitespace-nowrap` la fecha completa no
+                          cabia en movil y hubo que bajarla a 9px. */}
+                      <span className="text-[10px] sm:text-[11px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                        {formatDateRange(b.rango[0], b.rango[1])}
                       </span>
                     </div>
                   ))}
