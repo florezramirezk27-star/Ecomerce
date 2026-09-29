@@ -108,6 +108,39 @@ function discountPct(p: DropiProduct): number {
   return Math.round((1 - p.sale_price / p.suggested_price) * 100);
 }
 
+// Margen del dropshipper sobre el costo, que es el mismo numero que
+// `discountPct` pero con el signo y el nombre correctos: no es un descuento que
+// se le hace al comprador, es lo que te queda a ti.
+function marginPct(p: DropiProduct): number {
+  return discountPct(p);
+}
+
+// Guia de precio de un producto de Dropi.
+//
+// Antes esta pagina mostraba los dos numeros al reves: `sale_price` (lo que te
+// cobra Dropi) como si fuera el precio de venta, y `suggested_price` tachado
+// como si fuera un precio anterior. Para un dropshipper `suggested_price` no es
+// un precio de referencia, es el MINIMO por debajo del cual Dropi rechaza la
+// orden, asi que tacharlo invitaba justo a lo que no se debe hacer.
+//
+// Refleja lo mismo que hace el backend al importar (dropi.products.ts:
+// `price: suggested > 0 ? suggested : sale_price`), para que el numero que se
+// ve aqui sea exactamente el que queda guardado en el producto.
+function priceGuide(p: DropiProduct) {
+  const cost = Number(p.sale_price) || 0;
+  const suggested = Number(p.suggested_price) || 0;
+  const importPrice = suggested > 0 ? suggested : cost;
+  const margin = importPrice - cost;
+  return {
+    cost,
+    suggested,
+    importPrice,
+    margin,
+    hasMin: suggested > 0,
+    marginPct: cost > 0 ? Math.round((margin / cost) * 100) : 0,
+  };
+}
+
 function prng(seed: number): () => number {
   let a = seed | 0;
   return () => {
@@ -298,24 +331,34 @@ export default function DropiCatalogPage() {
     loadCatalog({ q: search, verified: userVerified, fav: favorite, priv: privated });
   }
 
-  async function handleImport(dropiProductId: number) {
+  async function handleImport(p: DropiProduct) {
     const user = getUser();
     if (!user) {
       router.push('/login');
       return;
     }
 
-    setImporting(dropiProductId);
+    setImporting(p.id);
     setImportMsg(null);
     try {
       const product = await apiFetch('/dropi/import', {
         method: 'POST',
-        body: JSON.stringify({ dropiProductId }),
+        body: JSON.stringify({ dropiProductId: p.id }),
       });
 
+      // Se confirma el precio con el que quedo guardado, no solo el nombre. Sin
+      // esto el unico rastro del precio era un log en la API, y si despues se
+      // edita a mano por debajo del minimo de Dropi no hay forma de saber de
+      // donde salio el numero.
+      const g = priceGuide(p);
+      const saved = Number(product.price);
       setImportMsg({
         ok: true,
-        text: `"${product.name}" importado exitosamente a tu tienda`,
+        text:
+          `"${product.name}" importado a ${formatCOP(saved)}` +
+          (g.hasMin
+            ? ` — mínimo Dropi ${formatCOP(g.suggested)}, no lo bajes de ahí o el pedido se rechaza`
+            : ''),
       });
     } catch (err) {
       setImportMsg({
@@ -344,9 +387,13 @@ export default function DropiCatalogPage() {
           Verificado
         </span>
       )}
-      {discountPct(p) > 0 && (
-        <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
-          -{discountPct(p)}%
+      {/* Antes este badge decia "-X%" en rojo, como si el producto estuviera en
+          descuento. Lo que mide en realidad es la distancia entre el costo y el
+          minimo de Dropi, o sea el margen del dropshipper. Etiquetado como
+          descuento invitaba a fijar el precio por debajo del minimo. */}
+      {marginPct(p) > 0 && (
+        <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
+          +{marginPct(p)}% margen
         </span>
       )}
     </div>
@@ -375,8 +422,7 @@ export default function DropiCatalogPage() {
   const renderCard = (p: DropiProduct) => {
     const img = getImageUrl(p);
     const stock = computeStock(p);
-    const price = formatCOP(p.sale_price);
-    const suggested = p.suggested_price ? formatCOP(p.suggested_price) : null;
+    const g = priceGuide(p);
     const typeLabel = p.type === 'VARIABLE' ? 'Variable' : 'Simple';
 
     return (
@@ -429,11 +475,19 @@ export default function DropiCatalogPage() {
 
           {renderProvider(p)}
 
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="text-base font-bold text-slate-900">{price}</span>
-            {suggested && (
-              <span className="text-xs text-slate-400 line-through">{suggested}</span>
-            )}
+          <div className="mt-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-base font-bold text-slate-900">{formatCOP(g.importPrice)}</span>
+              {g.marginPct > 0 && (
+                <span className="shrink-0 text-[11px] font-bold text-emerald-600">
+                  +{g.marginPct}% margen
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-[11px] leading-tight text-slate-500">
+              Costo {formatCOP(g.cost)}
+              {g.hasMin && ` · no lo bajes de ${formatCOP(g.suggested)}`}
+            </p>
           </div>
 
           <div className="mt-1.5 flex items-center gap-1 text-[11px] font-medium">
@@ -454,7 +508,7 @@ export default function DropiCatalogPage() {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              handleImport(p.id);
+              handleImport(p);
             }}
             disabled={importing === p.id || stock === 0}
             className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
@@ -762,7 +816,7 @@ export default function DropiCatalogPage() {
                     <option value="random">Aleatorio</option>
                     <option value="price-asc">Menor precio</option>
                     <option value="price-desc">Mayor precio</option>
-                    <option value="discount">Mayor descuento</option>
+                    <option value="discount">Mayor margen</option>
                     <option value="stock">Mayor stock</option>
                     <option value="name">Nombre A-Z</option>
                   </select>
@@ -835,6 +889,7 @@ export default function DropiCatalogPage() {
               {filtered.map((p) => {
                 const img = getImageUrl(p);
                 const stock = computeStock(p);
+                const lg = priceGuide(p);
                 return (
                   <div
                     key={p.id}
@@ -874,18 +929,24 @@ export default function DropiCatalogPage() {
                       </div>
                       <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-slate-900">{p.name}</h3>
                       {renderProvider(p)}
-                      <div className="mt-1 flex items-center gap-2 text-sm">
-                        <span className="font-bold text-slate-900">{formatCOP(p.sale_price)}</span>
-                        {p.suggested_price && (
-                          <span className="text-xs text-slate-400 line-through">{formatCOP(p.suggested_price)}</span>
-                        )}
+                      <div className="mt-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-sm font-bold text-slate-900">{formatCOP(lg.importPrice)}</span>
+                          {lg.marginPct > 0 && (
+                            <span className="text-[11px] font-bold text-emerald-600">+{lg.marginPct}%</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] leading-tight text-slate-500">
+                          Costo {formatCOP(lg.cost)}
+                          {lg.hasMin && ` · mín. ${formatCOP(lg.suggested)}`}
+                        </p>
                       </div>
                       <div className="mt-auto flex items-center justify-between gap-3 pt-2">
                         <span className={`text-xs font-medium ${stock > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                           {stock > 0 ? `${stock} en stock` : 'Sin stock'}
                         </span>
                         <button
-                          onClick={() => handleImport(p.id)}
+                          onClick={() => handleImport(p)}
                           disabled={importing === p.id || stock === 0}
                           className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                         >
@@ -1050,24 +1111,53 @@ Importar a mi tienda
                 </div>
                 <div className="shrink-0 text-right">
                   <span className="block text-3xl font-bold text-blue-600">
-                    {formatCOP(selectedProduct.sale_price)}
+                    {formatCOP(priceGuide(selectedProduct).importPrice)}
                   </span>
-                  {selectedProduct.suggested_price ? (
-                    <span className="block text-sm text-gray-400 line-through">
-                      {formatCOP(selectedProduct.suggested_price)}
-                    </span>
-                  ) : null}
+                  <span className="block text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    precio al importar
+                  </span>
                 </div>
               </div>
 
-              {discountPct(selectedProduct) > 0 && (
-                <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2">
-                  <span className="rounded bg-red-500 px-2 py-1 text-xs font-bold text-white">
-                    -{discountPct(selectedProduct)}%
-                  </span>
-                  <span className="text-sm text-red-700">Descuento sobre precio sugerido</span>
-                </div>
-              )}
+              {(() => {
+                const g = priceGuide(selectedProduct);
+                return (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                    <h5 className="text-sm font-bold text-blue-900">Precio para este producto</h5>
+                    <dl className="mt-2.5 space-y-1.5 text-sm">
+                      <div className="flex items-baseline justify-between gap-4">
+                        <dt className="text-blue-800">Lo que te cuesta en Dropi</dt>
+                        <dd className="font-semibold text-blue-900">{formatCOP(g.cost)}</dd>
+                      </div>
+                      {g.hasMin && (
+                        <div className="flex items-baseline justify-between gap-4">
+                          <dt className="text-blue-800">Mínimo para que Dropi acepte el pedido</dt>
+                          <dd className="font-semibold text-blue-900">{formatCOP(g.suggested)}</dd>
+                        </div>
+                      )}
+                      <div className="flex items-baseline justify-between gap-4 border-t border-blue-200 pt-1.5">
+                        <dt className="font-semibold text-blue-900">Se importa con este precio</dt>
+                        <dd className="text-base font-bold text-blue-900">{formatCOP(g.importPrice)}</dd>
+                      </div>
+                      {g.marginPct > 0 && (
+                        <div className="flex items-baseline justify-between gap-4">
+                          <dt className="text-blue-800">Tu margen sobre el costo</dt>
+                          <dd className="font-semibold text-emerald-700">
+                            {formatCOP(g.margin)} ({g.marginPct}%)
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                    {g.hasMin && (
+                      <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+                        Si después de importar le pones un precio menor a{' '}
+                        <strong>{formatCOP(g.suggested)}</strong>, Dropi rechaza el pedido. El
+                        cliente ve el pedido como confirmado y paga, pero el envío nunca se genera.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="border-t border-gray-100" />
 
@@ -1171,7 +1261,7 @@ Importar a mi tienda
               )}
 
               <button
-                onClick={() => handleImport(selectedProduct.id)}
+                onClick={() => handleImport(selectedProduct)}
                 disabled={importing === selectedProduct.id}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-4 text-lg font-bold text-white transition hover:bg-blue-700 disabled:bg-slate-300"
               >
