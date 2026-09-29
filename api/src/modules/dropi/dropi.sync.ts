@@ -8,7 +8,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 import { DropiProductsService } from './dropi.products';
 import { DropiTrackingService } from './dropi.tracking';
-import { DropiCatalogBody } from './dropi.types';
 
 export interface StockSyncSummary {
   checked: number;
@@ -16,10 +15,22 @@ export interface StockSyncSummary {
   errors: number;
   skipped: number;
   details: { id: number; name: string; updated: boolean; error?: string }[];
+  /**
+   * Productos cuyo precio local quedo por debajo del minimo que exige Dropi.
+   * No se corrigen solos: el precio lo define el_dueno a mano y el sync no debe
+   * deshacerlo, pero es exactamente la causa de que la orden no se cree.
+   */
+  priceWarnings: { id: number; name: string; local: number; suggested: number }[];
 }
 
-const SYNC_INTERVAL_MS = 30 * 60 * 1000;
+const DEFAULT_SYNC_INTERVAL_MIN = 30;
 const FIRST_RUN_DELAY_MS = 15 * 1000;
+
+function syncIntervalMs(): number {
+  const raw = Number(process.env.DROPI_STOCK_SYNC_INTERVAL_MINUTES);
+  const min = Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_SYNC_INTERVAL_MIN;
+  return min * 60 * 1000;
+}
 
 @Injectable()
 export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
@@ -34,10 +45,15 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
+    const every = syncIntervalMs();
     this.timer = setInterval(() => {
       void this.runAllSync();
-    }, SYNC_INTERVAL_MS);
+    }, every);
     this.timer.unref?.();
+
+    this.logger.log(
+      `Sync de stock cada ${Math.round(every / 60000)} min; primera corrida en ${FIRST_RUN_DELAY_MS / 1000}s`,
+    );
 
     setTimeout(() => {
       void this.runAllSync();
@@ -52,8 +68,14 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
     try {
       const summary = await this.syncStock();
       this.logger.log(
-        `Stock sync automático: ${summary.checked} revisados, ${summary.updated} actualizados, ${summary.errors} errores`,
+        `Stock sync automático: ${summary.checked} revisados, ${summary.updated} actualizados, ${summary.errors} errores, ${summary.skipped} sin datos en Dropi`,
       );
+
+      if (summary.priceWarnings.length > 0) {
+        this.logger.warn(
+          `Stock sync: ${summary.priceWarnings.length} producto(s) por debajo del precio minimo de Dropi: ${summary.priceWarnings.map((w) => `${w.name} (${w.local} < ${w.suggested})`).join('; ')}`,
+        );
+      }
     } catch (err: any) {
       this.logger.error(`Stock sync automático falló: ${err.message}`);
     }
@@ -84,12 +106,19 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
   async syncStock(targetIds?: number[]): Promise<StockSyncSummary> {
     const localProducts = await this.prisma.product.findMany({
       where: { dropiProductId: { not: null } },
-      select: { id: true, dropiProductId: true, name: true },
+      select: { id: true, dropiProductId: true, name: true, price: true },
     });
 
     if (localProducts.length === 0) {
       this.logger.warn('No hay productos importados de Dropi para sincronizar');
-      return { checked: 0, updated: 0, errors: 0, skipped: 0, details: [] };
+      return {
+        checked: 0,
+        updated: 0,
+        errors: 0,
+        skipped: 0,
+        details: [],
+        priceWarnings: [],
+      };
     }
 
     const wanted = new Set(
@@ -98,55 +127,13 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
         : localProducts.map((p) => p.dropiProductId!),
     );
 
-    const dropiById = new Map<number, any>();
-
-    try {
-      const pageSize = 100;
-      let startData = 0;
-
-      while (true) {
-        const body: DropiCatalogBody = {
-          pageSize,
-          startData,
-          privated_product: false,
-          userVerified: false,
-          favorite: false,
-          country: 'COLOMBIA',
-          get_stock: true,
-          no_count: true,
-          search_type: 'simple',
-          with_collection: true,
-        };
-
-        const page = await this.products.fetchCatalog(body);
-
-        if (!page?.isSuccess || !Array.isArray(page.objects)) {
-          this.logger.warn(
-            'Dropi devolvió una página inválida durante el sync',
-          );
-          break;
-        }
-
-        for (const obj of page.objects) {
-          if (obj?.id != null && wanted.has(Number(obj.id))) {
-            dropiById.set(Number(obj.id), obj);
-          }
-        }
-
-        if (page.objects.length < pageSize) break;
-        startData += pageSize;
-      }
-    } catch (err: any) {
-      this.logger.error(`Error trayendo catálogo de Dropi: ${err.message}`);
-      throw new Error(`No se pudo sincronizar con Dropi: ${err.message}`);
-    }
-
     const summary: StockSyncSummary = {
       checked: 0,
       updated: 0,
       errors: 0,
       skipped: 0,
       details: [],
+      priceWarnings: [],
     };
 
     for (const local of localProducts) {
@@ -158,7 +145,24 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
         continue;
       }
 
-      const dropiProduct = dropiById.get(dropiId);
+      // Uno por uno y en serie. Antes se paginaba el catalogo generico
+      // (`search_type: 'simple'` sin keywords), pero eso devuelve solo los 88
+      // productos de la propia tienda del dropshipper, no el catalogo del
+      // proveedor: ningun producto importado aparecia nunca y el stock local
+      // se quedaba congelado sin dar error. La busqueda por id si los ve.
+      let dropiProduct: any = null;
+      try {
+        dropiProduct = await this.products.getProductById(dropiId);
+      } catch (err: any) {
+        summary.errors++;
+        summary.details.push({
+          id: dropiId,
+          name: local.name,
+          updated: false,
+          error: `Dropi no respondio: ${err.message}`,
+        });
+        continue;
+      }
 
       if (!dropiProduct) {
         summary.skipped++;
@@ -166,26 +170,21 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
           id: dropiId,
           name: local.name,
           updated: false,
-          error: 'producto ausente en catálogo Dropi',
+          error: 'producto ausente en el catalogo de Dropi',
         });
         continue;
       }
 
       const stock = this.products.computeStock(dropiProduct);
-      const cost = Number(dropiProduct.sale_price) || 0;
-      const suggested = dropiProduct.suggested_price
-        ? Number(dropiProduct.suggested_price)
-        : 0;
-      const price = suggested > 0 ? suggested : cost;
+      const suggested = Number(dropiProduct.suggested_price) || 0;
 
       try {
+        // Solo el stock. El sync antes tambien sobrescribia `price` y
+        // `oldPrice` con el precio sugerido de Dropi, lo que deshacia a mano
+        // cualquier ajuste de precio. No se toca el precio.
         await this.prisma.product.update({
           where: { id: local.id },
-          data: {
-            stock,
-            ...(price > 0 && { price }),
-            ...(suggested > 0 && { oldPrice: Math.round(suggested * 1.15) }),
-          },
+          data: { stock },
         });
         summary.updated++;
         summary.details.push({
@@ -193,6 +192,21 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
           name: local.name,
           updated: true,
         });
+
+        // Aviso, no correccion: si el precio quedo por debajo del minimo de
+        // Dropi, la orden se va a rechazar aunque el stock este bien.
+        const localPrice = Number(local.price) || 0;
+        if (suggested > 0 && localPrice < suggested) {
+          summary.priceWarnings.push({
+            id: dropiId,
+            name: local.name,
+            local: localPrice,
+            suggested,
+          });
+          this.logger.warn(
+            `Sync: "${local.name}" esta en ${localPrice} y Dropi exige minimo ${suggested}; la orden sera rechazada`,
+          );
+        }
       } catch (err: any) {
         summary.errors++;
         summary.details.push({
