@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/api";
+import { openCookiePreferences } from "@/lib/consent";
 
 const SOCIAL = [
   {
@@ -241,9 +242,22 @@ export default function Footer() {
           <p className="text-xs text-slate-500">
             &copy; {new Date().getFullYear()} Kronio Market. Todos los derechos reservados.
           </p>
-          <p className="text-xs text-slate-600">
-            NIT 000.000.000-0 &middot; Bogot&aacute;, Colombia
-          </p>
+          <div className="flex flex-col items-center gap-1.5 sm:flex-row sm:gap-4">
+            <p className="text-xs text-slate-600">
+              NIT 000.000.000-0 &middot; Bogot&aacute;, Colombia
+            </p>
+            {/* Retirar el consentimiento tiene que ser tan facil como darlo. */}
+            <button
+              type="button"
+              onClick={openCookiePreferences}
+              className="flex items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-blue-400"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3a9 9 0 109 9 4.5 4.5 0 01-4.5-4.5A4.5 4.5 0 0112 3z" />
+              </svg>
+              Configurar cookies
+            </button>
+          </div>
         </div>
       </div>
     </footer>

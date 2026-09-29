@@ -12,6 +12,7 @@ import Banner from "@/components/Banner";
 import StoreChat from "@/components/chat/StoreChat";
 import StorefrontPresence from "@/components/StorefrontPresence";
 import FacebookPixel from "@/components/FacebookPixel";
+import CookieConsent from "@/components/CookieConsent";
 
 const FALLBACK_ICON = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%232563eb"/><text x="16" y="24" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="22" fill="white">K</text></svg>';
 
@@ -52,6 +53,9 @@ export default function RootLayout({
         <StorefrontPresence />
         <StoreChat />
         <FacebookPixel />
+        {/* Al final del body: queda por encima en el orden del DOM y es lo
+            ultimo que encuentra el tabulador. */}
+        <CookieConsent />
       </body>
     </html>
   );

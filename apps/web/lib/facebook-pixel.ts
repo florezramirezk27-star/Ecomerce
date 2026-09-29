@@ -5,6 +5,8 @@ declare global {
   }
 }
 
+import { hasTrackingConsent } from "./consent";
+
 type FbqFn = { (...args: unknown[]): void } & {
   callMethod?: (...args: unknown[]) => void;
   push?: unknown;
@@ -24,8 +26,13 @@ export function isPixelEnabled(): boolean {
   return FB_PIXEL_ID.length > 0;
 }
 
+/**
+ * Carga el script de Meta. No hace nada sin consentimiento de rastreo: pedir
+ * permiso en el banner y despues cargar el pixel igual seria mentira.
+ */
 export function initFacebookPixel(): void {
   if (!isPixelEnabled() || typeof window === "undefined") return;
+  if (!hasTrackingConsent()) return;
   if (window.fbq) return;
 
   const w = window as Window & { fbq?: FbqFn; _fbq?: unknown };
@@ -55,7 +62,6 @@ export function initFacebookPixel(): void {
   })(w, d, "script", "https://connect.facebook.net/en_US/fbevents.js");
 
   w.fbq?.("init", FB_PIXEL_ID);
-  w.fbq?.("track", "PageView");
 }
 
 export function firePixelEvent(
@@ -63,6 +69,7 @@ export function firePixelEvent(
   data?: Record<string, unknown>,
 ): void {
   if (!isPixelEnabled() || typeof window === "undefined") return;
+  if (!hasTrackingConsent()) return;
   if (!window.fbq) initFacebookPixel();
   window.fbq?.("track", name, data);
 }
@@ -83,12 +90,17 @@ export interface MetaEventData {
  * a la API de Conversiones (servidor) usando el MISMO eventID, para que Meta
  * deduplique y no cuente doble. Las credenciales (email/teléfono) se envían
  * solo al backend propio, que las hashea (SHA-256) antes de mandarlas a Meta.
+ *
+ * Sin consentimiento de rastreo no se manda nada, ni al pixel ni al backend.
  */
 export async function trackMetaEvent(
   name: string,
   data: MetaEventData = {},
 ): Promise<void> {
   if (typeof window === "undefined") return;
+  // El envio al servidor es el mas delicado: manda correo y telefono al backend
+  // para que Meta los hashee. Sin permiso no sale nada de aqui.
+  if (!hasTrackingConsent()) return;
   const eventId = crypto.randomUUID();
 
   const pixelData: Record<string, unknown> = {};

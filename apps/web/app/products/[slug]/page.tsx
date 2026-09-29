@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import ProductImage from "@/components/ProductImage";
+import VideoEmbed from "@/components/VideoEmbed";
 import { isAuthenticated } from "@/lib/auth";
 import { addToGuestCart } from "@/lib/guest-cart";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
@@ -35,15 +36,19 @@ function getYouTubeEmbed(url: string) {
   const match = url.match(
     /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/,
   );
+  // `youtube-nocookie.com` es la variante que no rastrea antes de que el
+  // visitante pulse reproducir. Va en el `frame-src` del CSP.
   return match
-    ? `https://www.youtube.com/embed/${match[1]}`
+    ? `https://www.youtube-nocookie.com/embed/${match[1]}`
     : null;
 }
 
 function getVimeoEmbed(url: string) {
   const match = url.match(/vimeo\.com\/(\d+)/);
+  // `dnt=1` es el equivalente en Vimeo: el reproductor no instala cookies de
+  // analitica.
   return match
-    ? `https://player.vimeo.com/video/${match[1]}`
+    ? `https://player.vimeo.com/video/${match[1]}?dnt=1`
     : null;
 }
 
@@ -340,14 +345,9 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
               {selectedMedia?.kind === "video" ? (
                 selectedMedia.embed ? (
                   <div className="w-full h-full">
-                    <iframe
+                    <VideoEmbed
                       src={selectedMedia.embed}
                       title={`Video de ${product.name}`}
-                      loading="lazy"
-                      referrerPolicy="strict-origin-when-cross-origin"
-                      className="w-full h-full"
-                      allowFullScreen
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     />
                   </div>
                 ) : (

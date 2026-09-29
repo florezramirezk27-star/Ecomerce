@@ -275,12 +275,30 @@ export default function PrivacyPage() {
             la experiencia de compra y analizar el tráfico. Puede configurar el uso de cookies
             desde su navegador.
           </p>
+          <p>
+            Al entrar por primera vez le mostramos un aviso para que decida si permite o no las
+            cookies que no son esenciales. Mientras no acepte, el sitio funciona igual, pero
+            ninguna herramienta de medición o publicidad se carga en su dispositivo. Navegar por
+            el sitio no se considera aceptación.
+          </p>
           <h3 className="font-semibold text-gray-800 mt-4">Tipos de cookies:</h3>
           <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Esenciales:</strong> necesarias para el carrito de compras, el inicio de sesión y la seguridad.</li>
-            <li><strong>De rendimiento y analítica:</strong> nos ayudan a entender el uso del sitio para mejorarlo.</li>
-            <li><strong>De funcionalidad:</strong> recuerdan sus preferencias.</li>
+            <li><strong>Esenciales:</strong> necesarias para el carrito de compras, el inicio de sesión y la seguridad. Están siempre activas porque sin ellas el sitio no puede funcionar, y por eso no requieren su autorización.</li>
+            <li><strong>De analítica y publicidad:</strong> el píxel de Meta (Facebook Pixel), que sirve para medir el tráfico y mostrarle anuncios relevantes. Solo se cargan si usted lo autoriza en el aviso de cookies.</li>
           </ul>
+          <h3 className="font-semibold text-gray-800 mt-4">Cómo retirar su consentimiento:</h3>
+          <p>
+            Puede cambiar su decisión cuando quiera, sin que esto afecte al acceso a la tienda.
+            Le recomendamos usar el enlace <strong>Configurar cookies</strong> que aparece al final
+            de esta página. Allí puede aceptar todas las cookies, quedarse solo con las esenciales
+            o elegir categoría por categoría. Si decide no permitir las de analítica y publicidad,
+            las cookies que ya se habían guardado se eliminan de su navegador.
+          </p>
+          <p>
+            También puede bloquear o eliminar cookies desde la configuración de su navegador. Tenga
+            en cuenta que si bloquea las cookies esenciales, el carrito de compras y el inicio de
+            sesión pueden dejar de funcionar.
+          </p>
           <p>
             No utilizamos cookies de publicidad comportamental sin su autorización previa. El
             tratamiento de datos derivado de cookies queda sujeto a esta política.
