@@ -297,21 +297,34 @@ Plantillas HTML para:
 
 ## Variables de entorno
 
-Ver `.env.example` para la lista completa. Las variables principales son:
+Ver `.env.example` para la lista completa y comentada. `.env.example` esta
+dividido por destino: lo que va en **Render** (API) y lo que va en **Vercel**
+(web). Ponerlas en el sitio equivocado hace que la app no se entere.
 
-| Variable | Descripcion |
-|----------|-------------|
-| `DATABASE_URL` | URL de conexion a PostgreSQL (Neon) |
-| `DIRECT_URL` | URL directa para migraciones |
-| `REDIS_URL` | URL de Redis (Upstash) |
-| `JWT_SECRET` | Secreto para firmar JWT |
-| `OPENAI_API_KEY` | API key de OpenAI (embeddings para RAG) |
-| `CLOUDINARY_*` | Credenciales de Cloudinary |
-| `AWS_*` | Credenciales de AWS S3 |
-| `SMTP_*` | Configuracion de email SMTP |
-| `GOOGLE_CLIENT_ID/SECRET` | Credenciales de Google OAuth |
-| `FACEBOOK_CLIENT_ID/SECRET` | Credenciales de Facebook OAuth (Meta for Developers) |
-| `FRONTEND_URL` | URL del frontend (para links de email) |
+Las principales:
+
+| Variable | Destino | Descripcion |
+|----------|---------|-------------|
+| `API_URL` | Vercel | URL de la API para el SSR y la rewrite `/api/proxy` |
+| `NEXT_PUBLIC_WS_URL` | Vercel | Endpoint publico de Socket.IO (chat y visitantes en vivo) |
+| `DATABASE_URL` | Render | URL de conexion a PostgreSQL (Neon, con pooler) |
+| `DIRECT_URL` | migraciones | URL directa, sin pooler, solo para Prisma |
+| `DB_STATEMENT_TIMEOUT` | Render | Corta los queries lentos antes de que tumben el pool |
+| `REDIS_URL` | Render | URL TLS de Redis (`rediss://default:TOKEN@...`) |
+| `REDIS_REQUIRED` | Render | `true` hace que `/ready` devuelva 503 si Redis cae |
+| `JWT_SECRET` | Render | Secreto para firmar JWT. Si falta, la app no arranca |
+| `JWT_ACCESS_EXPIRES_IN` | Render | Duracion del access token. OJO: `JWT_EXPIRES_IN` no lo lee nadie |
+| `CORS_ORIGIN` | Render | Origen exacto permitido. Una sola URL, sin coma |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Render | KronioBot (Gemini). Sin ella el chat no responde |
+| `OPENAI_API_KEY` | Render | Embeddings para la busqueda semantica y el RAG |
+| `CLOUDINARY_*` | Render | Credenciales de Cloudinary (si esta vacio, se usa S3) |
+| `AWS_*` | Render | Credenciales de AWS S3 |
+| `SMTP_*` | Render | Email. Render bloquea el SMTP saliente: no llega a enviar |
+| `DROPI_*` | Render | Credenciales, IDs y webhook de Dropi |
+| `GOOGLE_CLIENT_ID/SECRET` | Render | Credenciales de Google OAuth |
+| `FACEBOOK_CLIENT_ID/SECRET` | Render | Credenciales de Facebook OAuth (Meta for Developers) |
+| `META_PIXEL_ID` + `META_CAPI_ACCESS_TOKEN` | Render | Pixel y Conversions API. Se necesitan las dos |
+| `FRONTEND_URL` | Render | URL del frontend (para links de email y redirects OAuth) |
 
 ---
 
