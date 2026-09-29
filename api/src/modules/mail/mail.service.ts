@@ -53,8 +53,27 @@ function htmlToText(html: string): string {
 export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter | null = null;
+  /**
+   * API de Resend. Si esta puesta, el correo sale por HTTP y el bloque de
+   * SMTP no se toca.
+   *
+   * Render no deja salir por 25, 465 ni 587, y nodemailer solo habla SMTP: con
+   * SMTP configurado y sin salida, cada arranque gastaba 15s en un timeout y
+   * luego el envio fallaba igual, sin que el mensaje le llegara a nadie. Con
+   * `RESEND_API_KEY` el problema desaparece entero, no se amortigua.
+   */
+  private resendKey: string | null = null;
 
   async onModuleInit() {
+    if (this.resendKey) {
+      // No se sondea SMTP: si hay API HTTP, los puertos bloqueados son
+      // irrelevantes y gastar 15s en comprobarlos solo alarga el arranque.
+      this.logger.log(
+        `Mail vía API HTTP (Resend). Remitente: ${this.mailFrom()}`,
+      );
+      return;
+    }
+
     await this.buildTransporter();
     if (!this.transporter) return;
     try {
@@ -180,9 +199,85 @@ export class MailService implements OnModuleInit {
       'SMTP_USER',
       'SMTP_PASS',
       'SMTP_FROM',
+      'RESEND_API_KEY',
+      'MAIL_FROM',
     ]) {
       const v = process.env[key];
       if (v) process.env[key] = clean(v);
+    }
+
+    this.resendKey = clean(process.env.RESEND_API_KEY) || null;
+  }
+
+  /**
+   * Remitente. `MAIL_FROM` manda porque en Resend el dominio verificado no
+   * tiene por que ser el mismo que el de Gmail: si no, el correo sale desde
+   * `noreply@ecommerce.com`, que en Resend nadie ha verificado.
+   */
+  private mailFrom(): string {
+    return (
+      process.env.MAIL_FROM ||
+      process.env.SMTP_FROM ||
+      'onboarding@resend.dev'
+    );
+  }
+
+  /**
+   * Envio por la API de Resend. Devuelve el mismo contrato que el camino SMTP:
+   * `true` si el proveedor acepto el mensaje, `false` si no.
+   */
+  private async sendViaHttpApi(options: {
+    to: string;
+    subject: string;
+    text?: string;
+    html?: string;
+    tag: string;
+  }): Promise<boolean> {
+    const control = new AbortController();
+    const timer = setTimeout(() => control.abort(), 15000);
+
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        signal: control.signal,
+        headers: {
+          Authorization: `Bearer ${this.resendKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: this.mailFrom(),
+          to: [options.to],
+          subject: options.subject,
+          ...(options.html ? { html: options.html } : {}),
+          ...(options.text ? { text: options.text } : {}),
+        }),
+      });
+
+      if (res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { id?: string };
+        this.logger.log(
+          `[${options.tag}] enviado a ${options.to} vía Resend` +
+            (data.id ? ` (${data.id})` : '') +
+            ` | ${options.subject}`,
+        );
+        return true;
+      }
+
+      const detail = await res.text().catch(() => '');
+      this.logger.error(
+        `[${options.tag}] Resend rechazó el envío (HTTP ${res.status}): ` +
+          `${detail.slice(0, 300) || 'sin detalle'}`,
+      );
+      return false;
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? `${err.name}: ${err.message}`
+          : String(err);
+      this.logger.error(`[${options.tag}] fallo llamando a Resend: ${message}`);
+      return false;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -241,7 +336,7 @@ export class MailService implements OnModuleInit {
         </div>`
       : '';
 
-    await this.sendHtml({
+    return this.sendHtml({
       to: adminEmail,
       subject: `Nuevo pedido #${orderId.slice(0, 8)} — Kronio Market`,
       tag: 'ADMIN ORDER NOTIFICATION',
@@ -318,7 +413,6 @@ export class MailService implements OnModuleInit {
 </body>
 </html>`,
     });
-    return true;
   }
 
   /**
@@ -355,7 +449,7 @@ export class MailService implements OnModuleInit {
       )
       .join('');
 
-    await this.sendHtml({
+    return this.sendHtml({
       to: adminEmail,
       subject: `PEDIDO #${orderId.slice(0, 8)} NO se envío a Dropi — acción requerida`,
       tag: 'ADMIN DROPI FAILURE ALERT',
@@ -394,7 +488,6 @@ export class MailService implements OnModuleInit {
 </body>
 </html>`,
     });
-    return true;
   }
 
   private async send(options: {
@@ -403,11 +496,15 @@ export class MailService implements OnModuleInit {
     text: string;
     tag: string;
   }): Promise<boolean> {
+    if (this.resendKey) {
+      return this.sendViaHttpApi(options);
+    }
+
     if (this.transporter) {
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
           await this.transporter.sendMail({
-            from: process.env.SMTP_FROM || 'noreply@ecommerce.com',
+            from: this.mailFrom(),
             to: options.to,
             subject: options.subject,
             text: options.text,
@@ -432,7 +529,7 @@ export class MailService implements OnModuleInit {
     }
 
     this.logger.warn(
-      `[${options.tag}] SMTP no configurado — no se envió a ${options.to}`,
+      `[${options.tag}] sin transporte de correo configurado (ni RESEND_API_KEY ni SMTP) — no se envió a ${options.to}`,
     );
     return false;
   }
@@ -443,11 +540,18 @@ export class MailService implements OnModuleInit {
     html: string;
     tag: string;
   }): Promise<boolean> {
+    if (this.resendKey) {
+      return this.sendViaHttpApi({
+        ...options,
+        text: htmlToText(options.html),
+      });
+    }
+
     if (this.transporter) {
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
           await this.transporter.sendMail({
-            from: process.env.SMTP_FROM || 'noreply@ecommerce.com',
+            from: this.mailFrom(),
             to: options.to,
             subject: options.subject,
             text: htmlToText(options.html),
@@ -473,13 +577,17 @@ export class MailService implements OnModuleInit {
     }
 
     this.logger.warn(
-      `[${options.tag}] SMTP no configurado — no se envió a ${options.to}`,
+      `[${options.tag}] sin transporte de correo configurado (ni RESEND_API_KEY ni SMTP) — no se envió a ${options.to}`,
     );
     return false;
   }
 
-  async sendPasswordResetEmail(to: string, name: string, resetLink: string) {
-    await this.sendHtml({
+  async sendPasswordResetEmail(
+    to: string,
+    name: string,
+    resetLink: string,
+  ): Promise<boolean> {
+    return this.sendHtml({
       to,
       subject: 'Recuperación de contraseña - Kronio Market',
       tag: 'PASSWORD RESET',
@@ -509,8 +617,12 @@ export class MailService implements OnModuleInit {
     });
   }
 
-  async sendVerificationCode(to: string, name: string, code: string) {
-    await this.sendHtml({
+  async sendVerificationCode(
+    to: string,
+    name: string,
+    code: string,
+  ): Promise<boolean> {
+    return this.sendHtml({
       to,
       subject: 'Código de verificación - Kronio Market',
       tag: 'VERIFICATION CODE',
@@ -587,7 +699,7 @@ export class MailService implements OnModuleInit {
           </tr>`
       : '';
 
-    await this.sendHtml({
+    return this.sendHtml({
       to,
       subject: `Factura de compra #${invoiceNumber} — Kronio Market`,
       tag: 'ORDER CONFIRMATION',
@@ -723,7 +835,6 @@ export class MailService implements OnModuleInit {
 </body>
 </html>`,
     });
-    return true;
   }
 
   async sendOrderCancellationEmail(
@@ -745,7 +856,7 @@ export class MailService implements OnModuleInit {
       )
       .join('\n');
 
-    await this.sendHtml({
+    return this.sendHtml({
       to,
       subject: `Pedido #${orderNumber} cancelado — Kronio Market`,
       tag: 'ORDER CANCELLED',
@@ -796,7 +907,6 @@ export class MailService implements OnModuleInit {
 </body>
 </html>`,
     });
-    return true;
   }
 
   async sendOrderStatusEmail(
@@ -804,7 +914,7 @@ export class MailService implements OnModuleInit {
     name: string,
     orderId: string,
     status: string,
-  ) {
+  ): Promise<boolean> {
     const statusLabels: Record<string, string> = {
       PENDING: 'Pendiente',
       PAID: 'Pagada',
@@ -815,7 +925,7 @@ export class MailService implements OnModuleInit {
 
     const label = statusLabels[status] || status;
 
-    await this.send({
+    return this.send({
       to,
       subject: `Estado de tu orden #${orderId.slice(0, 8)}: ${label}`,
       tag: 'ORDER STATUS',
@@ -838,8 +948,9 @@ export class MailService implements OnModuleInit {
   }> {
     const mailerHost = process.env.SMTP_HOST || null;
     const smtpUser = process.env.SMTP_USER || null;
+    const porHttp = !!this.resendKey;
 
-    if (!this.transporter) {
+    if (!porHttp && !this.transporter) {
       return {
         ok: false,
         smtpConfigured: false,
@@ -847,14 +958,14 @@ export class MailService implements OnModuleInit {
         smtpUser,
         to,
         error:
-          'SMTP no configurado (faltan SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS en las variables de entorno)',
+          'No hay transporte de correo: faltan RESEND_API_KEY (recomendado en Render) o SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS',
       };
     }
 
     if (!to) {
       return {
         ok: false,
-        smtpConfigured: true,
+        smtpConfigured: !porHttp,
         mailerHost,
         smtpUser,
         to,
@@ -864,40 +975,45 @@ export class MailService implements OnModuleInit {
     }
 
     const base = {
-      smtpConfigured: true,
+      smtpConfigured: !porHttp,
       mailerHost,
       smtpUser,
       to,
     };
 
-    try {
-      await this.withTimeout(this.transporter.verify(), 15000);
-    } catch (err) {
-      const portProbes = await Promise.all(
-        [587, 465, 25].map(async (p) => ({
-          port: p,
-          ok: (await this.probeSmtp(mailerHost || '', p)).ok,
-        })),
-      );
-      const reachable = portProbes
-        .filter((p) => p.ok)
-        .map((p) => p.port)
-        .join(', ');
-      return {
-        ...base,
-        ok: false,
-        error: `Fallo al autenticar con ${mailerHost}: ${
-          err instanceof Error ? err.message : err
-        }. Puertos alcanzables desde el servidor: ${
-          reachable || 'ninguno (587/465/25 bloqueados)'
-        }.`,
-      };
+    // Con la API HTTP no hay `verify()` que hacer: la llamada de prueba es la
+    // verificacion. Preguntar por SMTP cuando el transporte es HTTP daria un
+    // fallo de autenticacion en un envio que si funciona.
+    if (!porHttp) {
+      try {
+        await this.withTimeout(this.transporter!.verify(), 15000);
+      } catch (err) {
+        const portProbes = await Promise.all(
+          [587, 465, 25].map(async (p) => ({
+            port: p,
+            ok: (await this.probeSmtp(mailerHost || '', p)).ok,
+          })),
+        );
+        const reachable = portProbes
+          .filter((p) => p.ok)
+          .map((p) => p.port)
+          .join(', ');
+        return {
+          ...base,
+          ok: false,
+          error: `Fallo al autenticar con ${mailerHost}: ${
+            err instanceof Error ? err.message : err
+          }. Puertos alcanzables desde el servidor: ${
+            reachable || 'ninguno (587/465/25 bloqueados)'
+          }.`,
+        };
+      }
     }
 
     const sent = await this.sendHtml({
       to,
       subject: 'Prueba — Kronio Market',
-      tag: 'SMTP TEST',
+      tag: 'MAIL TEST',
       html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
@@ -905,7 +1021,9 @@ export class MailService implements OnModuleInit {
   <div style="max-width:520px;margin:40px auto;background:#fff;border-radius:12px;padding:32px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
     <h1 style="color:#18181b;font-size:20px;margin:0 0 8px">Kronio Market</h1>
     <p style="color:#52525b;font-size:14px;margin:0">Correo de prueba enviado correctamente.</p>
-    <p style="color:#71717a;font-size:12px;margin:20px 0 0;border-top:1px solid #e4e4e7;padding-top:12px">Desde ${smtpUser || 'SMTP'} · ${new Date().toLocaleString('es-CO')}</p>
+    <p style="color:#71717a;font-size:12px;margin:20px 0 0;border-top:1px solid #e4e4e7;padding-top:12px">Desde ${
+      porHttp ? this.mailFrom() : smtpUser || 'SMTP'
+    } · ${new Date().toLocaleString('es-CO')}</p>
   </div>
 </body>
 </html>`,

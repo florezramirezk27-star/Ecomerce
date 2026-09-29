@@ -966,10 +966,18 @@ export class OrdersService {
             );
 
       void mailTask.then(
-        () => {
-          this.logger.log(
-            `Estado #${order.id} → notificado a ${customerEmail}`,
-          );
+        (sent) => {
+          // Antes decia "notificado" sin mirar el resultado, asi que el log
+          // afirmaba un envio que podia no haber ocurrido nunca.
+          if (sent) {
+            this.logger.log(
+              `Estado #${order.id} → notificado a ${customerEmail}`,
+            );
+          } else {
+            this.logger.warn(
+              `No se pudo notificar el estado de ${order.id} a ${customerEmail}`,
+            );
+          }
         },
         (err) => {
           this.logger.error(
@@ -986,10 +994,16 @@ export class OrdersService {
         void this.mailService
           .sendOrderStatusEmail(adminEmail, 'Admin', order.id, status)
           .then(
-            () => {
-              this.logger.log(
-                `Cancelación #${order.id} notificada al admin (${adminEmail})`,
-              );
+            (sent) => {
+              if (sent) {
+                this.logger.log(
+                  `Cancelación #${order.id} notificada al admin (${adminEmail})`,
+                );
+              } else {
+                this.logger.warn(
+                  `No se pudo notificar la cancelación #${order.id} al admin (${adminEmail})`,
+                );
+              }
             },
             (err) => {
               this.logger.error(
