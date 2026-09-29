@@ -941,6 +941,10 @@ export class MailService implements OnModuleInit {
   async sendTestEmail(to: string): Promise<{
     ok: boolean;
     smtpConfigured: boolean;
+    /** `resend` o `smtp`. Sin ninguno de los dos, `ninguno`. */
+    transport: 'resend' | 'smtp' | 'ninguno';
+    /** Remitente real del mensaje, el que veria el cliente. */
+    remitente: string | null;
     mailerHost: string | null;
     smtpUser: string | null;
     to: string;
@@ -954,6 +958,8 @@ export class MailService implements OnModuleInit {
       return {
         ok: false,
         smtpConfigured: false,
+        transport: 'ninguno',
+        remitente: null,
         mailerHost,
         smtpUser,
         to,
@@ -966,6 +972,8 @@ export class MailService implements OnModuleInit {
       return {
         ok: false,
         smtpConfigured: !porHttp,
+        transport: porHttp ? 'resend' : 'smtp',
+        remitente: this.mailFrom(),
         mailerHost,
         smtpUser,
         to,
@@ -976,6 +984,8 @@ export class MailService implements OnModuleInit {
 
     const base = {
       smtpConfigured: !porHttp,
+      transport: (porHttp ? 'resend' : 'smtp') as 'resend' | 'smtp',
+      remitente: this.mailFrom(),
       mailerHost,
       smtpUser,
       to,

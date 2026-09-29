@@ -31,8 +31,17 @@ export default function SecurityPage() {
     try {
       const res = await apiFetch('/mail/test', { method: 'POST' });
       if (res?.ok) {
+        // El transporte puede ser la API de Resend o SMTP. Antes solo se
+        // nombraba SMTP, asi que un envio correcto por HTTP se informaba como
+        // "SMTP: ? → ?".
+        const via = res.transport === 'resend'
+          ? 'vía Resend'
+          : res.mailerHost
+            ? `por SMTP ${res.mailerHost} → ${res.smtpUser || '?'}`
+            : '';
         setMailResult(
-          `Correo enviado a ${res.to || 'el ADMIN_EMAIL'}. Revisa la bandeja (y Spam). SMTP: ${res.mailerHost || '?'} → ${res.smtpUser || '?'}`,
+          `Correo enviado a ${res.to || 'el ADMIN_EMAIL'}${via ? ` ${via}` : ''}. ` +
+            `${res.remitente ? `Desde ${res.remitente}. ` : ''}Revisa la bandeja (y Spam).`,
         );
       } else {
         setMailError(

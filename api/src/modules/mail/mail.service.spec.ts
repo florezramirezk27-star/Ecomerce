@@ -186,4 +186,36 @@ describe('MailService: envio por API HTTP (Resend)', () => {
     expect(res.ok).toBe(true);
     expect(res.error).toBeUndefined();
   });
+
+  it('el diagnostico dice cual es el transporte y quien remite', async () => {
+    // El panel de admin imprimia "SMTP: ? → ?" con un envio correcto por HTTP:
+    // no hay host SMTP que mostrar cuando no se usa SMTP.
+    process.env.RESEND_API_KEY = 're_123';
+    process.env.MAIL_FROM = 'Kronio <hola@kroniomarket.co>';
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'x' }),
+    });
+
+    const service = new MailService();
+    await service.onModuleInit();
+    const res = await service.sendTestEmail('admin@correo.com');
+
+    expect(res.transport).toBe('resend');
+    expect(res.remitente).toBe('Kronio <hola@kroniomarket.co>');
+  });
+
+  it('el diagnostico reporta smtp cuando es el transporte', async () => {
+    process.env.SMTP_HOST = 'smtp.gmail.com';
+    process.env.SMTP_USER = 'kronio@gmail.com';
+    process.env.SMTP_PASS = 'app-password';
+
+    const service = new MailService();
+    await service.onModuleInit();
+    const res = await service.sendTestEmail('sin-destino');
+
+    expect(res.transport).toBe('smtp');
+    expect(res.ok).toBe(false);
+  });
 });
