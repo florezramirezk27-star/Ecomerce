@@ -382,7 +382,21 @@ export default function AdminOrdersPage() {
                         Integraciones
                       </h4>
                       <div className="mb-3 space-y-2 text-sm">
-                        {order.tracking?.dropiOrderId ? (
+                        {order.tracking?.status === 'ERROR' ? (
+                          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                            <p className="font-bold">
+                              No se envió a Dropi
+                            </p>
+                            <p className="mt-1 text-red-600">
+                              {order.tracking.lastEvent ||
+                                'Dropi rechazó la orden.'}
+                            </p>
+                            <p className="mt-1 text-red-500">
+                              El cliente ya tiene la factura pero está sin
+                              guía de envío.
+                            </p>
+                          </div>
+                        ) : order.tracking?.dropiOrderId ? (
                           <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                             <p>
                               <span className="font-semibold text-slate-900">

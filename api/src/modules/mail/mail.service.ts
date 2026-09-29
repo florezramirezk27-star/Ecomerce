@@ -22,6 +22,14 @@ interface ShippingInfo {
   docNumber?: string | null;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function htmlToText(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, '\n')
@@ -305,6 +313,82 @@ export class MailService implements OnModuleInit {
     </div>
     <div style="background:#f4f4f5;padding:16px 24px;text-align:center;font-size:11px;color:#a1a1aa">
       Kronio Market — Notificación automática de pedidos
+    </div>
+  </div>
+</body>
+</html>`,
+    });
+    return true;
+  }
+
+  /**
+   * Aviso aparte y con asunto propio cuando Dropi rechaza la orden. El aviso
+   * normal de "nuevo pedido" es un correo mas del flujo y su banda de Dropi
+   * pasa desapercibida; dos pedidos seguidos se quedaron sin enviar porque
+   * nadie noto ese detalle.
+   */
+  async sendAdminDropiFailureAlert(
+    adminEmail: string,
+    orderId: string,
+    customerName: string | null,
+    customerPhone: string | null,
+    shipping: ShippingInfo,
+    dropiError: string,
+  ): Promise<boolean> {
+    const rows: Array<[string, string]> = [
+      ['Cliente', customerName || shipping.name || 'N/A'],
+      ['Teléfono', customerPhone || shipping.phone || 'N/A'],
+      ['Correo', shipping.email || 'N/A'],
+      ['Dirección', `${shipping.address || 'N/A'}`],
+      ['Ciudad', `${shipping.city || 'N/A'}, ${shipping.state || ''}`],
+    ];
+
+    const rowsHtml = rows
+      .map(
+        ([label, value]) => `
+          <tr>
+            <td style="padding:4px 0;font-size:13px;color:#71717a">${label}</td>
+            <td style="padding:4px 0;text-align:right;font-size:13px;font-weight:bold;color:#18181b">${escapeHtml(
+              value,
+            )}</td>
+          </tr>`,
+      )
+      .join('');
+
+    await this.sendHtml({
+      to: adminEmail,
+      subject: `PEDIDO #${orderId.slice(0, 8)} NO se envío a Dropi — acción requerida`,
+      tag: 'ADMIN DROPI FAILURE ALERT',
+      html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0">
+  <div style="max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
+    <div style="background:#b91c1c;padding:32px 24px;text-align:center">
+      <h1 style="color:#fff;margin:0;font-size:22px;letter-spacing:0.5px">EL PEDIDO NO SE ENVIÓ A DROPI</h1>
+      <p style="color:#fecaca;margin:6px 0 0;font-size:13px">#${orderId}</p>
+    </div>
+    <div style="padding:32px 24px">
+      <p style="margin:0 0 20px;font-size:14px;color:#18181b;line-height:1.6">
+        Dropi rechazó la orden. <strong>El cliente ya recibió su factura pero no
+        tiene guía de envío</strong>, así que hay que resolverlo a mano o
+        reprocesar el pedido desde el panel.
+      </p>
+
+      <div style="background:#fef2f2;border-radius:8px;padding:16px;border:1px solid #fecaca;margin:0 0 20px">
+        <p style="margin:0;font-size:13px;color:#991b1b;line-height:1.6">
+          <strong>Respuesta de Dropi:</strong> ${escapeHtml(dropiError)}
+        </p>
+      </div>
+
+      <div style="background:#f4f4f5;border-radius:8px;padding:16px">
+        <table style="width:100%;font-size:13px;color:#52525b">
+          ${rowsHtml}
+        </table>
+      </div>
+    </div>
+    <div style="background:#f4f4f5;padding:16px 24px;text-align:center;font-size:11px;color:#a1a1aa">
+      Kronio Market — Alerta automática de fallo en Dropi
     </div>
   </div>
 </body>

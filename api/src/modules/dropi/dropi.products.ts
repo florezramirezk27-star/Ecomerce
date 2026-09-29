@@ -24,7 +24,14 @@ interface DropiCatalogEnvelope {
 
 export interface DropiSupplierWarehouseContext {
   supplierId: number;
+  /** Bodega con mas stock. Se conserva por compatibilidad. */
   warehouseId: number;
+  /**
+   * Todas las bodegas del proveedor, de mas a menos stock. El catalogo de
+   * Dropi no expone `sucursal_id`, asi que no se puede saber de antemano
+   * cuales son pedibles: se prueban en orden hasta que una pase.
+   */
+  warehouseIds: number[];
   salePrice: number;
   suggestedPrice: number;
 }
@@ -158,20 +165,30 @@ export class DropiProductsService {
 
     if (!supplierId || warehouses.length === 0) return null;
 
-    const best = warehouses.reduce((acc, w) =>
-      (w.stock || 0) >= (acc.stock || 0) ? w : acc,
-    );
+    // De mas a menos stock, deduplicando. El orden importa: la primera es la
+    // que se intenta primero, y las siguientes son el reintento cuando Dropi
+    // dice que esa bodega no tiene sucursal.
+    const warehouseIds = warehouses
+      .slice()
+      .sort((a, b) => (b.stock || 0) - (a.stock || 0))
+      .map((w) => Number(w.warehouse_id))
+      .filter((id) => Number.isFinite(id) && id > 0)
+      .filter((id, idx, all) => all.indexOf(id) === idx);
 
-    const warehouseId = Number(best.warehouse_id);
+    const warehouseId = warehouseIds[0];
     if (!warehouseId) return null;
 
     this.logger.log(
-      `Dropi contexto resuelto para ${dropiProductId}: supplier=${supplierId}, warehouse=${warehouseId}`,
+      `Dropi contexto resuelto para ${dropiProductId}: supplier=${supplierId}, warehouse=${warehouseId}` +
+        (warehouseIds.length > 1
+          ? ` (candidatas: ${warehouseIds.join(', ')})`
+          : ''),
     );
 
     return {
       supplierId,
       warehouseId,
+      warehouseIds,
       salePrice: Number(product.sale_price) || 0,
       suggestedPrice: Number(product.suggested_price) || 0,
     };

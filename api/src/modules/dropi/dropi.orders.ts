@@ -36,6 +36,8 @@ interface DropiOrderItemInput {
   name: string;
   supplierId?: number;
   warehouseId?: number;
+  /** Bodegas candidatas, en orden de preferencia. La ultima es el respaldo. */
+  warehouseIds?: number[];
   variationId?: number | null;
   suggestedPrice?: number;
 }
@@ -206,67 +208,125 @@ export class DropiOrdersService {
       };
     }
 
-    const body = this.buildFinalOrder(enriched, shipping);
+    // El catalogo de Dropi no dice que bodegas son pedibles (no expone
+    // `sucursal_id`), asi que no se puede elegir bien de una: se prueban en
+    // orden y si Dropi culpa a la bodega se pasa a la siguiente.
+    const candidates = this.warehouseCandidates(enriched);
+    const attempts: Array<number | undefined> =
+      candidates.length > 0 ? candidates : [enriched.warehouseId];
 
-    if (!body) {
-      return {
-        dropiOrderId: null,
-        dropiGuideId: null,
-        carrier: null,
-        status: `Falta configuración de Dropi (${this.lastMissingFields.join(', ')})`,
-        rawResponse: null,
-      };
-    }
+    let lastResult: DropiOrderResult | null = null;
 
-    try {
-      let resData = await this.postOrder(body, token);
+    for (let i = 0; i < attempts.length; i++) {
+      const warehouseId = attempts[i];
+      const body = this.buildFinalOrder({ ...enriched, warehouseId }, shipping);
 
-      if (resData.statusCode === 401) {
-        this.logger.warn(
-          'Dropi order request: token expired, re-logging in...',
-        );
-        this.auth.invalidateToken();
-        token = await this.auth.getToken();
-        resData = await this.postOrder(body, token);
-      }
-
-      const parsed = this.safeParse(resData.data);
-
-      if (resData.statusCode === 200 && parsed?.is_succesfull === true) {
-        const orderId = this.extractOrderId(parsed);
+      if (!body) {
         return {
-          dropiOrderId: orderId,
+          dropiOrderId: null,
           dropiGuideId: null,
-          carrier: shipping.distributionCompanyName || 'Dropi',
-          status: parsed?.status_reason || 'CREATED',
-          rawResponse: parsed ?? resData.data,
+          carrier: null,
+          status: `Falta configuración de Dropi (${this.lastMissingFields.join(', ')})`,
+          rawResponse: null,
         };
       }
 
-      this.logger.warn(
-        `Dropi order failed for ${item.name}: ${resData.statusCode} ${resData.data.slice(0, 300)}`,
-      );
+      try {
+        let resData = await this.postOrder(body, token);
 
-      return {
-        dropiOrderId: null,
-        dropiGuideId: null,
-        carrier: null,
-        status: parsed?.status_reason || `HTTP ${resData.statusCode}`,
-        rawResponse: parsed ?? resData.data,
-      };
-    } catch (err: unknown) {
-      let message = 'unknown error';
-      if (err instanceof Error) message = err.message;
-      else if (typeof err === 'string') message = err;
-      this.logger.error(`Dropi order error for ${item.name}: ${message}`);
-      return {
-        dropiOrderId: null,
-        dropiGuideId: null,
-        carrier: null,
-        status: 'error',
-        rawResponse: { error: message },
-      };
+        if (resData.statusCode === 401) {
+          this.logger.warn(
+            'Dropi order request: token expired, re-logging in...',
+          );
+          this.auth.invalidateToken();
+          token = await this.auth.getToken();
+          resData = await this.postOrder(body, token);
+        }
+
+        const parsed = this.safeParse(resData.data);
+
+        if (resData.statusCode === 200 && parsed?.is_succesfull === true) {
+          const orderId = this.extractOrderId(parsed);
+          if (i > 0) {
+            this.logger.warn(
+              `Dropi: ${item.name} se creo con la bodega ${warehouseId} tras ${i} rechazo(s) de bodega anterior(es)`,
+            );
+          }
+          return {
+            dropiOrderId: orderId,
+            dropiGuideId: null,
+            carrier: shipping.distributionCompanyName || 'Dropi',
+            status: parsed?.status_reason || 'CREATED',
+            rawResponse: parsed ?? resData.data,
+          };
+        }
+
+        const reason = parsed?.status_reason || `HTTP ${resData.statusCode}`;
+        lastResult = {
+          dropiOrderId: null,
+          dropiGuideId: null,
+          carrier: null,
+          status: reason,
+          rawResponse: parsed ?? resData.data,
+        };
+
+        if (i === attempts.length - 1 || !this.isWarehouseRejection(reason)) {
+          this.logger.warn(
+            `Dropi order failed for ${item.name}: ${resData.statusCode} ${resData.data.slice(0, 300)}`,
+          );
+          return lastResult;
+        }
+
+        this.logger.warn(
+          `Dropi: bodega ${warehouseId} rechazada para ${item.name} ("${reason}"); se prueba la siguiente`,
+        );
+      } catch (err: unknown) {
+        // Fallo de red o de token: nada que ver con la bodega, no se reintenta.
+        let message = 'unknown error';
+        if (err instanceof Error) message = err.message;
+        else if (typeof err === 'string') message = err;
+        this.logger.error(`Dropi order error for ${item.name}: ${message}`);
+        return {
+          dropiOrderId: null,
+          dropiGuideId: null,
+          carrier: null,
+          status: 'error',
+          rawResponse: { error: message },
+        };
+      }
     }
+
+    return (
+      lastResult ?? {
+        dropiOrderId: null,
+        dropiGuideId: null,
+        carrier: null,
+        status: `Dropi no devolvio respuesta para ${item.name}`,
+        rawResponse: null,
+      }
+    );
+  }
+
+  private warehouseCandidates(item: DropiOrderItemInput): number[] {
+    const out: number[] = [];
+    const push = (value: unknown) => {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0 && !out.includes(n)) out.push(n);
+    };
+
+    // La bodega del proveedor va primero: es la que Dropi confirmo en las ordenes
+    // que si se crearon (`order.warehouse.user_id` = el del proveedor). La de
+    // .env va de ultima porque antes nunca se usaba y no hay evidencia de que
+    // sirva, pero mejor eso que perder el pedido.
+    push(item.warehouseId);
+    for (const id of item.warehouseIds ?? []) push(id);
+    push(process.env.DROPI_WAREHOUSE_ID);
+
+    return out;
+  }
+
+  private isWarehouseRejection(reason: string): boolean {
+    return /bodega|warehouse|sucursal|branch/i.test(reason);
   }
 
   async cancelOrder(dropiOrderId: number): Promise<DropiCancelResult> {
@@ -372,6 +432,10 @@ export class DropiOrdersService {
       ...item,
       supplierId: item.supplierId ?? ctx.supplierId,
       warehouseId: item.warehouseId ?? ctx.warehouseId,
+      warehouseIds: [
+        ...(item.warehouseIds ?? []),
+        ...(ctx.warehouseIds ?? []),
+      ],
       suggestedPrice: ctx.suggestedPrice,
     };
   }

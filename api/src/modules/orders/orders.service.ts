@@ -324,6 +324,9 @@ export class OrdersService {
 
     if (dropiItems.length > 0) {
       try {
+        // `ERROR` y no `PENDING`: un pedido que Dropi rechazo no esta en
+        // espera, esta perdido. Con `PENDING` era indistinguible de uno sano y
+        // nadie se enteraba de que no se iba a enviar.
         await this.prisma.orderTracking.upsert({
           where: { orderId: order.id },
           create: {
@@ -332,7 +335,7 @@ export class OrdersService {
               ? String(dropiResult.orderId)
               : null,
             carrier: dropiResult.carrier,
-            status: dropiResult.success ? 'CREATED' : 'PENDING',
+            status: dropiResult.success ? 'CREATED' : 'ERROR',
             lastEvent: dropiResult.message,
             rawResponse: dropiResult.raw as Prisma.InputJsonValue,
             checkedAt: new Date(),
@@ -342,7 +345,7 @@ export class OrdersService {
               ? String(dropiResult.orderId)
               : null,
             carrier: dropiResult.carrier,
-            status: dropiResult.success ? 'CREATED' : 'PENDING',
+            status: dropiResult.success ? 'CREATED' : 'ERROR',
             lastEvent: dropiResult.message,
             rawResponse: dropiResult.raw as Prisma.InputJsonValue,
             checkedAt: new Date(),
@@ -360,6 +363,16 @@ export class OrdersService {
     const adminEmail =
       process.env.ADMIN_EMAIL || process.env.ADMIN_GOOGLE_EMAIL || '';
     if (adminEmail) {
+      this.notifyDropiFailure(adminEmail, order.id, {
+        name: user?.name || dto.shippingName,
+        phone: dto.shippingPhone,
+        email: customerEmail,
+        address: dto.shippingAddress,
+        city: dto.shippingCity,
+        state: dto.shippingState,
+        zip: dto.shippingZip,
+      }, dropiResult, dropiItems.length);
+
       const adminTask = this.mailService.sendAdminOrderNotification(
         adminEmail,
         user?.name || dto.shippingName,
@@ -547,7 +560,7 @@ export class OrdersService {
               ? String(dropiResult.orderId)
               : null,
             carrier: dropiResult.carrier,
-            status: dropiResult.success ? 'CREATED' : 'PENDING',
+            status: dropiResult.success ? 'CREATED' : 'ERROR',
             lastEvent: dropiResult.message,
             rawResponse: dropiResult.raw as Prisma.InputJsonValue,
             checkedAt: new Date(),
@@ -557,7 +570,7 @@ export class OrdersService {
               ? String(dropiResult.orderId)
               : null,
             carrier: dropiResult.carrier,
-            status: dropiResult.success ? 'CREATED' : 'PENDING',
+            status: dropiResult.success ? 'CREATED' : 'ERROR',
             lastEvent: dropiResult.message,
             rawResponse: dropiResult.raw as Prisma.InputJsonValue,
             checkedAt: new Date(),
@@ -580,6 +593,17 @@ export class OrdersService {
 
     const adminEmail =
       process.env.ADMIN_EMAIL || process.env.ADMIN_GOOGLE_EMAIL || '';
+    if (adminEmail) {
+      this.notifyDropiFailure(adminEmail, order.id, {
+        name: user?.name || shipping.name,
+        phone: shipping.phone,
+        email: customerEmail,
+        address: shipping.address,
+        city: shipping.city,
+        state: shipping.state,
+        zip: shipping.zip,
+      }, dropiResult, dropiItems.length);
+    }
     const skipEmails = alreadyInDropi && !force;
 
     let customerQueued = false;
@@ -659,6 +683,68 @@ export class OrdersService {
         admin: skipEmails ? 'skipped' : adminQueued ? 'queued' : 'skipped',
       },
     };
+  }
+
+  /**
+   * Aviso al admin cuando Dropi rechaza la orden. Va aparte del aviso normal de
+   * "nuevo pedido": ahi el fallo queda como una linea mas y se pierde de vista.
+   */
+  private notifyDropiFailure(
+    adminEmail: string,
+    orderId: string,
+    customer: {
+      name?: string | null;
+      phone?: string | null;
+      email?: string | null;
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      zip?: string | null;
+    },
+    dropiResult: { success: boolean | null; message: string },
+    dropiItemsCount: number,
+  ): void {
+    // `success === null` es el caso "pedido sin productos de proveedor": no
+    // hay fallo que avisar. `false` si no es un rechazo de verdad.
+    if (dropiItemsCount === 0 || dropiResult.success !== false) return;
+
+    this.logger.error(
+      `Dropi rechazó el pedido ${orderId}: ${dropiResult.message}`,
+    );
+
+    void this.mailService
+      .sendAdminDropiFailureAlert(
+        adminEmail,
+        orderId,
+        customer.name ?? null,
+        customer.phone ?? null,
+        {
+          name: customer.name || '',
+          phone: customer.phone || '',
+          email: customer.email,
+          address: customer.address || '',
+          city: customer.city || '',
+          state: customer.state || '',
+          zip: customer.zip,
+        },
+        dropiResult.message,
+      )
+      .then(
+        (sent) => {
+          if (!sent) {
+            this.logger.warn(
+              `No se pudo enviar la alerta de fallo de Dropi (pedido ${orderId})`,
+            );
+          }
+        },
+        (err) => {
+          this.logger.error(
+            `Error enviando la alerta de Dropi (pedido ${orderId}): ${
+              err instanceof Error ? err.message : err
+            }`,
+          );
+        },
+      );
   }
 
   async reprocessOrder(orderId: string, force = false) {
