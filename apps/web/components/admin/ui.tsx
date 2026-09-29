@@ -192,12 +192,15 @@ export function Select({
 export function Label({
   children,
   className,
+  htmlFor,
 }: {
   children: ReactNode;
   className?: string;
+  htmlFor?: string;
 }) {
   return (
     <label
+      htmlFor={htmlFor}
       className={cn('mb-1.5 block text-sm font-medium text-slate-700', className)}
     >
       {children}
@@ -209,15 +212,22 @@ export function Field({
   label,
   children,
   className,
+  htmlFor,
+  hint,
 }: {
   label: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Conecta el label con su control. Sin esto ellector de pantalla
+      anuncia el campo sin nombre y al hacer clic en el texto no enfoca. */
+  htmlFor?: string;
+  hint?: ReactNode;
 }) {
   return (
     <div className={cn('space-y-1.5', className)}>
-      <Label>{label}</Label>
+      <Label htmlFor={htmlFor}>{label}</Label>
       {children}
+      {hint}
     </div>
   );
 }
