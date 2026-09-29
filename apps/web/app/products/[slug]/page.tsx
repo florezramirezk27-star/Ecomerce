@@ -190,10 +190,21 @@ export default function ProductPage() {
   }
 
   const inStock = product.stock > 0;
-  const stockPercent = Math.min(
-    100,
-    (product.stock / 20) * 100,
-  );
+  // Escala logaritmica, no lineal. Con `stock / 20` cualquier producto con mas
+  // de 20 unidades clavaba la barra al 100% y se veia siempre igual, que es lo
+  // mismo que no tener barra: aqui los stock van de 1 a 1500, tres ordenes de
+  // magnitud, justo el rango donde una escala lineal no distingue nada. El log
+  // reparte el 0-100% para que se vea la diferencia entre 5 y 50 unidades, que
+  // es la que un comprador nota al mirar la ficha.
+  const STOCK_BAR_MAX = 1000;
+  const stockPercent = inStock
+    ? Math.min(
+        100,
+        Math.round(
+          (Math.log10(product.stock + 1) / Math.log10(STOCK_BAR_MAX + 1)) * 100,
+        ),
+      )
+    : 0;
   const priceFormatted = Number(
     product.price,
   ).toLocaleString("es-CO", {
