@@ -217,6 +217,37 @@ export default function ProductPage() {
   return `${startStr} - ${endStr}`;
 }
 
+  // Eran tres bloques de JSX casi identicos que solo cambiaban en el degradado,
+  // el icono, los textos y el rango de fechas. Con los datos juntos el marcado
+  // se reduce a un `map` y las tres variantes quedan a la vista, que es donde se
+  // tocan cuando se editan.
+  const beneficios = [
+    {
+      titulo: "Despacho rápido",
+      detalle: "Sale de bodega en 24 horas",
+      rango: [1, 2],
+      gradiente: "from-blue-400 to-blue-600 shadow-blue-200",
+      icono:
+        "M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z",
+    },
+    {
+      titulo: "Envío gratis",
+      detalle: "En cualquier ciudad de Colombia",
+      rango: [3, 5],
+      gradiente: "from-emerald-400 to-emerald-600 shadow-emerald-200",
+      icono:
+        "M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z",
+    },
+    {
+      titulo: "Pago seguro",
+      detalle: "Pagas solo cuando recibes tu pedido",
+      rango: [5, 7],
+      gradiente: "from-purple-400 to-purple-600 shadow-purple-200",
+      icono:
+        "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
+    },
+  ];
+
 type MediaItem =
   | { kind: "image"; src: string }
   | { kind: "video"; src: string; embed: string | null };
@@ -555,55 +586,42 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
             </div>
 
 
-            <div className="border-t border-gray-200 pt-5">
-              <h3 className="text-xs font-semibold text-gray-900 mb-4 uppercase tracking-wider">
+            <div className="border-t border-gray-200 pt-4">
+              <h3 className="text-xs font-semibold text-gray-900 mb-3 uppercase tracking-wider">
                 Lo que necesitas saber
               </h3>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <span className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 shadow-md shadow-blue-200 flex items-center justify-center shrink-0">
-                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
-                    </svg>
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-800 leading-tight">Despacho rápido</p>
-                    <p className="text-xs text-gray-500 leading-tight">Sale de bodega en 24 horas</p>
-                    <span className="inline-block mt-1 text-[11px] font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
-                      Llega {formatDateRange(1, 2)}
+              {/* Un beneficio por linea: icono, titulo, detalle y fecha en la
+                  misma fila. `flex-wrap` mas `basis-40` en el grupo de textos
+                  deja que la fecha baje a su propia linea en pantallas
+                  estrechas, en vez de partirse o quedar cortada. */}
+              <div className="space-y-2">
+                {beneficios.map((b) => (
+                  <div
+                    key={b.titulo}
+                    className="flex flex-wrap items-center gap-x-2.5 gap-y-1"
+                  >
+                    <span
+                      className={`w-7 h-7 shrink-0 rounded-full bg-gradient-to-br ${b.gradiente} shadow-sm flex items-center justify-center`}
+                    >
+                      <svg
+                        className="w-3.5 h-3.5 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d={b.icono} />
+                      </svg>
+                    </span>
+                    <div className="flex flex-1 basis-40 flex-wrap items-baseline gap-x-2">
+                      <p className="text-sm font-semibold text-gray-800">
+                        {b.titulo}
+                      </p>
+                      <p className="text-xs text-gray-500">{b.detalle}</p>
+                    </div>
+                    <span className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+                      Llega {formatDateRange(b.rango[0], b.rango[1])}
                     </span>
                   </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <span className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-md shadow-emerald-200 flex items-center justify-center shrink-0">
-                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                    </svg>
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-800 leading-tight">Envío gratis</p>
-                    <p className="text-xs text-gray-500 leading-tight">En cualquier ciudad de Colombia</p>
-                    <span className="inline-block mt-1 text-[11px] font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
-                      Llega {formatDateRange(3, 5)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <span className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 shadow-md shadow-purple-200 flex items-center justify-center shrink-0">
-                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                    </svg>
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-800 leading-tight">Pago seguro</p>
-                    <p className="text-xs text-gray-500 leading-tight">Pagas solo cuando recibes tu pedido</p>
-                    <span className="inline-block mt-1 text-[11px] font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
-                      Llega {formatDateRange(5, 7)}
-                    </span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
             </div>
