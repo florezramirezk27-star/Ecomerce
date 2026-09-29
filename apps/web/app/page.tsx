@@ -101,7 +101,6 @@ export default function Home() {
                 products={recommended}
                 label="Recomendados"
                 title="Recomendados para ti"
-                subtitle="Una selección curada con los productos mejor valorados y disponibles hoy en la tienda."
                 actionHref="/products"
               />
             </section>

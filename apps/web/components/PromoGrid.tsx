@@ -40,11 +40,6 @@ function discountPct(product: Product) {
 export default function PromoGrid({ products }: { products: Product[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const maxDiscount = products.reduce(
-    (max, p) => Math.max(max, discountPct(p)),
-    0,
-  );
-
   function scrollByDir(dir: "left" | "right") {
     if (!scrollRef.current) return;
     const amount = scrollRef.current.clientWidth * 0.75;
@@ -65,14 +60,6 @@ export default function PromoGrid({ products }: { products: Product[] }) {
         tone="rose"
         label="Oferta flash"
         title="Productos en Promoción"
-        // El subtitulo absorbia el texto de la pill que se quito ("cantidades
-        // limitadas"). Tres dispositivos de urgencia uno encima del otro,
-        // siendo la seccion entera una oferta, es ruido.
-        subtitle={
-          maxDiscount > 0
-            ? `Ahorra hasta -${maxDiscount}% en productos seleccionados. Cantidades limitadas, precios válidos mientras haya stock.`
-            : "Precios rebajados por tiempo limitado mientras haya stock."
-        }
         actionHref="/products?onSale=true"
         actionLabel="Ver todas las ofertas"
       />
