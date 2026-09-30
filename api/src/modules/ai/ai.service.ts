@@ -59,6 +59,20 @@ export class AIService {
       this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.5-flash';
     this.model = google(modelName);
 
+    // Sin esta linea el arranque no decia nada y el chat caia al clasificador
+    // local de intents sin que nadie se enterara. El bot respondia igual de
+    // bien y sin un solo error en el log, asi que un despliegue con la clave
+    // faltante pasaba desapercibido. Esto lo hace visible de una vez.
+    if (this.hasApiKey) {
+      this.logger.log(`IA real encendida: Gemini ${modelName}`);
+    } else {
+      this.logger.warn(
+        'GOOGLE_GENERATIVE_AI_API_KEY no esta configurada: el chat responde ' +
+          'con el clasificador local de intents, no con Gemini. Sin busqueda ' +
+          'semantica y sin las herramientas de stock y rastreo.',
+      );
+    }
+
     this.systemPrompt = `Eres "KronioBot", un agente de ventas inteligente de Kronio Market, una tienda online colombiana.
 
 PERSONALIDAD:
@@ -456,6 +470,13 @@ FORMATO:
       return 'THANKS';
     }
 
+    // Un numero solo, del largo de una guia de Dropi, es lo que el cliente
+    // contesta cuando el bot le pide el numero. Sin esto caia en UNKNOWN y
+    // recibia el menu de "que puedo hacer", que no le servia de nada.
+    if (/^[\s#:.-]*\d[\d\s#:.-]{7,}$/.test(message.trim())) {
+      return 'ORDER_STATUS';
+    }
+
     return 'UNKNOWN';
   }
 
@@ -674,13 +695,24 @@ FORMATO:
       }
 
       case 'SHIPPING':
+        // El tiempo de entrega se quitaba de aqui porque estaba escrito a mano
+        // y nadie lo habia comprobado. El checkout no cobra flete aparte: pide
+        // la direccion y el total es el del producto, asi que tampoco se puede
+        // prometer un monto aqui. Lo que si es cierto se dice, lo demas se
+        // manda al checkout, que es donde el cliente lo ve confirmado.
         return {
-          text: '📦 **Envíos a toda Colombia.** Realizamos entregas en 3 a 7 días hábiles dependiendo de tu ubicación. El pago es contra entrega (efectivo). El costo de envío se calcula al momento de finalizar la compra. ¿En qué ciudad estás para darte más detalles?',
+          text: '📦 **Envíos a toda Colombia.** El pago es contra entrega, en efectivo.\n\nEl costo y el tiempo de entrega te los confirma el checkout al final de la compra, cuando ya tenemos tu ciudad. Si quieres, dime qué producto estás mirando y te paso el precio.',
         };
 
       case 'ORDER_STATUS':
+        // Aqui antes se ofrecia rastrear la guia y se pedia el numero. Ese
+        // numero no servia para nada: la herramienta rastrearPedidoDropi solo
+        // la invoca Gemini y este camino no la toca, asi que el cliente
+        // respondia con su guia y el bot le contestaba el menu de "que puedo
+        // hacer". Ahora se manda a Mis Pedidos, que si muestra el estado real
+        // de la orden, y un numero suelto tambien aterriza aqui.
         return {
-          text: '📋 Para consultar el estado de tu pedido, ve a la sección "Mis Pedidos" en tu cuenta e ingresa el número de pedido. Si tienes la guía de Dropi, puedo ayudarte a rastrearlo. ¿Cuál es tu número de guía o pedido?',
+          text: '📋 El estado de tu pedido lo ves en **"Mis Pedidos"**, dentro de tu cuenta: ahí sale el número de pedido y la guía de envío con su estado actualizado.\n\nSi no te acuerdas del número, escríbele a soporte por el canal de contacto de la página y lo buscamos por tu correo.',
         };
 
       case 'PRODUCT_INFO': {

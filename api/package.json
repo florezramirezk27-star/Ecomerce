@@ -105,6 +105,10 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
+    "moduleNameMapper": {
+      "^@ai-sdk/google$": "<rootDir>/__mocks__/@ai-sdk/google.ts",
+      "^ai$": "<rootDir>/__mocks__/ai.ts"
+    },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],
