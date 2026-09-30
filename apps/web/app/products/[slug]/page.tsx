@@ -385,7 +385,7 @@ const isVideo = selectedMedia?.kind === "video";
                   alt={product.name}
                   priority
                   sizes="(max-width: 1024px) 100vw, 50vw"
-                  className="object-cover"
+                  className="object-contain"
                 />
               )}
             </div>
@@ -631,7 +631,7 @@ const isVideo = selectedMedia?.kind === "video";
 
 
             <div className="border-t border-gray-200 pt-4">
-              <h3 className="text-xs font-semibold text-gray-900 mb-4 uppercase tracking-wider text-center">
+              <h3 className="text-xs font-semibold text-gray-900 mb-4 uppercase tracking-wider text-left">
                 Lo que necesitas saber
               </h3>
               {/* Los tres iconos en fila unidos por una linea, como linea de
@@ -647,9 +647,16 @@ const isVideo = selectedMedia?.kind === "video";
                 />
                 <div className="relative grid grid-cols-3 gap-2 sm:gap-3">
                   {beneficios.map((b) => (
+                    /* `items-center` se queda aunque el texto sea izquierdo: la
+                       linea de tiempo de arriba ancla los iconos al centro de su
+                       columna, y si se alinearan a la izquierda la linea pasaria
+                       al lado de los nodos en vez de cruzarlos. El texto si va a
+                       la izquierda, y necesita `w-full` para que la alineacion se
+                       note, porque sin esto el parrafo se ajusta al ancho del
+                       texto y quedaria igual de centrado. */
                     <div
                       key={b.titulo}
-                      className="flex flex-col items-center text-center gap-1.5"
+                      className="flex flex-col items-center text-left gap-1.5"
                     >
                       <span
                         className={`w-9 h-9 shrink-0 rounded-full bg-gradient-to-br ${b.gradiente} ring-4 ring-orange-50 shadow-sm flex items-center justify-center`}
@@ -662,10 +669,10 @@ const isVideo = selectedMedia?.kind === "video";
                           <path d={b.icono} />
                         </svg>
                       </span>
-                      <p className="text-xs font-semibold text-gray-800 leading-tight">
+                      <p className="w-full text-xs font-semibold text-gray-800 leading-tight">
                         {b.titulo}
                       </p>
-                      <p className="text-[11px] text-gray-500 leading-tight">
+                      <p className="w-full text-[11px] text-gray-500 leading-tight">
                         {b.detalle}
                       </p>
                       {/* Sin el "Llega" delante. Ese prefijo era lo que
