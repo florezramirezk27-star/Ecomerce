@@ -13,15 +13,12 @@ export const API_URL = isServer
   ? (process.env.API_URL || 'http://localhost:3001')
   : (process.env.NEXT_PUBLIC_API_URL || '/api/proxy');
 
-export function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('token');
-}
-
-export function setToken(token: string) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem('token', token);
-}
+// El token de sesion no se guarda en ningun sitio del navegador. Solo viaja en
+// la cookie httpOnly que pone la API, y por eso estas peticiones van siempre con
+// credentials: 'include'. Antes se copiaba a localStorage y ademas se mandaba
+// como Authorization Bearer; con esa copia, cualquier JavaScript que corriera en
+// la pagina podia leerla con localStorage.getItem('token') y quedarse con la
+// sesion del admin. Un token de refresco tampoco sirve: leerlo basta.
 
 const CSRF_COOKIE_NAMES = ['__Host-csrf-token', 'csrf-token'];
 
@@ -83,15 +80,11 @@ async function performRefresh(): Promise<boolean> {
   try {
     await ensureCsrfCookie();
     const csrfToken = getCsrfToken();
-    const token = getToken();
-
-    if (!token) return false;
 
     const response = await fetchWithRetry(`${API_URL}/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
         ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
       },
       credentials: 'include',
@@ -100,13 +93,11 @@ async function performRefresh(): Promise<boolean> {
 
     if (!response.ok) return false;
 
-    const data = await response.json();
+    // /auth/refresh renueva la cookie httpOnly y devuelve solo el usuario. No
+    // hay token que guardar: la cookie ya cambio sola.
+    const data = await response.json().catch(() => null);
 
-    if (data.access_token) {
-      setToken(data.access_token);
-    }
-
-    if (data.user && !isServer) {
+    if (data?.user && !isServer) {
       localStorage.setItem('user', JSON.stringify(data.user));
       window.dispatchEvent(new Event('auth-change'));
     }
@@ -119,9 +110,10 @@ async function performRefresh(): Promise<boolean> {
 
 function handleSessionExpired() {
   if (isServer) return;
-  localStorage.removeItem('token');
   localStorage.removeItem('user');
-  document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
+  // La cookie 'token' no se toca aqui y no se puede: es httpOnly, asi que
+  // document.cookie no la ve. La limpia el logout de la API. La de 'role' si es
+  // legible y hay que borrarla para que la UI no siga mostrando el rol.
   document.cookie = 'role=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
   window.dispatchEvent(new Event('auth-change'));
   window.location.href = '/login';
@@ -141,11 +133,6 @@ export async function apiFetch(
 
   if (!isFormData) {
     headers['Content-Type'] = 'application/json';
-  }
-
-  const token = getToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
   }
 
   const isSafeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(method);

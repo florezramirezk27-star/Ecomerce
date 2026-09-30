@@ -51,6 +51,16 @@ export class AuthController {
     };
   }
 
+  // El token viaja solo por aqui, en la cookie httpOnly. Nunca debe volver en
+  // el cuerpo del JSON: el frontend lo guardaba en localStorage y lo mandaba
+  // como Authorization Bearer, con lo que cualquier JavaScript de la pagina
+  // podia leerlo con localStorage.getItem('token') y quedarse con la sesion,
+  // incluida la de admin. La cookie httpOnly no protege nada mientras exista
+  // esa copia.
+  //
+  // El extractor de JwtStrategy sigue admitiendo el header Bearer a proposito:
+  // hay clientes que no son navegador. Lo que no debe pasar es que un navegador
+  // lo use. Por eso login, refresh y exchange devuelven solo el usuario.
   private setTokenCookie(res: Response, token: string) {
     const isProduction = process.env.NODE_ENV === 'production';
     const maxAge = accessTokenMs();
@@ -107,7 +117,6 @@ export class AuthController {
     setCsrfCookie(res, createCsrfToken());
     return {
       user: result.user,
-      access_token: result.access_token,
     };
   }
 
@@ -170,7 +179,6 @@ export class AuthController {
 
     return {
       user: result.user,
-      access_token: result.access_token,
     };
   }
 
@@ -237,7 +245,6 @@ export class AuthController {
     setCsrfCookie(res, createCsrfToken());
     return {
       user: result.user,
-      access_token: result.access_token,
     };
   }
 

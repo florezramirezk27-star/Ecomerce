@@ -25,7 +25,8 @@ function CallbackContent() {
           body: JSON.stringify({ code }),
         });
 
-        setAuth(result.user, result.access_token);
+        // El exchange devuelve solo el usuario; la credencial es la cookie.
+        setAuth(result.user);
         router.replace(result.user.role === 'ADMIN' ? '/admin' : '/');
       } catch {
         router.replace('/login?error=google_auth_failed');

@@ -1,6 +1,6 @@
 // Admin shared types and utilities
 
-import { getToken, refreshSession } from './api';
+import { refreshSession } from './api';
 
 export interface User {
   id: string;
@@ -134,15 +134,12 @@ export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   '/api/proxy';
 
+// Solo el Content-Type. El token ya no se manda aqui: viaja en la cookie
+// httpOnly y estas peticiones llevan credentials: 'include' mas abajo.
 export const getAuthHeader = (body?: BodyInit) => {
   const headers: Record<string, string> = {
     ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
   };
-
-  const token = getToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
 
   return headers;
 };
@@ -282,9 +279,9 @@ export const apiFetch = async (
 
   if (response.status === 401) {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
       localStorage.removeItem('user');
-      document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
+      // La cookie 'token' es httpOnly: no se puede borrar desde aqui. La
+      // limpia el logout de la API. La de 'role' si es legible.
       document.cookie = 'role=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
       window.dispatchEvent(new Event('auth-change'));
       window.location.href = '/login';

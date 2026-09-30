@@ -86,7 +86,6 @@ export default function AdminLayout({
 
       const isServerAdmin = await verifyAdminWithServer();
       if (!isServerAdmin) {
-        localStorage.removeItem('token');
         localStorage.removeItem('user');
         if (!redirecting.current) {
           redirecting.current = true;

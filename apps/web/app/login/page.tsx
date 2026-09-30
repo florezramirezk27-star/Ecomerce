@@ -51,7 +51,9 @@ function LoginForm() {
 
     const data = await res.json();
 
-    setAuth(data.user, data.access_token);
+    // La respuesta ya no trae token: la cookie httpOnly ya quedo puesta por la
+    // API. Aqui solo se guarda el usuario para pintar la interfaz.
+    setAuth(data.user);
 
     const redirect = searchParams.get("redirect");
     if (redirect && data.user.role === "ADMIN") {
