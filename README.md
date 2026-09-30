@@ -15,7 +15,7 @@ Monorepo gestionado con **pnpm workspaces** compuesto por dos aplicaciones:
 |------|-------------|
 | Frontend | Next.js 16 (App Router), React 19, Tailwind CSS v4, Framer Motion, Recharts |
 | Backend | NestJS 11, Express 5, Prisma 6 (PostgreSQL), Socket.IO |
-| IA / Chatbot | Google Gemini (Vercel AI SDK), OpenAI embeddings, RAG con pgvector |
+| IA / Chatbot | Google Gemini (Vercel AI SDK) con tool calling |
 | Autenticacion | JWT + sesiones server-side, Google OAuth, CSRF, bcrypt |
 | Base de datos | PostgreSQL (Neon), Redis (Upstash) |
 | Upload de imagenes | Cloudinary, AWS S3 |
@@ -36,7 +36,7 @@ Monorepo gestionado con **pnpm workspaces** compuesto por dos aplicaciones:
 | `Session` | Sesiones server-side vinculadas a JWT |
 | `Category` | Categorias de productos |
 | `Product` | Productos con precio, stock, galeria de imagenes, video, vinculo a Dropi |
-| `ProductEmbedding` | Embeddings vectoriales (pgvector, 1536 dim) para busqueda semantica |
+| `ProductEmbedding` | Tabla de embeddings vectoriales (pgvector). Ya no la usa el codigo; queda en el esquema para no romper la base |
 | `DiscountCode` | Codigos de descuento (porcentaje/fijo, flash deals, usos maximos, expiracion) |
 | `Cart` / `CartItem` | Carrito de compras por usuario |
 | `Order` | Pedidos con estados (PENDING/PAID/SHIPPED/DELIVERED/CANCELLED), datos de envio, idempotencyKey |
@@ -122,10 +122,6 @@ El modulo mas sofisticado del proyecto — un agente de ventas con IA.
 - **Tool calling** con 2 herramientas:
   - `consultarStockYPrecio` — Consulta stock y precio de productos en tiempo real
   - `rastrearPedidoDropi` — Rastrea estado de envio via Dropi
-- **RAG (Retrieval-Augmented Generation):**
-  - Embeddings con OpenAI text-embedding-3-small
-  - Busqueda semantica con pgvector
-  - Optimizacion de consultas via LLM
 - **UI generativa** — Retorna componentes UI estructurados (carruseles de productos, actualizaciones de tracking) junto al texto
 - **Maquina de estados de conversacion** — Trackea el recorrido del usuario (EXPLORING -> COMPARING -> INTENT_TO_BUY -> CHECKOUT_READY)
 - **Guard de prompt injection** — Detecta y bloquea ataques de inyeccion
@@ -222,7 +218,7 @@ Plantillas HTML para:
 │           ├── orders/             # Checkout, gestion de pedidos, cancelacion sincronizada con Dropi
 │           ├── dashboard/          # Estadisticas y analytics del admin
 │           ├── chat/               # Controller + WebSocket gateway del chat
-│           ├── ai/                 # Agente IA (Gemini, RAG, tools, guardrails)
+│           ├── ai/                 # Agente IA (Gemini, tools, guardrails)
 │           ├── dropi/              # Integracion con Dropi dropshipping (login 2FA, catalogo, ordenes, tracking)
 │           ├── dropi-integration/  # Puente WooCommerce (webhooks /wp-json/wc/v3) para pedidos de Dropi
 │           ├── uploads/            # Upload de imagenes (Cloudinary/S3)
@@ -315,8 +311,7 @@ Las principales:
 | `JWT_SECRET` | Render | Secreto para firmar JWT. Si falta, la app no arranca |
 | `JWT_ACCESS_EXPIRES_IN` | Render | Duracion del access token. OJO: `JWT_EXPIRES_IN` no lo lee nadie |
 | `CORS_ORIGIN` | Render | Origen exacto permitido. Una sola URL, sin coma |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Render | KronioBot (Gemini). Sin ella el chat no responde |
-| `OPENAI_API_KEY` | Render | Embeddings para la busqueda semantica y el RAG |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Render | KronioBot (Gemini). Sin ella el chat usa el fallback local por keywords |
 | `CLOUDINARY_*` | Render | Credenciales de Cloudinary (si esta vacio, se usa S3) |
 | `AWS_*` | Render | Credenciales de AWS S3 |
 | `SMTP_*` | Render | Email. Render bloquea el SMTP saliente: no llega a enviar |

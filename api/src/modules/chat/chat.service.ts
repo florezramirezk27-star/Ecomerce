@@ -1,9 +1,7 @@
-import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChatIntent } from '@prisma/client';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
-import axios from 'axios';
 import {
   ChatContext,
   ProductRecommendation,
@@ -16,11 +14,6 @@ interface SessionContext {
 
 @Injectable()
 export class ChatService {
-  private readonly logger = new Logger(ChatService.name);
-  private readonly openaiKey: string;
-  private readonly openaiModel: string;
-  private readonly openaiEndpoint: string;
-
   private readonly memoryStore = new Map<string, SessionContext>();
   private readonly SESSION_TTL_MS = 30 * 60 * 1000;
 
@@ -44,17 +37,7 @@ INFORMACIÓN DE LA TIENDA:
 - Envíos: A toda Colombia
 - Horario de atención: 8:00 AM - 6:00 PM`;
 
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly prisma: PrismaService,
-  ) {
-    this.openaiKey = this.configService.get<string>('OPENAI_API_KEY') ?? '';
-    this.openaiModel =
-      this.configService.get<string>('OPENAI_MODEL') ?? 'gpt-4o-mini';
-    this.openaiEndpoint =
-      this.configService.get<string>('OPENAI_ENDPOINT') ??
-      'https://api.openai.com/v1/chat/completions';
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   private static hashSecret(secret: string): string {
     return createHash('sha256').update(secret, 'utf8').digest('hex');
@@ -268,116 +251,6 @@ INSTRUCCIONES ESPECÍFICAS:
 4. Responde de forma natural y conversacional.`;
   }
 
-  async queryAI(
-    messages: Array<{ role: string; content: string }>,
-  ): Promise<string> {
-    if (!this.openaiKey) {
-      this.logger.warn(
-        'OPENAI_API_KEY no configurada, usando respuesta simulada',
-      );
-      return this.generateSimulatedResponse(
-        messages[messages.length - 1]?.content ?? '',
-      );
-    }
-
-    try {
-      const response = await axios.post(
-        this.openaiEndpoint,
-        {
-          model: this.openaiModel,
-          messages,
-          temperature: 0.7,
-          max_tokens: 1024,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.openaiKey}`,
-          },
-          timeout: 15000,
-        },
-      );
-
-      return (
-        response.data.choices[0]?.message?.content ??
-        'Lo siento, no pude generar una respuesta.'
-      );
-    } catch (error: any) {
-      this.logger.error(`Error calling AI: ${error.message}`);
-      if (error.response?.status === 429) {
-        return 'Estoy recibiendo muchas solicitudes en este momento. Por favor, intenta de nuevo en unos segundos. 🕐';
-      }
-      return 'Ocurrió un error al procesar tu mensaje. Por favor, intenta de nuevo. 🙏';
-    }
-  }
-
-  async *streamAI(
-    messages: Array<{ role: string; content: string }>,
-  ): AsyncGenerator<string> {
-    if (!this.openaiKey) {
-      const response = this.generateSimulatedResponse(
-        messages[messages.length - 1]?.content ?? '',
-      );
-      const words = response.split(' ');
-      for (const word of words) {
-        yield word + ' ';
-        await new Promise((r) => setTimeout(r, 40));
-      }
-      return;
-    }
-
-    try {
-      const response = await axios.post(
-        this.openaiEndpoint,
-        {
-          model: this.openaiModel,
-          messages,
-          temperature: 0.7,
-          max_tokens: 1024,
-          stream: true,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.openaiKey}`,
-            Accept: 'text/event-stream',
-          },
-          timeout: 30000,
-          responseType: 'stream',
-        },
-      );
-
-      const stream = response.data;
-      let buffer = '';
-
-      for await (const chunk of stream) {
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') return;
-
-            try {
-              const parsed = JSON.parse(data);
-              const content = parsed.choices?.[0]?.delta?.content;
-              if (content) {
-                yield content;
-              }
-            } catch {
-              // ignore parse errors in streaming
-            }
-          }
-        }
-      }
-    } catch (error: any) {
-      this.logger.error(`Error streaming AI: ${error.message}`);
-      yield 'Lo siento, ocurrió un error al procesar tu mensaje. Por favor, intenta de nuevo. 🙏';
-    }
-  }
-
   async persistMessage(
     sessionId: string,
     role: 'user' | 'assistant' | 'system',
@@ -455,35 +328,5 @@ INSTRUCCIONES ESPECÍFICAS:
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
-  }
-
-  private generateSimulatedResponse(message: string): string {
-    const lower = message.toLowerCase();
-
-    if (/\b(hola|buenas|hey|saludos)\b/.test(lower)) {
-      return '¡Hola! 👋 Bienvenido a **Kronio Market**. ¿En qué puedo ayudarte hoy? Puedo recomendarte productos, consultar tu pedido o resolver cualquier duda.';
-    }
-
-    if (/\b(comprar|precio|cuesta|cuánto|valor)\b/.test(lower)) {
-      return '¡Claro! 🛍️ En Kronio Market tenemos productos con excelentes precios. Puedes navegar nuestro catálogo en la sección de productos y agregar lo que necesites al carrito. ¿Buscas algo en específico?';
-    }
-
-    if (/\b(envío|envio|domicilio|entrega|llegar)\b/.test(lower)) {
-      return '📦 Realizamos envíos a toda Colombia. El tiempo de entrega depende de tu ubicación, pero generalmente es de 3 a 7 días hábiles. El pago es contra entrega (efectivo). ¿Te gustaría saber el costo de envío a tu ciudad?';
-    }
-
-    if (/\b(productos?|catálogos?|catalogos?|venden|ofrecen)\b/.test(lower)) {
-      return '🔍 En Kronio Market encontrarás una gran variedad de productos. Puedes explorar nuestro catálogo completo en la sección "Productos". ¿Te gustaría que te recomiende algo?';
-    }
-
-    if (/\b(pedido|orden|estado|seguimiento)\b/.test(lower)) {
-      return '📋 Para consultar el estado de tu pedido, puedes ir a la sección "Mis Pedidos" en tu cuenta. Si tienes tu número de pedido, puedo intentar ayudarte. ¿Cuál es tu número de pedido?';
-    }
-
-    if (/\b(gracias|thanks|te amo)\b/.test(lower)) {
-      return '¡A ti por preferirnos! 😊 Si tienes más preguntas, aquí estoy para ayudarte. ¡Que tengas un excelente día!';
-    }
-
-    return '¡Hola! 😊 Soy **KronioBot**, el asistente virtual de Kronio Market. ¿En qué puedo ayudarte hoy? Puedo informarte sobre productos, precios, envíos y más.';
   }
 }

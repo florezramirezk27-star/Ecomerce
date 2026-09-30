@@ -5,7 +5,6 @@ import { generateText, streamText, tool, isStepCount } from 'ai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockPriceTool } from './tools/stock-price.tool';
 import { TrackingTool } from './tools/tracking.tool';
-import { RAGService } from './rag/rag.service';
 import { PromptInjectionGuard } from './guardrails/prompt-injection.guard';
 import {
   ToolContext,
@@ -50,7 +49,6 @@ export class AIService {
     private readonly prisma: PrismaService,
     private readonly stockPriceTool: StockPriceTool,
     private readonly trackingTool: TrackingTool,
-    private readonly ragService: RAGService,
     private readonly promptInjectionGuard: PromptInjectionGuard,
   ) {
     const apiKey = this.configService.get<string>(
@@ -163,19 +161,13 @@ FORMATO:
     }
 
     try {
-      const { contextSummary } = await this.ragService.retrieveRelevantContext(
-        sanitizedMessage,
-        history,
-        config.userId,
-      );
-
       const toolContext = this.getToolContext(config);
       const recentHistory = history
         .slice(-10)
         .map((m) => `[${m.role}]: ${m.content}`)
         .join('\n');
 
-      const instructions = `${this.systemPrompt}\n\nContexto del catálogo:\n${contextSummary}\n\nHistorial reciente:\n${recentHistory}`;
+      const instructions = `${this.systemPrompt}\n\nHistorial reciente:\n${recentHistory}`;
 
       const result = await generateText({
         model: this.model,
@@ -277,19 +269,13 @@ FORMATO:
     }
 
     try {
-      const { contextSummary } = await this.ragService.retrieveRelevantContext(
-        sanitizedMessage,
-        history,
-        config.userId,
-      );
-
       const toolContext = this.getToolContext(config);
       const recentHistory = history
         .slice(-10)
         .map((m) => `[${m.role}]: ${m.content}`)
         .join('\n');
 
-      const instructions = `${this.systemPrompt}\n\nContexto del catálogo:\n${contextSummary}\n\nHistorial reciente:\n${recentHistory}`;
+      const instructions = `${this.systemPrompt}\n\nHistorial reciente:\n${recentHistory}`;
 
       const stream = streamText({
         model: this.model,
