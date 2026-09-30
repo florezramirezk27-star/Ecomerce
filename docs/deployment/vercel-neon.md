@@ -33,7 +33,7 @@ FRONTEND_URL=https://www.example.com
 GOOGLE_CALLBACK_URL=https://api.example.com/auth/google/callback
 ```
 
-Añade también SMTP, Cloudinary/S3, Google OAuth, Gemini y Dropi si utilizas esas integraciones.
+Añade también SMTP o Resend (ver [correo-transaccional.md](correo-transaccional.md)), Cloudinary/S3, Google OAuth, Gemini y Dropi si utilizas esas integraciones.
 
 ## Migraciones Neon
 
