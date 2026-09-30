@@ -187,6 +187,26 @@ describe('MailService: envio por API HTTP (Resend)', () => {
     expect(res.error).toBeUndefined();
   });
 
+  it('el diagnostico devuelve el motivo real cuando Resend rechaza', async () => {
+    // El panel solo decia "El mensaje no pudo enviarse (revisa los logs del
+    // servicio)" y el motivo quedaba escondido en el log. Ahora el motivo debe
+    // llegar a la respuesta.
+    process.env.RESEND_API_KEY = 're_123';
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 422,
+      text: async () => '{"message":"domain not verified"}',
+    });
+
+    const service = new MailService();
+    await service.onModuleInit();
+    const res = await service.sendTestEmail('cliente@correo.com');
+
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('HTTP 422');
+    expect(res.error).toContain('domain not verified');
+  });
+
   it('el diagnostico dice cual es el transporte y quien remite', async () => {
     // El panel de admin imprimia "SMTP: ? → ?" con un envio correcto por HTTP:
     // no hay host SMTP que mostrar cuando no se usa SMTP.

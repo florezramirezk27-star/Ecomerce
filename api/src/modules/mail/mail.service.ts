@@ -63,6 +63,14 @@ export class MailService implements OnModuleInit {
    * `RESEND_API_KEY` el problema desaparece entero, no se amortigua.
    */
   private resendKey: string | null = null;
+  /**
+   * Ultimo error del proveedor (Resend HTTP o SMTP). Lo llenan los caminos de
+   * envio y lo consume `sendTestEmail`: antes el panel de admin solo devolvia
+   * "El mensaje no pudo enviarse (revisa los logs del servicio)" y el motivo
+   * real (422 domain not verified, 401 clave invalida, 535 smtp...) quedaba
+   * escondido en el log.
+   */
+  private lastSendError: string | null = null;
 
   async onModuleInit() {
     if (this.resendKey) {
@@ -255,6 +263,7 @@ export class MailService implements OnModuleInit {
 
       if (res.ok) {
         const data = (await res.json().catch(() => ({}))) as { id?: string };
+        this.lastSendError = null;
         this.logger.log(
           `[${options.tag}] enviado a ${options.to} vía Resend` +
             (data.id ? ` (${data.id})` : '') +
@@ -264,9 +273,11 @@ export class MailService implements OnModuleInit {
       }
 
       const detail = await res.text().catch(() => '');
+      const resumen = `${detail.slice(0, 300) || 'sin detalle'}`;
+      this.lastSendError = `Resend (HTTP ${res.status}): ${resumen}`;
       this.logger.error(
         `[${options.tag}] Resend rechazó el envío (HTTP ${res.status}): ` +
-          `${detail.slice(0, 300) || 'sin detalle'}`,
+          `${resumen}`,
       );
       return false;
     } catch (err) {
@@ -274,6 +285,7 @@ export class MailService implements OnModuleInit {
         err instanceof Error
           ? `${err.name}: ${err.message}`
           : String(err);
+      this.lastSendError = `No se pudo llamar a Resend: ${message}`;
       this.logger.error(`[${options.tag}] fallo llamando a Resend: ${message}`);
       return false;
     } finally {
@@ -509,6 +521,7 @@ export class MailService implements OnModuleInit {
             subject: options.subject,
             text: options.text,
           });
+          this.lastSendError = null;
           this.logger.log(
             `[${options.tag}] enviado a ${options.to} | ${options.subject}`,
           );
@@ -522,12 +535,17 @@ export class MailService implements OnModuleInit {
             await new Promise((r) => setTimeout(r, 1500));
             continue;
           }
-          this.logger.error(`Error sending ${options.tag} email: ${message}`);
+          this.lastSendError = message;
+          this.logger.error(
+            `Error sending ${options.tag} email: ${message}`,
+          );
           return false;
         }
       }
     }
 
+    this.lastSendError =
+      'No hay transporte de correo configurado (ni RESEND_API_KEY ni SMTP)';
     this.logger.warn(
       `[${options.tag}] sin transporte de correo configurado (ni RESEND_API_KEY ni SMTP) — no se envió a ${options.to}`,
     );
@@ -557,6 +575,7 @@ export class MailService implements OnModuleInit {
             text: htmlToText(options.html),
             html: options.html,
           });
+          this.lastSendError = null;
           this.logger.log(
             `[${options.tag}] enviado a ${options.to} | ${options.subject}`,
           );
@@ -570,12 +589,17 @@ export class MailService implements OnModuleInit {
             await new Promise((r) => setTimeout(r, 1500));
             continue;
           }
-          this.logger.error(`Error sending ${options.tag} email: ${message}`);
+          this.lastSendError = message;
+          this.logger.error(
+            `Error sending ${options.tag} email: ${message}`,
+          );
           return false;
         }
       }
     }
 
+    this.lastSendError =
+      'No hay transporte de correo configurado (ni RESEND_API_KEY ni SMTP)';
     this.logger.warn(
       `[${options.tag}] sin transporte de correo configurado (ni RESEND_API_KEY ni SMTP) — no se envió a ${options.to}`,
     );
@@ -1044,7 +1068,12 @@ export class MailService implements OnModuleInit {
       ok: sent,
       error: sent
         ? undefined
-        : 'El mensaje no pudo enviarse (revisa los logs del servicio)',
+        : // El motivo real lo deja el camino de envio en `lastSendError`
+          // (ej: "Resend (HTTP 422): {\"message\":\"domain not verified\"}").
+          // Antes se devolvia siempre este generico y el motivo quedaba solo
+          // en el log del servicio.
+          (this.lastSendError ||
+            'El mensaje no pudo enviarse (revisa los logs del servicio)'),
     };
   }
 }
