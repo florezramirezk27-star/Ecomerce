@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { GoogleTokenService } from './google-token.service';
 import { UsersModule } from '../users/users.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { GoogleStrategy } from './strategies/google.strategy';
@@ -63,6 +64,7 @@ const facebookStrategyProvider = {
     SessionCacheService,
     JwtStrategy,
     GoogleStrategy,
+    GoogleTokenService,
     facebookStrategyProvider,
   ],
 })

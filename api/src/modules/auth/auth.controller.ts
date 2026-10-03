@@ -20,6 +20,7 @@ import type { Request as ExpressRequest, Response } from 'express';
 import { z } from 'zod';
 
 import { AuthService } from './auth.service';
+import { GoogleTokenService } from './google-token.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { WsTicketStore } from '../../common/ws-ticket.store';
@@ -42,6 +43,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly jwtService: JwtService,
+    private readonly googleTokenService: GoogleTokenService,
   ) {}
 
   @Get()
@@ -228,6 +230,48 @@ export class AuthController {
         `${frontendUrl(req)}/login?error=facebook_auth_failed`,
       );
     }
+  }
+
+  /**
+   * Login con Google **nativo**, desde la app movil.
+   *
+   * Contraparte movil de `GET /auth/google` + `POST /auth/exchange`. Ahi el
+   * usuario se autentica en el navegador y vuelve por deep link con un codigo
+   * de un solo uso; aqui la app pide el ID token con `google_sign_in` y lo
+   * manda directo, sin abrir el navegador.
+   *
+   * Por eso este endpoint tiene que verificar la firma del token
+   * ([GoogleTokenService.verify]) en lugar de confiar en lo que dice el cuerpo:
+   * un ID token sin verificar es una cadena que el cliente puede fabricar con
+   * cualquier `sub`.
+   *
+   * A partir de ahi el camino es **identico** al web: `googleLogin()` resuelve
+   * o crea el usuario, aplica el rol de admin y crea la sesion, y la respuesta
+   * es solo el usuario con el token en la cookie httpOnly, igual que en login,
+   * refresh y exchange.
+   */
+  // Mismo limite que `exchange`: son las dos rutas por las que la app movil
+  // entra. Acota los intentos de mandar tokens falsificados contra este
+  // endpoint, que de otro modo serian una llamada a las claves publicas de
+  // Google por cada request.
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @Post('google/native')
+  @HttpCode(200)
+  async googleNativeLogin(
+    @Body(new ZodValidationPipe(z.object({ idToken: z.string().min(1) })))
+    body: { idToken: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const googleProfile = await this.googleTokenService.verify(body.idToken);
+
+    const result = await this.authService.googleLogin(googleProfile);
+
+    this.setTokenCookie(res, result.access_token);
+    setCsrfCookie(res, createCsrfToken());
+
+    return {
+      user: result.user,
+    };
   }
 
   @Post('exchange')

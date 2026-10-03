@@ -30,6 +30,13 @@ const CSRF_EXCLUDED_PATHS = new Set([
   '/auth/reset-password',
   '/auth/google',
   '/auth/google/callback',
+  // Login nativo de la app movil. Es publico por definicion: quien lo llama aun
+  // no tiene cookie de sesion ni token CSRF, porque lo que trae es un ID token
+  // de Google. La seguridad no la da el CSRF (que protege contra que un sitio
+  // malicioso reutilice la sesion de un navegador) sino `GoogleTokenService`,
+  // que verifica la firma del token. Sin esta excepcion el POST devolveria 403
+  // siempre y el login nativo no seria posible.
+  '/auth/google/native',
   '/auth/exchange',
   '/auth/refresh',
   '/auth/logout',

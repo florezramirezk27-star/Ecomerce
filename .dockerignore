@@ -1,0 +1,34 @@
+# Sin esto, `COPY api ./api` y `COPY . .` arrastran el node_modules del
+# host dentro de la imagen. Puesto que el host es Windows y la imagen es Linux,
+# esos binarios y enlaces symbolically resueltos sustituyen a los que
+# `pnpm install` acaba de crear en Linux, y el build falla con MODULE_NOT_FOUND
+# al no encontrar `nest`.
+node_modules
+**/node_modules
+
+# Artefactos de compilacion: se generan dentro de la imagen.
+dist
+**/dist
+build
+**/build
+
+.git
+.github
+**/.git
+
+# Configuracion local con secretos. Los secretos van por variables de entorno
+# en el proveedor, nunca en la imagen.
+.env
+**/.env
+.env.*
+**/.env.*
+
+# Logs y cobertura.
+*.log
+coverage
+**/coverage
+
+.DS_Store
+Thumbs.db
+.vscode
+.idea
