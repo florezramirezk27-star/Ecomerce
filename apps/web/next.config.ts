@@ -42,7 +42,19 @@ const VIDEO_FRAME_SRC = [
   "https://www.youtube.com",
   "https://www.youtube-nocookie.com",
   "https://player.vimeo.com",
-].join(" ");
+];
+
+// El mapa de la direccion de envio vive en un iframe de Google. Sin estos
+// origenes en frame-src, default-src 'self' lo bloquea y el cliente ve la
+// caja gris en blanco.
+const MAPS_FRAME_SRC = ["https://www.google.com", "https://maps.google.com"];
+
+// Geocodificadores de OpenStreetMap que rellenan el codigo postal. Sin estos
+// origenes en connect-src el fetch falla con CORS y el campo queda vacio.
+const GEOCODE_ORIGINS = [
+  "https://nominatim.openstreetmap.org",
+  "https://photon.komoot.io",
+];
 
 function dedupe(values: string[]) {
   return values.filter((v, i, a) => a.indexOf(v) === i).join(" ");
@@ -54,6 +66,7 @@ const connectSrc = dedupe([
   `ws://${wsHost}`,
   `wss://${wsHost}`,
   META_ORIGINS,
+  ...GEOCODE_ORIGINS,
 ]);
 
 const csp = [
@@ -63,7 +76,7 @@ const csp = [
   "font-src 'self' data:",
   "img-src 'self' data: blob: https:",
   `connect-src ${connectSrc}`,
-  `frame-src ${VIDEO_FRAME_SRC}`,
+  `frame-src ${dedupe([...VIDEO_FRAME_SRC, ...MAPS_FRAME_SRC])}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

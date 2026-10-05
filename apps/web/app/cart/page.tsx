@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { getUser, isAuthenticated } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import ProductImage from "@/components/ProductImage";
+import AddressMap from "@/components/AddressMap";
 import { getGuestCart, removeFromGuestCart, updateGuestCartQuantity, type GuestCartItem } from "@/lib/guest-cart";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
 import { DEPARTMENTS, MUNICIPALITIES } from "@/lib/colombia";
+import { lookupPostalCode } from "@/lib/postal-code";
 
 interface CartItem {
   id: string;
@@ -66,6 +68,9 @@ function guestToCartItem(item: GuestCartItem, index: number): CartItem {
 
 const MAX_QUANTITY = 99;
 
+/** Espera (ms) antes de buscar el codigo postal de la direccion escrita. */
+const POSTAL_DEBOUNCE_MS = 600;
+
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "Pendiente",
   PAID: "Pagado",
@@ -113,6 +118,46 @@ export default function CartPage() {
     loadCart();
     if (isAuthenticated()) loadOrders();
   }, []);
+
+  /**
+   * false = el campo lo pone el geocoder, true = lo escribio el cliente y ya no
+   * se vuelve a tocar (salvo que lo borre, que lo devuelve a automatico).
+   */
+  const zipTouchedRef = useRef(false);
+  const addressForLookup = [
+    shippingForm.shippingAddress.trim(),
+    shippingForm.shippingCity.trim(),
+    shippingForm.shippingState.trim(),
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const addressIsComplete = Boolean(
+    shippingForm.shippingAddress.trim() &&
+      shippingForm.shippingCity.trim() &&
+      shippingForm.shippingState.trim(),
+  );
+
+  useEffect(() => {
+    if (!addressIsComplete || zipTouchedRef.current) return;
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      const { zip } = await lookupPostalCode(addressForLookup, controller.signal);
+      // Mientras se buscaba el cliente pudo escribir algo: manda lo suyo.
+      if (cancelled || !zip || zipTouchedRef.current) return;
+      // Devolver el mismo objeto si ya esta puesto evita renders en cascada.
+      setShippingForm((prev) =>
+        prev.shippingZip === zip ? prev : { ...prev, shippingZip: zip },
+      );
+    }, POSTAL_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [addressIsComplete, addressForLookup]);
 
   async function loadCart() {
     if (!isAuthenticated()) {
@@ -242,6 +287,8 @@ export default function CartPage() {
       shippingZip: "",
       notes: "",
     });
+    // El formulario arranca de cero: el codigo postal vuelve a ser automatico.
+    zipTouchedRef.current = false;
     setMessage(null);
     void trackMetaEvent("InitiateCheckout", {
       num_items: items.reduce((acc, item) => acc + item.quantity, 0),
@@ -899,6 +946,11 @@ export default function CartPage() {
                       </datalist>
                     </div>
                   </div>
+                  <AddressMap
+                    address={shippingForm.shippingAddress}
+                    city={shippingForm.shippingCity}
+                    state={shippingForm.shippingState}
+                  />
                   <div className="mt-4">
                     <label className="mb-1.5 block text-sm font-medium text-gray-700">
                       C&oacute;digo postal <span className="font-normal text-gray-400">(opcional)</span>
@@ -907,10 +959,21 @@ export default function CartPage() {
                       type="text"
                       inputMode="numeric"
                       value={shippingForm.shippingZip}
-                      onChange={(e) => setShippingForm({ ...shippingForm, shippingZip: e.target.value.replace(/[^0-9]/g, "") })}
+                      onChange={(e) => {
+                        const zip = e.target.value.replace(/[^0-9]/g, "");
+                        // Escribir apaga el relleno automatico; borrarlo lo
+                        // vuelve a encender en la proxima direccion.
+                        zipTouchedRef.current = zip !== "";
+                        setShippingForm({ ...shippingForm, shippingZip: zip });
+                      }}
                       className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                       placeholder="110111"
                     />
+                    {!shippingForm.shippingZip && (
+                      <p className="mt-1.5 text-xs text-gray-400">
+                        Se completa solo con la direcci&oacute;n; ed&iacute;talo si no coincide.
+                      </p>
+                    )}
                   </div>
                   <div className="mt-4">
                     <label className="mb-1.5 block text-sm font-medium text-gray-700">Notas del pedido</label>
