@@ -9,7 +9,7 @@ import { TrackingTool } from './tools/tracking.tool';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
- * El camino sin GOOGLE_GENERATIVE_AI_API_KEY. No es un modo de pruebas: es el
+ * El camino sin OPENROUTER_API_KEY. No es un modo de pruebas: es el
  * que corre en produccion mientras la clave no este puesta, asi que todo lo
  * queprometa aqui le llega al cliente de verdad.
  */
@@ -20,7 +20,8 @@ describe('AIService sin clave de IA', () => {
     categoryFindMany = jest.fn().mockResolvedValue([]);
 
     const valores: Record<string, string | undefined> = {
-      GOOGLE_GENERATIVE_AI_API_KEY: apiKey,
+      OPENROUTER_API_KEY: apiKey,
+      OPENROUTER_MODEL: 'google/gemini-3.6-flash',
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -63,7 +64,7 @@ describe('AIService sin clave de IA', () => {
     await montar(undefined);
 
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('GOOGLE_GENERATIVE_AI_API_KEY no esta configurada'),
+      expect.stringContaining('OPENROUTER_API_KEY no esta configurada'),
     );
     warn.mockRestore();
   });
@@ -74,9 +75,9 @@ describe('AIService sin clave de IA', () => {
 
     await montar('una-clave');
 
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('Gemini'));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('OpenRouter'));
     expect(warn).not.toHaveBeenCalledWith(
-      expect.stringContaining('GOOGLE_GENERATIVE_AI_API_KEY'),
+      expect.stringContaining('OPENROUTER_API_KEY'),
     );
     log.mockRestore();
     warn.mockRestore();
@@ -92,7 +93,7 @@ describe('AIService sin clave de IA', () => {
     );
 
     // Antes ofrecia rastrear la guia y pedia el numero. La herramienta
-    // rastrearPedidoDropi solo la invoca Gemini, asi que el numero que
+    // rastrearPedidoDropi solo la invoca el modelo, asi que el numero que
     // mandaba el cliente no servia para nada y acababa en el menu generico.
     // Ahora lo manda a Mis Pedidos, que si muestra el estado real.
     expect(text).toContain('Mis Pedidos');
@@ -125,7 +126,7 @@ describe('AIService sin clave de IA', () => {
 
     // El "3 a 7 dias habiles" estaba escrito a mano y nadie lo comprobo. El
     // checkout no cobra flete aparte, asi que el monto tampoco se puede
-    // prometer aqui. El prompt de Gemini ya prohibia inventar tiempos; ahora
+    // prometer aqui. El system prompt ya prohibia inventar tiempos; ahora
     // el fallback local tampoco los inventa.
     expect(text).not.toMatch(/3 a 7|días hábiles|días habiles/);
     expect(text).not.toMatch(/¿En qué ciudad estás/);

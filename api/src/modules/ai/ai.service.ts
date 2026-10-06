@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { google } from '@ai-sdk/google';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { generateText, streamText, tool, isStepCount } from 'ai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockPriceTool } from './tools/stock-price.tool';
@@ -51,24 +51,30 @@ export class AIService {
     private readonly trackingTool: TrackingTool,
     private readonly promptInjectionGuard: PromptInjectionGuard,
   ) {
-    const apiKey = this.configService.get<string>(
-      'GOOGLE_GENERATIVE_AI_API_KEY',
-    );
+    const apiKey = this.configService.get<string>('OPENROUTER_API_KEY');
     this.hasApiKey = !!apiKey;
+    // OpenRouter se llama igual que Gemini pero con el prefijo del autor:
+    // "google/gemini-3.6-flash" y no "gemini-3.6-flash".
     const modelName =
-      this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.5-flash';
-    this.model = google(modelName);
+      this.configService.get<string>('OPENROUTER_MODEL') ||
+      'google/gemini-3.6-flash';
+    this.model = createOpenAICompatible({
+      name: 'openrouter',
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey,
+      headers: { 'X-Title': 'Kronio Market' },
+    }).languageModel(modelName);
 
     // Sin esta linea el arranque no decia nada y el chat caia al clasificador
     // local de intents sin que nadie se enterara. El bot respondia igual de
     // bien y sin un solo error en el log, asi que un despliegue con la clave
     // faltante pasaba desapercibido. Esto lo hace visible de una vez.
     if (this.hasApiKey) {
-      this.logger.log(`IA real encendida: Gemini ${modelName}`);
+      this.logger.log(`IA real encendida: OpenRouter ${modelName}`);
     } else {
       this.logger.warn(
-        'GOOGLE_GENERATIVE_AI_API_KEY no esta configurada: el chat responde ' +
-          'con el clasificador local de intents, no con Gemini. Sin busqueda ' +
+        'OPENROUTER_API_KEY no esta configurada: el chat responde ' +
+          'con el clasificador local de intents, no con OpenRouter. Sin busqueda ' +
           'semantica y sin las herramientas de stock y rastreo.',
       );
     }
@@ -211,6 +217,11 @@ FORMATO:
         },
         stopWhen: isStepCount(5),
         temperature: 0.7,
+        // OpenRouter mira el max_tokens anunciado para saber si la cuenta da
+        // para la peticion: sin tope, el modelo pide su maximo (65.536 tokens)
+        // y sale un 402 aunque la respuesta fuera a ser de tres lineas. Con
+        // 1024 sobra para cualquier respuesta del bot.
+        maxOutputTokens: 1024,
       });
 
       const toolCalls = result.toolResults.map((tr) => ({
@@ -315,6 +326,9 @@ FORMATO:
         },
         stopWhen: isStepCount(5),
         temperature: 0.7,
+        // Mismo tope que en processMessage: sin el, OpenRouter responde 402
+        // por no poder cubrir el maximo del modelo.
+        maxOutputTokens: 1024,
         onStepEnd: (event) => {
           if (event.toolCalls?.length > 0) {
             for (const tc of event.toolCalls) {
@@ -707,7 +721,7 @@ FORMATO:
       case 'ORDER_STATUS':
         // Aqui antes se ofrecia rastrear la guia y se pedia el numero. Ese
         // numero no servia para nada: la herramienta rastrearPedidoDropi solo
-        // la invoca Gemini y este camino no la toca, asi que el cliente
+        // la invoca el modelo de OpenRouter y este camino no la toca, asi que el cliente
         // respondia con su guia y el bot le contestaba el menu de "que puedo
         // hacer". Ahora se manda a Mis Pedidos, que si muestra el estado real
         // de la orden, y un numero suelto tambien aterriza aqui.

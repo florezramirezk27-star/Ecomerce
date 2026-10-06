@@ -15,7 +15,7 @@ Monorepo gestionado con **pnpm workspaces** compuesto por dos aplicaciones:
 |------|-------------|
 | Frontend | Next.js 16 (App Router), React 19, Tailwind CSS v4, Framer Motion, Recharts |
 | Backend | NestJS 11, Express 5, Prisma 6 (PostgreSQL), Socket.IO |
-| IA / Chatbot | Google Gemini (Vercel AI SDK) con tool calling |
+| IA / Chatbot | OpenRouter (Vercel AI SDK) con tool calling |
 | Autenticacion | JWT + sesiones server-side, Google OAuth, CSRF, bcrypt |
 | Base de datos | PostgreSQL (Neon), Redis (Upstash) |
 | Upload de imagenes | Cloudinary, AWS S3 |
@@ -118,7 +118,7 @@ Monorepo gestionado con **pnpm workspaces** compuesto por dos aplicaciones:
 El modulo mas sofisticado del proyecto — un agente de ventas con IA.
 
 **Capacidades:**
-- **Google Gemini** (gemini-2.5-flash) como LLM principal via Vercel AI SDK
+- **OpenRouter** (`google/gemini-3.6-flash`) como LLM principal via Vercel AI SDK
 - **Tool calling** con 2 herramientas:
   - `consultarStockYPrecio` — Consulta stock y precio de productos en tiempo real
   - `rastrearPedidoDropi` — Rastrea estado de envio via Dropi
@@ -218,7 +218,7 @@ Plantillas HTML para:
 │           ├── orders/             # Checkout, gestion de pedidos, cancelacion sincronizada con Dropi
 │           ├── dashboard/          # Estadisticas y analytics del admin
 │           ├── chat/               # Controller + WebSocket gateway del chat
-│           ├── ai/                 # Agente IA (Gemini, tools, guardrails)
+│           ├── ai/                 # Agente IA (OpenRouter, tools, guardrails)
 │           ├── dropi/              # Integracion con Dropi dropshipping (login 2FA, catalogo, ordenes, tracking)
 │           ├── dropi-integration/  # Puente WooCommerce (webhooks /wp-json/wc/v3) para pedidos de Dropi
 │           ├── uploads/            # Upload de imagenes (Cloudinary/S3)
@@ -311,7 +311,8 @@ Las principales:
 | `JWT_SECRET` | Render | Secreto para firmar JWT. Si falta, la app no arranca |
 | `JWT_ACCESS_EXPIRES_IN` | Render | Duracion del access token. OJO: `JWT_EXPIRES_IN` no lo lee nadie |
 | `CORS_ORIGIN` | Render | Origen exacto permitido. Una sola URL, sin coma |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Render | KronioBot (Gemini). Sin ella el chat usa el fallback local por keywords |
+| `OPENROUTER_API_KEY` | Render | KronioBot (OpenRouter). Sin ella el chat usa el fallback local por keywords |
+| `OPENROUTER_MODEL` | Render | Modelo del catalogo, con prefijo de autor (`google/gemini-3.6-flash`) |
 | `CLOUDINARY_*` | Render | Credenciales de Cloudinary (si esta vacio, se usa S3) |
 | `AWS_*` | Render | Credenciales de AWS S3 |
 | `SMTP_*` | Render | Email. Render bloquea el SMTP saliente: no llega a enviar |
