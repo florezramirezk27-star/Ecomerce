@@ -61,7 +61,7 @@ type LocalIntent =
  * peticiones y, cuando se acaba, contesta el siguiente de la lista.
  */
 const MODELOS_POR_DEFECTO =
-  'nvidia/nemotron-3-super-120b-a12b:free,nvidia/nemotron-3-ultra-550b-a55b:free';
+  'nvidia/nemotron-3-super-120b-a12b:free,nvidia/nemotron-3-ultra-550b-a55b:free,google/gemini-3.6-flash';
 
 /**
  * Fallo que otro modelo de la lista puede resolver: cuota diaria agotada (429),
@@ -70,7 +70,7 @@ const MODELOS_POR_DEFECTO =
  * repetirlo con otro modelo solo alarga el fallo.
  */
 function esFalloDeModelo(mensaje: string): boolean {
-  return /\b(429|402|500|502|503|529)\b|rate.?limit|too many requests|quota|credit|overloaded|provider returned error|fetch failed|etimedout|econnreset|socket hang up/i.test(
+  return /\b(402|403|404|408|425|429|500|502|503|504|529)\b|rate.?limit|too many requests|quota|credit|overloaded|provider returned error|not found|not available|not allowed|only available|unavailable|fetch failed|etimedout|econnreset|socket hang up/i.test(
     mensaje,
   );
 }
@@ -330,6 +330,10 @@ FORMATO:
           },
           stopWhen: isStepCount(5),
           temperature: 0.7,
+          // Los reintentos los maneja conRespaldo: pasa al siguiente modelo en
+          // vez de volver a golpear al mismo (el SDK reintenta 3 veces y eso
+          // son ~6 segundos perdidos cuando el fallo es de cuota o credito).
+          maxRetries: 0,
           // OpenRouter mira el max_tokens anunciado para saber si la cuenta da
           // para la peticion: sin tope, el modelo pide su maximo (65.536 tokens)
           // y sale un 402 aunque la respuesta fuera a ser de tres lineas. Con
@@ -444,6 +448,8 @@ FORMATO:
           },
           stopWhen: isStepCount(5),
           temperature: 0.7,
+          // Igual que en processMessage: quien reintenta es conRespaldo.
+          maxRetries: 0,
           // Mismo tope que en processMessage: sin el, OpenRouter responde 402
           // por no poder cubrir el maximo del modelo.
           maxOutputTokens: 1024,

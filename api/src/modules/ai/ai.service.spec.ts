@@ -248,6 +248,34 @@ describe('AIService sin clave de IA', () => {
     log.mockRestore();
   });
 
+  it('salta de modelo cuando lo rechazan por app (403)', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    const gen = generateText as jest.Mock;
+    gen.mockClear();
+
+    // OpenRouter devuelve esto cuando un modelo esta restringido a cierto tipo
+    // de app: no hay nada que reintentar contra ese modelo, hay que pasar al
+    // siguiente de la lista.
+    gen.mockRejectedValueOnce(
+      new Error(
+        'thinkingmachines/inkling:free is only available on agentic harnesses',
+      ),
+    );
+    gen.mockResolvedValueOnce({
+      text: 'respaldo que si contesta',
+      toolResults: [],
+    });
+
+    const service = await montar('una-clave', 'modelo-restringido,modelo-ok');
+    const { text } = await service.processMessage('hola', [], config);
+
+    expect(text).toBe('respaldo que si contesta');
+    expect(gen).toHaveBeenCalledTimes(2);
+
+    gen.mockReset();
+    warn.mockRestore();
+  });
+
   it('no reintenta cuando el fallo no es de cuota', async () => {
     const gen = generateText as jest.Mock;
     gen.mockClear();
