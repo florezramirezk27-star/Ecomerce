@@ -2,6 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { generateText, streamText, tool, isStepCount } from 'ai';
+
+/**
+ * Modelo que aceptan `generateText` y `streamText`. Se toma del tipo de sus
+ * parametros y no del proveedor porque en el lock conviven dos copias de
+ * `@ai-sdk/provider` (la que trae `ai` y la de `@ai-sdk/openai-compatible`,
+ * de parches distintos) y TypeScript no las deja asignar entre si aunque en
+ * runtime son compatibles.
+ */
+type ModeloDelChat = Parameters<typeof generateText>[0]['model'];
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockPriceTool } from './tools/stock-price.tool';
 import { TrackingTool } from './tools/tracking.tool';
@@ -32,15 +41,58 @@ type LocalIntent =
   | 'GREETING'
   | 'PURCHASE'
   | 'SHIPPING'
+  | 'PAYMENT'
   | 'PRODUCT_INFO'
   | 'ORDER_STATUS'
   | 'THANKS'
   | 'UNKNOWN';
 
+/**
+ * Aviso que se antepone a la respuesta local cuando el modelo fallo.
+ *
+ * Sin este aviso el cliente recibia el fallback como si fuera una respuesta
+ * normal del asistente: si la pregunta no encajaba con ninguna palabra clave,
+ * parecia que el bot contestaba cosas que no tenian que ver y nadie se
+ * enteraba de que la IA estaba caida.
+ */
+/**
+ * Modelos por defecto, en orden de preferencia. OPENROUTER_MODEL acepta varios
+ * separados por coma: los modelos gratuitos comparten una cuota diaria de 50
+ * peticiones y, cuando se acaba, contesta el siguiente de la lista.
+ */
+const MODELOS_POR_DEFECTO =
+  'nvidia/nemotron-3-super-120b-a12b:free,nvidia/nemotron-3-ultra-550b-a55b:free';
+
+/**
+ * Fallo que otro modelo de la lista puede resolver: cuota diaria agotada (429),
+ * credito insuficiente (402) o caida puntual del proveedor (5xx). Lo demas (un
+ * bug nuestro o una herramienta rota) se propaga sin reintentar, porque
+ * repetirlo con otro modelo solo alarga el fallo.
+ */
+function esFalloDeModelo(mensaje: string): boolean {
+  return /\b(429|402|500|502|503|529)\b|rate.?limit|too many requests|quota|credit|overloaded|provider returned error|fetch failed|etimedout|econnreset|socket hang up/i.test(
+    mensaje,
+  );
+}
+
+const AVISO_MODO_BASICO =
+  '⚠️ **Estoy en modo básico**: tuve una falla con mi asistente IA, así que lo que sigue es una respuesta automática y puede que no encaje con tu pregunta. Perdón. Escríbeme de nuevo en unos minutos y vuelvo a responderte normal.\n\n';
+
+/**
+ * El modelo se queda a veces llamando herramientas hasta agotar los 5 pasos de
+ * `stopWhen` (paso tipico cuando el producto no existe y sigue buscando) y
+ * devuelve texto vacio: el cliente veia un globo en blanco.
+ */
+const TEXTO_SIN_RESPUESTA =
+  'Estuve revisando el catálogo pero no logré terminar de armar la respuesta. ¿Me vuelves a preguntar o me das un poco más de detalle del producto que buscas?';
+
 @Injectable()
 export class AIService {
   private readonly logger = new Logger(AIService.name);
-  private readonly model;
+  /** Modelos en orden de preferencia; el primero es el principal. */
+  private readonly modelos: string[];
+  /** Indice del modelo que esta contestando. Se queda con el que funcione. */
+  private indiceModelo = 0;
   private readonly hasApiKey: boolean;
   private readonly systemPrompt: string;
 
@@ -53,24 +105,31 @@ export class AIService {
   ) {
     const apiKey = this.configService.get<string>('OPENROUTER_API_KEY');
     this.hasApiKey = !!apiKey;
-    // OpenRouter se llama igual que Gemini pero con el prefijo del autor:
-    // "google/gemini-3.6-flash" y no "gemini-3.6-flash".
-    const modelName =
-      this.configService.get<string>('OPENROUTER_MODEL') ||
-      'google/gemini-3.6-flash';
-    this.model = createOpenAICompatible({
-      name: 'openrouter',
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey,
-      headers: { 'X-Title': 'Kronio Market' },
-    }).languageModel(modelName);
+    // OpenRouter pide el prefijo del autor: "google/gemini-3.6-flash" y no
+    // "gemini-3.6-flash". Se admite una lista separada por coma para tener
+    // respaldo cuando el principal se queda sin cuota diaria.
+    //
+    // Los modelos de pago sin credito devuelven 402 en cada mensaje y el chat
+    // se queda solo en el fallback local, que es el que contestaba cosas que
+    // no tenian que ver, por eso el valor por defecto es gratuito.
+    this.modelos = (
+      this.configService.get<string>('OPENROUTER_MODEL') || MODELOS_POR_DEFECTO
+    )
+      .split(',')
+      .map((modelo) => modelo.trim())
+      .filter(Boolean);
+    if (this.modelos.length === 0) {
+      this.modelos = MODELOS_POR_DEFECTO.split(',');
+    }
 
     // Sin esta linea el arranque no decia nada y el chat caia al clasificador
     // local de intents sin que nadie se enterara. El bot respondia igual de
     // bien y sin un solo error en el log, asi que un despliegue con la clave
     // faltante pasaba desapercibido. Esto lo hace visible de una vez.
     if (this.hasApiKey) {
-      this.logger.log(`IA real encendida: OpenRouter ${modelName}`);
+      this.logger.log(
+        `IA real encendida: OpenRouter ${this.modelos.join(' | ')}`,
+      );
     } else {
       this.logger.warn(
         'OPENROUTER_API_KEY no esta configurada: el chat responde ' +
@@ -122,9 +181,10 @@ REGLAS COMERCIALES:
 - Si el cliente pregunta por descuentos, responde que actualmente Kronio Market no ofrece descuentos ni cupones.
 - No debes intentar utilizar ninguna herramienta relacionada con descuentos.
 
-ENVÍOS:
+ENVÍOS Y PAGOS:
 - Kronio Market realiza envíos a toda Colombia.
-- El método de pago puede incluir pago contra entrega.
+- El pago es contra entrega, en efectivo: el cliente paga cuando recibe su pedido en su domicilio.
+- No confirmes Nequi, Daviplata, tarjeta ni transferencia. Si el cliente pregunta por otro medio, dígle que hoy lo confirmado es contra entrega y que ese detalle se lo confirma soporte por el canal de contacto de la página.
 - No inventes tiempos de entrega, costos de envío o condiciones que no estén disponibles en el sistema.
 
 SEGURIDAD:
@@ -144,6 +204,58 @@ FORMATO:
 - Cuando recomiendes productos, proporciona información clara y útil.
 - Utiliza la información real proporcionada por las herramientas.
 - No inventes información para completar una respuesta.`;
+  }
+
+  /**
+   * Crea el modelo de OpenRouter para el id indicado. Se recrea en cada
+   * intento porque la lista puede tener varios modelos y hay que poder
+   * saltar al siguiente cuando el principal se queda sin cuota.
+   */
+  private crearModelo(modelo: string): ModeloDelChat {
+    return createOpenAICompatible({
+      name: 'openrouter',
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: this.configService.get<string>('OPENROUTER_API_KEY'),
+      headers: { 'X-Title': 'Kronio Market' },
+    }).languageModel(modelo) as unknown as ModeloDelChat;
+  }
+
+  /**
+   * Ejecuta una llamada al modelo probando la lista configurada en orden.
+   *
+   * Los modelos gratuitos de OpenRouter comparten una cuota diaria de 50
+   * peticiones: cuando se acaba, el siguiente de la lista contesta hasta que
+   * se resetee. Si fallan todos (o el fallo no es de cuota), el error se
+   * propaga y el chat cae en el fallback local con el aviso de modo basico.
+   */
+  private async conRespaldo<T>(
+    llamado: (modelo: string) => T | Promise<T>,
+  ): Promise<T> {
+    let ultimoError: unknown;
+
+    for (let i = 0; i < this.modelos.length; i++) {
+      const indice = (this.indiceModelo + i) % this.modelos.length;
+      const modelo = this.modelos[indice];
+
+      try {
+        const resultado = await llamado(modelo);
+        if (indice !== this.indiceModelo) {
+          this.logger.log(`OpenRouter: me quedo con el modelo ${modelo}.`);
+        }
+        this.indiceModelo = indice;
+        return resultado;
+      } catch (error) {
+        ultimoError = error;
+        const mensaje = error instanceof Error ? error.message : String(error);
+        if (!esFalloDeModelo(mensaje)) throw error;
+        this.logger.warn(
+          `Modelo ${modelo} no respondio (${mensaje.slice(0, 140)})` +
+            `${i < this.modelos.length - 1 ? '; pruebo el siguiente' : ''}`,
+        );
+      }
+    }
+
+    throw ultimoError;
   }
 
   private getToolContext(config: AgentConfig): ToolContext {
@@ -189,40 +301,42 @@ FORMATO:
 
       const instructions = `${this.systemPrompt}\n\nHistorial reciente:\n${recentHistory}`;
 
-      const result = await generateText({
-        model: this.model,
-        instructions,
-        messages: [{ role: 'user' as const, content: sanitizedMessage }],
-        tools: {
-          consultarStockYPrecio: tool({
-            description: this.stockPriceTool.description,
-            inputSchema: this.stockPriceTool.parameters,
-            execute: async (args) => {
-              this.logger.log(
-                `Tool call: consultarStockYPrecio con args: ${JSON.stringify(args)}`,
-              );
-              return this.stockPriceTool.execute(args, toolContext);
-            },
-          }),
-          rastrearPedidoDropi: tool({
-            description: this.trackingTool.description,
-            inputSchema: this.trackingTool.parameters,
-            execute: async (args) => {
-              this.logger.log(
-                `Tool call: rastrearPedidoDropi con args: ${JSON.stringify(args)}`,
-              );
-              return this.trackingTool.execute(args, toolContext);
-            },
-          }),
-        },
-        stopWhen: isStepCount(5),
-        temperature: 0.7,
-        // OpenRouter mira el max_tokens anunciado para saber si la cuenta da
-        // para la peticion: sin tope, el modelo pide su maximo (65.536 tokens)
-        // y sale un 402 aunque la respuesta fuera a ser de tres lineas. Con
-        // 1024 sobra para cualquier respuesta del bot.
-        maxOutputTokens: 1024,
-      });
+      const result = await this.conRespaldo((modelo) =>
+        generateText({
+          model: this.crearModelo(modelo),
+          instructions,
+          messages: [{ role: 'user' as const, content: sanitizedMessage }],
+          tools: {
+            consultarStockYPrecio: tool({
+              description: this.stockPriceTool.description,
+              inputSchema: this.stockPriceTool.parameters,
+              execute: async (args) => {
+                this.logger.log(
+                  `Tool call: consultarStockYPrecio con args: ${JSON.stringify(args)}`,
+                );
+                return this.stockPriceTool.execute(args, toolContext);
+              },
+            }),
+            rastrearPedidoDropi: tool({
+              description: this.trackingTool.description,
+              inputSchema: this.trackingTool.parameters,
+              execute: async (args) => {
+                this.logger.log(
+                  `Tool call: rastrearPedidoDropi con args: ${JSON.stringify(args)}`,
+                );
+                return this.trackingTool.execute(args, toolContext);
+              },
+            }),
+          },
+          stopWhen: isStepCount(5),
+          temperature: 0.7,
+          // OpenRouter mira el max_tokens anunciado para saber si la cuenta da
+          // para la peticion: sin tope, el modelo pide su maximo (65.536 tokens)
+          // y sale un 402 aunque la respuesta fuera a ser de tres lineas. Con
+          // 1024 sobra para cualquier respuesta del bot.
+          maxOutputTokens: 1024,
+        }),
+      );
 
       const toolCalls = result.toolResults.map((tr) => ({
         name: tr.toolName,
@@ -230,7 +344,9 @@ FORMATO:
         result: tr.output,
       }));
 
-      const text = result.text;
+      // Sin texto: el modelo agoto sus pasos de herramientas y el cliente
+      // habria recibido un globo en blanco.
+      const text = result.text.trim() ? result.text : TEXTO_SIN_RESPUESTA;
 
       const ui: GenerativeUI[] = [];
 
@@ -266,7 +382,8 @@ FORMATO:
       this.logger.warn(
         `AI generateText falló, usando respuesta local de contingencia: ${error instanceof Error ? error.message : error}`,
       );
-      return this.buildLocalResponse(sanitizedMessage);
+      const local = await this.buildLocalResponse(sanitizedMessage);
+      return { ...local, text: `${AVISO_MODO_BASICO}${local.text}` };
     }
   }
 
@@ -302,51 +419,59 @@ FORMATO:
 
       const instructions = `${this.systemPrompt}\n\nHistorial reciente:\n${recentHistory}`;
 
-      const stream = streamText({
-        model: this.model,
-        instructions,
-        messages: [{ role: 'user' as const, content: sanitizedMessage }],
-        tools: {
-          consultarStockYPrecio: tool({
-            description: this.stockPriceTool.description,
-            inputSchema: this.stockPriceTool.parameters,
-            execute: async (args) => {
-              this.logger.log(`Tool call: consultarStockYPrecio`);
-              return this.stockPriceTool.execute(args, toolContext);
-            },
-          }),
-          rastrearPedidoDropi: tool({
-            description: this.trackingTool.description,
-            inputSchema: this.trackingTool.parameters,
-            execute: async (args) => {
-              this.logger.log(`Tool call: rastrearPedidoDropi`);
-              return this.trackingTool.execute(args, toolContext);
-            },
-          }),
-        },
-        stopWhen: isStepCount(5),
-        temperature: 0.7,
-        // Mismo tope que en processMessage: sin el, OpenRouter responde 402
-        // por no poder cubrir el maximo del modelo.
-        maxOutputTokens: 1024,
-        onStepEnd: (event) => {
-          if (event.toolCalls?.length > 0) {
-            for (const tc of event.toolCalls) {
-              if (
-                tc.type === 'tool-call' &&
-                tc.toolName === 'consultarStockYPrecio'
-              ) {
-                this.logger.log(`Tool called: consultarStockYPrecio`);
+      const stream = await this.conRespaldo((modelo) =>
+        streamText({
+          model: this.crearModelo(modelo),
+          instructions,
+          messages: [{ role: 'user' as const, content: sanitizedMessage }],
+          tools: {
+            consultarStockYPrecio: tool({
+              description: this.stockPriceTool.description,
+              inputSchema: this.stockPriceTool.parameters,
+              execute: async (args) => {
+                this.logger.log(`Tool call: consultarStockYPrecio`);
+                return this.stockPriceTool.execute(args, toolContext);
+              },
+            }),
+            rastrearPedidoDropi: tool({
+              description: this.trackingTool.description,
+              inputSchema: this.trackingTool.parameters,
+              execute: async (args) => {
+                this.logger.log(`Tool call: rastrearPedidoDropi`);
+                return this.trackingTool.execute(args, toolContext);
+              },
+            }),
+          },
+          stopWhen: isStepCount(5),
+          temperature: 0.7,
+          // Mismo tope que en processMessage: sin el, OpenRouter responde 402
+          // por no poder cubrir el maximo del modelo.
+          maxOutputTokens: 1024,
+          onStepEnd: (event) => {
+            if (event.toolCalls?.length > 0) {
+              for (const tc of event.toolCalls) {
+                if (
+                  tc.type === 'tool-call' &&
+                  tc.toolName === 'consultarStockYPrecio'
+                ) {
+                  this.logger.log(`Tool called: consultarStockYPrecio`);
+                }
               }
             }
-          }
-        },
-      });
+          },
+        }),
+      );
 
       let fullText = '';
       for await (const chunk of stream.textStream) {
         fullText += chunk;
         yield { type: 'text', content: chunk };
+      }
+
+      // Mismo caso que en processMessage: pasos de herramientas agotados y
+      // texto vacio. Sin esto el cliente veia un globo en blanco.
+      if (!fullText.trim()) {
+        yield { type: 'text', content: TEXTO_SIN_RESPUESTA };
       }
 
       const toolResults = await stream.toolResults;
@@ -385,6 +510,7 @@ FORMATO:
       this.logger.warn(
         `AI streamMessage falló, usando respuesta local de contingencia: ${error instanceof Error ? error.message : error}`,
       );
+      yield { type: 'text', content: AVISO_MODO_BASICO };
       yield* this.streamLocalResponse(sanitizedMessage);
     }
   }
@@ -434,10 +560,17 @@ FORMATO:
   }
 
   private detectLocalIntent(message: string): LocalIntent {
-    const lower = message.toLowerCase();
+    // En minusculas y sin acentos. Los \b de JavaScript son de ASCII: entre la
+    // "o" y la "s" de "envíos" no hay borde de palabra, asi que la pregunta de
+    // envio no casaba con "envío" y acababa en el menu generico. Normalizando,
+    // las keywords se escriben una sola vez y sin tilde.
+    const lower = message
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
 
     if (
-      /\b(hola|buenas|hey|saludos|buen[ao]s?|qué\s*hay|que\s*hay|buenos\s*días|buenas\s*tardes|buenas\s*noches)\b/.test(
+      /\b(hola|buen[ao]s?|hey|saludos|buenos\s+dias|buenas\s+tardes|buenas\s+noches|que\s+hay)\b/.test(
         lower,
       )
     ) {
@@ -445,7 +578,7 @@ FORMATO:
     }
 
     if (
-      /\b(comprar|precio|cuesta|cuánto|valor|carrito|ordenar|adquirir|costo|costó|costó|costar|cuanto)\b/.test(
+      /\b(comprar|compro|precio|precios|cuesta|cuestan|cuanto|valor|valores|carrito|ordenar|adquirir|costo|costaron|costar|descuento|descuentos|cupon|cupones|promocion|promociones|oferta|ofertas|barato|baratos|rebaja|rebajas)\b/.test(
         lower,
       )
     ) {
@@ -453,7 +586,7 @@ FORMATO:
     }
 
     if (
-      /\b(envío|envio|domicilio|entrega|llegar|envían|envien|shipping|envíen|envíar|entregado|despacho)\b/.test(
+      /\b(envio|envios|domicilio|entrega|entregas|llegar|llegan|envian|envien|shipping|enviar|entregado|despacho|despachos)\b/.test(
         lower,
       )
     ) {
@@ -461,15 +594,27 @@ FORMATO:
     }
 
     if (
-      /\b(pedido|orden|estado|seguimiento|guía|rastrear|tracking|llegó|llegó|listo|preparando)\b/.test(
+      /\b(pedido|pedidos|orden|ordenes|estado|estados|seguimiento|guia|guias|rastrear|tracking|llego|llegaron|listo|preparando)\b/.test(
         lower,
       )
     ) {
       return 'ORDER_STATUS';
     }
 
+    // "¿Se puedo pagar con Nequi?" caia en UNKNOWN y el cliente se llevaba el
+    // menu de "que puedo hacer". Contra entrega en efectivo es lo unico que la
+    // tienda confirma, asi que se dice eso; el resto (Nequi, tarjeta,
+    // transferencia) se manda a confirmar con soporte en vez de prometerlo.
     if (
-      /\b(productos?|catálogos?|catalogos?|venden|vendéis|vendes|ofrecen|ofreces|tienen|tienes|busco|necesito|quiero|hay|cuáles|cuales|eléctricos?|electricos?|electronicos?|artículos?|articulos?|recomiendas|sugieres|muéstrame|muestrame|catálogo)\b/.test(
+      /\b(pago|pagos|pagar|pagan|pague|nequi|daviplata|efectivo|tarjeta|tarjetas|transferencia|bancolombia|deposito|debito|credito|contra\s+entrega)\b/.test(
+        lower,
+      )
+    ) {
+      return 'PAYMENT';
+    }
+
+    if (
+      /\b(producto|productos|catalogo|catalogos|venden|vende|vendes|vendemos|ofrecen|ofreces|tienen|tienes|busco|necesito|quiero|hay|cuales|electricos|electronicos|articulo|articulos|recomiendas|sugieres|muestame|muestrame)\b/.test(
         lower,
       )
     ) {
@@ -477,7 +622,7 @@ FORMATO:
     }
 
     if (
-      /\b(gracias|thanks|te amo|muchas gracias|gracias|agradezco|excelente|perfecto|genial)\b/.test(
+      /\b(gracias|thanks|te amo|agradezco|excelente|perfecto|genial)\b/.test(
         lower,
       )
     ) {
@@ -660,6 +805,25 @@ FORMATO:
       .toLowerCase();
   }
 
+  /**
+   * Respuesta cuando el catalogo no tiene lo que el cliente pidio. En vez de
+   * contestar algo generico que no responde la pregunta (era lo que pasaba
+   * con "¿cuanto cuesta la lampara?"), se dice que no esta y se muestran las
+   * categorias reales de la tienda.
+   */
+  private async respuestaSinCoincidencias(): Promise<{ text: string }> {
+    const allCategories = await this.prisma.category.findMany({
+      take: 10,
+      orderBy: { name: 'asc' },
+    });
+
+    const categoryList = allCategories.map((c) => `• **${c.name}**`).join('\n');
+
+    return {
+      text: `🔍 No encontré productos exactamente con esos términos, pero tenemos estas categorías disponibles:\n\n${categoryList}\n\n¿Te interesa alguna en especial? O dime más detalles de lo que buscas y te ayudo a encontrarlo. 😊`,
+    };
+  }
+
   private async buildLocalResponse(message: string): Promise<{
     text: string;
     ui?: GenerativeUI[];
@@ -703,9 +867,11 @@ FORMATO:
           };
         }
 
-        return {
-          text: '🛍️ ¡Me encanta que quieras comprar! En Kronio Market tenemos productos de excelente calidad. Puedes navegar nuestro catálogo, agregar productos al carrito y pagar contra entrega (efectivo). Si me dices qué estás buscando, puedo recomendarte algo específico. ¿Qué necesitas?',
-        };
+        // Sin resultados no se vende a ciegas: "¿cuánto cuesta la lámpara
+        // LED?" contestaba un "me encanta que quieras comprar" que no decia
+        // nada del precio. Ahora se dice que no esta ese producto y se
+        // muestran las categorias, igual que en PRODUCT_INFO.
+        return this.respuestaSinCoincidencias();
       }
 
       case 'SHIPPING':
@@ -727,6 +893,11 @@ FORMATO:
         // de la orden, y un numero suelto tambien aterriza aqui.
         return {
           text: '📋 El estado de tu pedido lo ves en **"Mis Pedidos"**, dentro de tu cuenta: ahí sale el número de pedido y la guía de envío con su estado actualizado.\n\nSi no te acuerdas del número, escríbele a soporte por el canal de contacto de la página y lo buscamos por tu correo.',
+        };
+
+      case 'PAYMENT':
+        return {
+          text: '💳 **Pagas contra entrega, en efectivo**, cuando recibes tu pedido en tu domicilio.\n\nSi necesitas otro medio (Nequi, Daviplata, tarjeta o transferencia), confírmalo antes con soporte por el canal de contacto de la página: así te dicen qué está habilitado hoy y no quedas con la duda.',
         };
 
       case 'PRODUCT_INFO': {
@@ -762,18 +933,7 @@ FORMATO:
           };
         }
 
-        const allCategories = await this.prisma.category.findMany({
-          take: 10,
-          orderBy: { name: 'asc' },
-        });
-
-        const categoryList = allCategories
-          .map((c) => `• **${c.name}**`)
-          .join('\n');
-
-        return {
-          text: `🔍 No encontré productos exactamente con esos términos, pero tenemos estas categorías disponibles:\n\n${categoryList}\n\n¿Te interesa alguna en especial? O dime más detalles de lo que buscas y te ayudo a encontrarlo. 😊`,
-        };
+        return this.respuestaSinCoincidencias();
       }
 
       case 'THANKS':

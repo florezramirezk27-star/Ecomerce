@@ -312,7 +312,7 @@ Las principales:
 | `JWT_ACCESS_EXPIRES_IN` | Render | Duracion del access token. OJO: `JWT_EXPIRES_IN` no lo lee nadie |
 | `CORS_ORIGIN` | Render | Origen exacto permitido. Una sola URL, sin coma |
 | `OPENROUTER_API_KEY` | Render | KronioBot (OpenRouter). Sin ella el chat usa el fallback local por keywords |
-| `OPENROUTER_MODEL` | Render | Modelo del catalogo, con prefijo de autor (`google/gemini-3.6-flash`) |
+| `OPENROUTER_MODEL` | Render | Uno o varios modelos separados por coma (principal + respaldo). Trae los `:free` (0 USD, cuota de 50/día) |
 | `CLOUDINARY_*` | Render | Credenciales de Cloudinary (si esta vacio, se usa S3) |
 | `AWS_*` | Render | Credenciales de AWS S3 |
 | `SMTP_*` | Render | Email. Render bloquea el SMTP saliente: no llega a enviar |
