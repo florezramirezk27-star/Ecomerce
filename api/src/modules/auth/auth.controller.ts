@@ -38,6 +38,20 @@ function accessTokenMs(): number {
   return accessTokenLifetimeMs();
 }
 
+/**
+ * El callback de Google puede llegar desde la app movil o desde el navegador.
+ * En el primer caso hay que devolver un deep link kronio:// y no una URL del
+ * frontend, o el codigo de intercambio se pierde en una pagina que la app no
+ * puede abrir.
+ */
+function isMobileApp(req: ExpressRequest): boolean {
+  return (
+    req.query.from_app === 'true' ||
+    req.headers['x-kronio-app'] === 'true' ||
+    (req.headers['user-agent']?.toLowerCase().includes('kronio') ?? false)
+  );
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -199,12 +213,17 @@ export class AuthController {
         result.user,
       );
 
-      const redirectUrl = `${frontendUrl(req)}/auth/google/callback?code=${encodeURIComponent(code)}`;
+      const redirectUrl = isMobileApp(req)
+        ? `kronio://auth/google/callback?code=${encodeURIComponent(code)}`
+        : `${frontendUrl(req)}/auth/google/callback?code=${encodeURIComponent(code)}`;
+
       return res.redirect(redirectUrl);
     } catch {
-      return res.redirect(
-        `${frontendUrl(req)}/login?error=google_auth_failed`,
-      );
+      const redirectUrl = isMobileApp(req)
+        ? 'kronio://login?error=google_auth_failed'
+        : `${frontendUrl(req)}/login?error=google_auth_failed`;
+
+      return res.redirect(redirectUrl);
     }
   }
 
