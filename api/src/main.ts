@@ -43,7 +43,8 @@ async function bootstrap() {
   // Sin esto, detras de un balanceador todas las peticiones comparten la IP del
   // proxy: el rate limiting por IP se vuelve inutil y los logs no muestran al
   // cliente real. El numero indica cuantos saltos de proxy confiar.
-  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  const expressApp = app.getHttpAdapter().getInstance() as express.Express;
+  expressApp.set('trust proxy', 1);
 
   // Cierra el pool de Postgres y Redis de forma ordenada en SIGTERM, para que un
   // rolling update no corte requests en vuelo.
@@ -58,7 +59,10 @@ async function bootstrap() {
     .map((o) => o.trim());
 
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
       if (isOriginAllowed(origin, allowedOrigins)) {
         callback(null, true);
       } else {
@@ -153,4 +157,4 @@ async function reportRedisAtStartup(app: INestApplication): Promise<void> {
   );
 }
 
-bootstrap();
+void bootstrap();

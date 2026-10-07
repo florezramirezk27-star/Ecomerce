@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
@@ -37,7 +37,8 @@ const facebookStrategyProvider = {
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const jwtSecret = config.get('JWT_SECRET') || process.env.JWT_SECRET;
+        const jwtSecret =
+          config.get<string>('JWT_SECRET') || process.env.JWT_SECRET;
 
         if (!jwtSecret || jwtSecret === 'dev-secret-key') {
           throw new Error(
@@ -46,7 +47,11 @@ const facebookStrategyProvider = {
           );
         }
 
-        const expiresIn = config.get('JWT_ACCESS_EXPIRES_IN') || '1h';
+        // `expiresIn` llega como string libre desde la env y `JwtSignOptions`
+        // exige `number | StringValue` (de `ms`), asi que se normaliza con un
+        // cast: el valor real ya es algo como '30m' o '1h'.
+        const expiresIn = (config.get<string>('JWT_ACCESS_EXPIRES_IN') ||
+          '1h') as JwtSignOptions['expiresIn'];
 
         return {
           secret: jwtSecret,

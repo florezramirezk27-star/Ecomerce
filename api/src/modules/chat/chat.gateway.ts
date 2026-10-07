@@ -5,7 +5,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+import { Server, Socket, DefaultEventsMap } from 'socket.io';
 import { Logger, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ChatService } from './chat.service';
@@ -15,6 +15,28 @@ import { WsThrottlerGuard } from '../../common/guards/ws-throttler.guard';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WsTicketStore } from '../../common/ws-ticket.store';
 import { isOriginAllowed } from '../../common/config/origins';
+
+// Usuario resuelto por `resolveUser` y guardado en `client.data.user`.
+interface UsuarioEnSesion {
+  id: string;
+  email: string;
+  role: string;
+}
+
+// Campos propios que cada socket guarda en `client.data`.
+interface DatosSocketChat {
+  authReady?: Promise<void>;
+  user?: UsuarioEnSesion;
+  guestSecret?: string;
+}
+
+// `Socket` con el tipo de `client.data` en lugar del `any` por defecto.
+type ChatSocket = Socket<
+  DefaultEventsMap,
+  DefaultEventsMap,
+  DefaultEventsMap,
+  DatosSocketChat
+>;
 
 @WebSocketGateway({
   namespace: '/chat',
@@ -28,10 +50,7 @@ import { isOriginAllowed } from '../../common/config/origins';
       const allowed = (process.env.CORS_ORIGIN || 'http://localhost:3000')
         .split(',')
         .map((o) => o.trim());
-      callback(
-        null,
-        isOriginAllowed(origin, allowed),
-      );
+      callback(null, isOriginAllowed(origin, allowed));
     },
     credentials: true,
   },
@@ -66,7 +85,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return undefined;
   }
 
-  async handleConnection(client: Socket): Promise<void> {
+  async handleConnection(client: ChatSocket): Promise<void> {
     const ticket = client.handshake.auth?.ticket as string | undefined;
 
     client.data.authReady = (async () => {
@@ -88,7 +107,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('chat.message')
-  async handleMessage(client: Socket, payload: unknown): Promise<void> {
+  async handleMessage(client: ChatSocket, payload: unknown): Promise<void> {
     await client.data?.authReady?.catch(() => {});
 
     const parsed = sendMessageSchema.safeParse(payload);
@@ -182,11 +201,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         sessionId: context.sessionId,
         ui: lastUIs.length > 0 ? lastUIs : undefined,
       });
-    } catch (error: any) {
-      this.logger.error(`Error en chat: ${error.message}`);
+    } catch (error: unknown) {
+      const e = error as { message?: string; status?: number };
+      this.logger.error(`Error en chat: ${e.message}`);
       client.emit('chat.error', {
         message:
-          error?.status === 403
+          e.status === 403
             ? 'No tienes acceso a esta conversación'
             : 'Error al procesar el mensaje. Intenta de nuevo.',
       });
@@ -195,7 +215,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('chat.history')
   async handleHistory(
-    client: Socket,
+    client: ChatSocket,
     payload: { sessionId: string; limit?: number; guestSecret?: string },
   ): Promise<void> {
     await client.data?.authReady?.catch(() => {});
@@ -230,10 +250,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         sessionId: payload.sessionId,
         messages,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const e = error as { message?: string; status?: number };
       client.emit('chat.error', {
         message:
-          error?.status === 403
+          e.status === 403
             ? 'No tienes permiso para ver esta sesión'
             : 'Error al obtener historial',
       });

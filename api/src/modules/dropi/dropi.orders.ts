@@ -29,6 +29,18 @@ interface DropiBffOrderResponse {
   data?: DropiBffOrderData | null;
 }
 
+/**
+ * Cuerpo que Dropi (o el BFF) devuelve al cancelar una orden. Los nombres de
+ * los campos no son estables entre endpoints asi que se miran varios.
+ */
+interface DropiCancelBody {
+  isSuccess?: boolean;
+  message?: string;
+  status_reason?: string;
+  error?: string;
+  raw?: string;
+}
+
 interface DropiOrderItemInput {
   dropiProductId: number;
   quantity: number;
@@ -392,9 +404,9 @@ export class DropiOrdersService {
   }
 
   private parseCancelResponse(res: DropiHttpResponse): DropiCancelResult {
-    let body: any = {};
+    let body: DropiCancelBody = {};
     try {
-      body = JSON.parse(res.data);
+      body = JSON.parse(res.data) as DropiCancelBody;
     } catch {
       body = { raw: res.data };
     }

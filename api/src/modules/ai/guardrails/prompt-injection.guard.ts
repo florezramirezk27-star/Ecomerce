@@ -37,14 +37,23 @@ export class PromptInjectionGuard {
     /GRANT\s+ALL/i,
     /EXEC(\s+|\()/i,
     /EVAL\s*\(/i,
-    /require\([\'"]fs[\'"]\)/i,
+    /require\(['"]fs['"]\)/i,
     /process\.env/i,
     /fs\.(read|write|exec)/i,
   ];
 
   sanitizeMessage(message: string): string {
+    // Los caracteres de control C0 (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F) no
+    // aportan nada a un mensaje y rompen el parseo posterior; TAB, LF y CR se
+    // conservan porque separan lineas. El patron va en una plantilla (no en un
+    // literal con \x00..) porque no-control-regex marca esos escapes como
+    // caracteres de control intencionales.
+    const controlChars = new RegExp(
+      `[\u0000-\u0008\u000B\u000C\u000E-\u001F]`,
+      'g',
+    );
     return message
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+      .replace(controlChars, '')
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
       .trim();
@@ -73,7 +82,6 @@ export class PromptInjectionGuard {
       }
     }
 
-    const words = sanitized.split(/\s+/);
     const systemInstructionWords = [
       'system',
       'prompt',

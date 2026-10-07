@@ -43,6 +43,11 @@ const NO_STOCK_ERROR = httpResponse(400, {
   data: null,
 });
 
+/** Cuerpo de la orden enviada a Dropi (solo lo que mira el test). */
+interface PostedOrderBody {
+  warehouses_selected_id?: number;
+}
+
 /**
  * Monta el servicio con dobles. `responses` se consume en orden: cada llamada
  * a Dropi toma el siguiente elemento y, si se acaba, el ultimo (que es lo que
@@ -53,16 +58,18 @@ function makeService(opts: {
   suggestedPrice?: number;
   responses: Array<{ statusCode: number; data: string } | Error>;
 }) {
-  const posted: any[] = [];
+  const posted: PostedOrderBody[] = [];
   let call = 0;
 
-  const request = jest.fn((_path: string, _method: string, body: any) => {
-    posted.push(body);
-    const next = opts.responses[Math.min(call, opts.responses.length - 1)];
-    call++;
-    if (next instanceof Error) return Promise.reject(next);
-    return Promise.resolve(next);
-  });
+  const request = jest.fn(
+    (_path: string, _method: string, body: PostedOrderBody) => {
+      posted.push(body);
+      const next = opts.responses[Math.min(call, opts.responses.length - 1)];
+      call++;
+      if (next instanceof Error) return Promise.reject(next);
+      return Promise.resolve(next);
+    },
+  );
 
   const client = { request } as unknown as DropiClient;
   const auth = {
@@ -85,7 +92,7 @@ function makeService(opts: {
   };
 }
 
-const usedWarehouses = (posted: any[]) =>
+const usedWarehouses = (posted: PostedOrderBody[]) =>
   posted.map((b) => b.warehouses_selected_id);
 
 describe('DropiOrdersService: eleccion y reintento de bodega', () => {

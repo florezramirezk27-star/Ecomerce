@@ -51,7 +51,7 @@ export class DropiAuthService implements OnModuleInit, OnModuleDestroy {
       this.configService.get<string>('DROPI_2FA_SECRET')?.trim() ?? '';
   }
 
-  async onModuleInit() {
+  onModuleInit() {
     if (this.apiToken) {
       this.activeToken = this.apiToken;
       this.logger.log('Dropi autenticado con API token del panel');

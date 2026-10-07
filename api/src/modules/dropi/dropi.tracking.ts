@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DropiClient } from './dropi.client';
 import { DropiAuthService } from './dropi.auth';
@@ -12,6 +13,20 @@ interface DropiOrderEstado {
   shipping_guide?: string | null;
   shipping_company?: string | null;
   updated_at?: string | number | null;
+}
+
+/** Pedazo de la respuesta de `GET /api/products/v4/index` que se usa al rastrear por guía. */
+interface TrackGuideObject {
+  status?: string;
+  last_event?: string;
+  status_detail?: string;
+  carrier?: string;
+  transportadora?: string;
+}
+
+interface TrackGuideResponse {
+  isSuccess?: boolean;
+  objects?: TrackGuideObject[];
 }
 
 @Injectable()
@@ -28,7 +43,7 @@ export class DropiTrackingService {
   async trackByGuide(guideId: string): Promise<DropiTrackingData | null> {
     let token = await this.auth.getToken();
 
-    let { statusCode, data } = await this.client.request(
+    const { statusCode, data: initialData } = await this.client.request(
       '/api/products/v4/index',
       'POST',
       {
@@ -37,6 +52,8 @@ export class DropiTrackingService {
       },
       token,
     );
+
+    let data = initialData;
 
     if (statusCode === 401) {
       this.auth.invalidateToken();
@@ -59,18 +76,22 @@ export class DropiTrackingService {
       data = retry.data;
     }
 
-    let parsed: any;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(data);
     } catch {
-      parsed = data;
+      parsed = null;
     }
 
-    if (!parsed?.isSuccess || !parsed?.objects?.length) {
+    // Se tipa la respuesta igual que consultarEstadoPorId para no arrastrar el
+    // `any` de JSON.parse por todo el método.
+    const respuesta = parsed as TrackGuideResponse | null;
+
+    if (!respuesta?.isSuccess || !respuesta?.objects?.length) {
       return null;
     }
 
-    const trackingData = parsed.objects[0];
+    const trackingData = respuesta.objects[0];
 
     return {
       status: trackingData.status || 'UNKNOWN',
@@ -227,7 +248,7 @@ export class DropiTrackingService {
         carrier: data.carrier || null,
         status: data.status || 'PENDING',
         lastEvent: data.lastEvent || null,
-        rawResponse: data.rawResponse || null,
+        rawResponse: (data.rawResponse || null) as Prisma.InputJsonValue,
         checkedAt: now,
       },
       update: {
@@ -236,7 +257,7 @@ export class DropiTrackingService {
         ...(data.carrier && { carrier: data.carrier }),
         ...(data.status && { status: data.status }),
         ...(data.lastEvent && { lastEvent: data.lastEvent }),
-        rawResponse: data.rawResponse || undefined,
+        rawResponse: (data.rawResponse || undefined) as Prisma.InputJsonValue,
         checkedAt: now,
       },
     });
@@ -299,7 +320,7 @@ export class DropiTrackingService {
       } else {
         await this.prisma.order.update({
           where: { id: orderId },
-          data: { status: translatedDropiStatus as any },
+          data: { status: translatedDropiStatus as OrderStatus },
         });
         this.logger.log(
           `Pedido ${orderId}: ${currentOrderStatus} → ${translatedDropiStatus} (Dropi: ${trackingData.status})`,
@@ -312,7 +333,7 @@ export class DropiTrackingService {
       lastEvent: trackingData.lastEvent,
       carrier: trackingData.carrier,
       dropiGuideId: trackingData.guide,
-      rawResponse: trackingData.rawResponse,
+      rawResponse: trackingData.rawResponse as Prisma.InputJsonValue,
     });
 
     return {
@@ -352,8 +373,10 @@ export class DropiTrackingService {
             dropi: result.dropiStatus,
           });
         }
-      } catch (err: any) {
-        this.logger.error(`Sync failed for order ${order.id}: ${err.message}`);
+      } catch (err: unknown) {
+        this.logger.error(
+          `Sync failed for order ${order.id}: ${(err as Error).message}`,
+        );
       }
     }
 
@@ -364,7 +387,7 @@ export class DropiTrackingService {
     found: boolean;
     deleted: boolean;
     status: string | null;
-    raw: any;
+    raw: unknown;
   }> {
     const order = await this.prisma.order.findFirst({
       where: { tracking: { dropiOrderId } },
@@ -399,9 +422,9 @@ export class DropiTrackingService {
         status: info.status,
         raw: info.rawResponse,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.error(
-        `fetchDropiOrderStatus falló para ${dropiOrderId}: ${err.message}`,
+        `fetchDropiOrderStatus falló para ${dropiOrderId}: ${(err as Error).message}`,
       );
       return { found: true, deleted: false, status: null, raw: null };
     }
@@ -463,9 +486,9 @@ export class DropiTrackingService {
           current: 'CANCELLED',
           reason: info.status || 'no encontrado en tracking',
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         this.logger.error(
-          `Sync de envío Dropi falló para orden ${order.id} (${dropiOrderId}): ${err.message}`,
+          `Sync de envío Dropi falló para orden ${order.id} (${dropiOrderId}): ${(err as Error).message}`,
         );
       }
     }

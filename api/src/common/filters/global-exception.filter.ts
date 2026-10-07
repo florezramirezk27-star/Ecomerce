@@ -35,7 +35,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     response.status(status).json({
       statusCode: status,
-      message: Array.isArray(message) ? message[0] : message,
+      message: (Array.isArray(message) ? message[0] : message) as string,
     });
   }
 }

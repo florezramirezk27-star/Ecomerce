@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { DropiQuoteParams } from './dropi.types';
+import { DropiCatalogBody, DropiQuoteParams } from './dropi.types';
 import { DropiService } from './dropi.service';
 import { DropiWebhookGuard } from '../../common/guards/dropi-webhook.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -23,7 +23,7 @@ export class DropiController {
   @Get('status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  async status() {
+  status() {
     return this.dropiService.getStatus();
   }
 
@@ -37,7 +37,7 @@ export class DropiController {
     @Query('favorite') favorite?: string,
     @Query('privated') privated?: string,
   ) {
-    const body: any = {
+    const body: DropiCatalogBody = {
       pageSize: pageSize ? Number(pageSize) : 50,
       startData: 0,
       privated_product: privated === 'true',

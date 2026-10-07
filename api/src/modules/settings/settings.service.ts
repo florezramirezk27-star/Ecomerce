@@ -23,7 +23,7 @@ export class SettingsService {
 
   private read(): Settings {
     try {
-      return JSON.parse(fs.readFileSync(this.filePath, 'utf-8'));
+      return JSON.parse(fs.readFileSync(this.filePath, 'utf-8')) as Settings;
     } catch {
       return { logo: null };
     }

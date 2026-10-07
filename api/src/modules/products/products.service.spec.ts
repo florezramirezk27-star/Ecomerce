@@ -17,7 +17,11 @@ describe('ProductsService', () => {
         {
           provide: CatalogCacheService,
           useValue: {
-            remember: (_s, _p, loader) => loader(),
+            remember: (
+              _scope: string,
+              _parts: unknown[],
+              loader: () => Promise<unknown>,
+            ) => loader(),
             invalidate: async () => {},
           },
         },

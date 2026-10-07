@@ -24,6 +24,7 @@ import { GoogleTokenService } from './google-token.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { WsTicketStore } from '../../common/ws-ticket.store';
+import type { AuthenticatedRequest } from '../../common/types/auth-request';
 import { accessTokenLifetimeMs } from '../../common/token-expiry';
 import { createCsrfToken, setCsrfCookie } from '../../common/csrf';
 import { frontendUrl } from '../../common/config/origins';
@@ -51,6 +52,17 @@ function isMobileApp(req: ExpressRequest): boolean {
     (req.headers['user-agent']?.toLowerCase().includes('kronio') ?? false)
   );
 }
+
+/**
+ * Petición con el perfil que dejó la estrategia de OAuth en `req.user`
+ * (`validate()` de Google/Facebook), tipado contra lo que realmente consumen
+ * `googleLogin`/`facebookLogin` para que un cambio de forma se note en
+ * compilación y no en runtime.
+ */
+type OAuthRequest<M extends 'googleLogin' | 'facebookLogin'> =
+  ExpressRequest & {
+    user: Parameters<AuthService[M]>[0];
+  };
 
 @Controller('auth')
 export class AuthController {
@@ -204,7 +216,10 @@ export class AuthController {
 
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
-  async googleAuthRedirect(@Req() req, @Res() res: Response) {
+  async googleAuthRedirect(
+    @Req() req: OAuthRequest<'googleLogin'>,
+    @Res() res: Response,
+  ) {
     try {
       const result = await this.authService.googleLogin(req.user);
 
@@ -233,7 +248,10 @@ export class AuthController {
 
   @Get('facebook/callback')
   @UseGuards(AuthGuard('facebook'))
-  async facebookAuthRedirect(@Req() req, @Res() res: Response) {
+  async facebookAuthRedirect(
+    @Req() req: OAuthRequest<'facebookLogin'>,
+    @Res() res: Response,
+  ) {
     try {
       const result = await this.authService.facebookLogin(req.user);
 
@@ -314,7 +332,7 @@ export class AuthController {
   @ApiBearerAuth()
   @Get('profile')
   @UseGuards(JwtAuthGuard)
-  profile(@Request() req) {
+  profile(@Request() req: AuthenticatedRequest) {
     return req.user;
   }
 
@@ -322,7 +340,10 @@ export class AuthController {
   @Post('logout')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
-  logout(@Request() req, @Res({ passthrough: true }) res: Response) {
+  logout(
+    @Request() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     this.clearTokenCookie(res);
     return this.authService.logout(req.user.id, req.user.sessionId);
   }
@@ -331,7 +352,10 @@ export class AuthController {
   @Post('logout-force')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
-  async logoutForce(@Request() req, @Res({ passthrough: true }) res: Response) {
+  async logoutForce(
+    @Request() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.authService.logout(req.user.id);
     this.clearTokenCookie(res);
     return result;
@@ -341,7 +365,7 @@ export class AuthController {
   @Get('ws-ticket')
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 30, ttl: 60000 } })
-  wsTicket(@Request() req) {
+  wsTicket(@Request() req: AuthenticatedRequest) {
     return { ticket: WsTicketStore.create(req.user.id, req.user.role) };
   }
 }

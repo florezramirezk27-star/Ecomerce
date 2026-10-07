@@ -115,7 +115,8 @@ export class MetaService {
 
     try {
       const response = await axios.post(url, { data: [event] });
-      const eventsReceived = response.data?.events_received ?? 0;
+      const data = response.data as { events_received?: number } | null;
+      const eventsReceived = data?.events_received ?? 0;
       if (eventsReceived !== 1) {
         this.logger.warn(
           `Meta CAPI: ${payload.event} no reconocido por Meta: ${JSON.stringify(response.data)}`,

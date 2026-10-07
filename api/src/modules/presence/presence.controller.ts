@@ -16,12 +16,17 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import type { Request } from 'express';
+import type { AuthUser } from '../../common/types/auth-request';
 
 interface PresencePingDto {
   visitorId?: string;
   path?: string;
   referrer?: string;
 }
+
+// El guard es opcional (`OptionalJwtAuthGuard`), así que `user` puede faltar.
+type PresenceRequest = Request & { user?: AuthUser };
 
 @ApiTags('Presence')
 @Controller('presence')
@@ -37,7 +42,10 @@ export class PresenceController {
   @Header('Cache-Control', 'no-store')
   @UseGuards(OptionalJwtAuthGuard)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  async heartbeat(@Query() query: PresencePingDto, @Req() req: any) {
+  async heartbeat(
+    @Query() query: PresencePingDto,
+    @Req() req: PresenceRequest,
+  ) {
     const result = await this.presenceService.heartbeat({
       visitorId: query.visitorId ?? null,
       lastPath: query.path,

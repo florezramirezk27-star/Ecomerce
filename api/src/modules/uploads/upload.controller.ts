@@ -66,7 +66,11 @@ export class UploadController {
         fileSize: 5_000_000,
       },
       fileFilter: (_req, file, cb) => {
-        if (ALLOWED_MIMES.includes(file.mimetype as any)) {
+        if (
+          ALLOWED_MIMES.includes(
+            file.mimetype as (typeof ALLOWED_MIMES)[number],
+          )
+        ) {
           cb(null, true);
         } else {
           cb(

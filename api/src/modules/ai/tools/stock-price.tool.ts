@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   AgentTool,
@@ -24,7 +25,11 @@ export class StockPriceTool implements AgentTool<StockPriceIn, StockPriceOut> {
     args: StockPriceIn,
     _context: ToolContext,
   ): Promise<StockPriceOut> {
-    const where: any = { active: true };
+    // La herramienta no usa el contexto; se conserva el parametro para cumplir
+    // el contrato de AgentTool y `void` evita el aviso de variable sin usar.
+    void _context;
+
+    const where: Prisma.ProductWhereInput = { active: true };
 
     if (args.productId) {
       where.id = args.productId;

@@ -211,8 +211,8 @@ export class OrdersService {
 
         return created;
       });
-    } catch (err: any) {
-      if (err?.code === 'P2002' && dto.idempotencyKey) {
+    } catch (err: unknown) {
+      if ((err as { code?: string })?.code === 'P2002' && dto.idempotencyKey) {
         // Mismo acotado por `userId` que la busqueda previa: esta rama tambien
         // devuelve la orden al llamador, asi que arrastra el mismo riesgo de fuga.
         const existing = await this.prisma.order.findFirst({
@@ -990,10 +990,11 @@ export class OrdersService {
           dropiCancel = await this.dropiService.cancelOrder(
             Number(dropiOrderId),
           );
-        } catch (e: any) {
+        } catch (e: unknown) {
+          const dropiErr = e as { message?: string };
           dropiCancel = {
             success: false,
-            error: e.message || 'Error al cancelar en Dropi',
+            error: dropiErr.message || 'Error al cancelar en Dropi',
             rawResponse: null,
           };
         }
@@ -1028,7 +1029,7 @@ export class OrdersService {
         return tx.order.update({
           where: { id },
           data: {
-            status: status as any,
+            status: status,
           },
           include: {
             user: true,
@@ -1044,7 +1045,7 @@ export class OrdersService {
       updatedOrder = await this.prisma.order.update({
         where: { id },
         data: {
-          status: status as any,
+          status: status as OrderStatus,
         },
         include: {
           user: true,

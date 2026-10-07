@@ -45,7 +45,7 @@ export class ProductsService {
     onSale?: boolean,
     includeInactive = false,
   ) {
-    const where: any = {};
+    const where: Prisma.ProductWhereInput = {};
 
     if (!includeInactive) {
       where.active = true;
@@ -122,7 +122,7 @@ export class ProductsService {
       'product',
       [idOrSlug, includeInactive],
       async () => {
-        const where: any = {};
+        const where: Prisma.ProductWhereInput = {};
         if (!includeInactive) {
           where.active = true;
         }
@@ -174,7 +174,7 @@ export class ProductsService {
   async update(id: string, dto: UpdateProductDto) {
     const product = await this.prisma.product.update({
       where: { id },
-      data: dto as any,
+      data: dto,
       include: {
         category: true,
       },

@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { ExecutionContext } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { WsException } from '@nestjs/websockets';
 import type { ThrottlerRequest } from '@nestjs/throttler';

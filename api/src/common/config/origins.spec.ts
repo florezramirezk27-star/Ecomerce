@@ -1,8 +1,4 @@
-import {
-  frontendUrl,
-  isLocalOrigin,
-  isOriginAllowed,
-} from './origins';
+import { frontendUrl, isLocalOrigin, isOriginAllowed } from './origins';
 
 const OLD_ENV = { ...process.env };
 
@@ -43,9 +39,9 @@ describe('frontendUrl', () => {
 
   it('no acepta un origen externo como destino del redirect', () => {
     delete process.env.FRONTEND_URL;
-    expect(frontendUrl({ headers: { origin: 'https://atacante.example' } })).toBe(
-      'http://localhost:3000',
-    );
+    expect(
+      frontendUrl({ headers: { origin: 'https://atacante.example' } }),
+    ).toBe('http://localhost:3000');
   });
 
   it('no acepta esquemas que no sean http', () => {

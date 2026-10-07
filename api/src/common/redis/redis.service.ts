@@ -122,8 +122,13 @@ export class RedisService implements OnModuleDestroy {
     if (client.status === 'wait') {
       try {
         await client.connect();
-      } catch (error: any) {
-        this.noteFailure(new Error(error?.message ?? 'fallo al conectar'));
+      } catch (error: unknown) {
+        this.noteFailure(
+          new Error(
+            (error as { message?: string } | null | undefined)?.message ??
+              'fallo al conectar',
+          ),
+        );
         return null;
       }
       // `connect()` muta el status, pero TypeScript no lo sabe y mantiene el
@@ -143,8 +148,10 @@ export class RedisService implements OnModuleDestroy {
     if (!client) return null;
     try {
       return await run(client);
-    } catch (error: any) {
-      this.logger.warn(`Redis ${label} fallo: ${error?.message ?? error}`);
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Redis ${label} fallo: ${((error as { message?: string } | null | undefined)?.message ?? error) as string}`,
+      );
       return null;
     }
   }
@@ -273,8 +280,10 @@ export class RedisService implements OnModuleDestroy {
     if (!client) throw new Error('Redis no disponible');
     try {
       return await run(client);
-    } catch (error: any) {
-      this.logger.warn(`Redis ${label} fallo: ${error?.message ?? error}`);
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Redis ${label} fallo: ${((error as { message?: string } | null | undefined)?.message ?? error) as string}`,
+      );
       throw error;
     }
   }

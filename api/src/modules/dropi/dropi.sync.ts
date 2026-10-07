@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
-import { DropiProductsService } from './dropi.products';
+import { DropiProduct, DropiProductsService } from './dropi.products';
 import { DropiTrackingService } from './dropi.tracking';
 
 export interface StockSyncSummary {
@@ -27,7 +27,12 @@ export interface StockSyncSummary {
    * No se corrigen solos: el precio lo define el_dueno a mano y el sync no debe
    * deshacerlo, pero es exactamente la causa de que la orden no se cree.
    */
-  priceWarnings: { id: number; name: string; local: number; suggested: number }[];
+  priceWarnings: {
+    id: number;
+    name: string;
+    local: number;
+    suggested: number;
+  }[];
 }
 
 const DEFAULT_SYNC_INTERVAL_MIN = 30;
@@ -93,8 +98,9 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
           `Stock sync: ${summary.priceWarnings.length} producto(s) por debajo del precio minimo de Dropi: ${summary.priceWarnings.map((w) => `${w.name} (${w.local} < ${w.suggested})`).join('; ')}`,
         );
       }
-    } catch (err: any) {
-      this.logger.error(`Stock sync automático falló: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Stock sync automático falló: ${message}`);
     }
 
     try {
@@ -104,8 +110,9 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
           `Sync automático de estados Dropi: ${updates.length} orden(es) actualizada(s)`,
         );
       }
-    } catch (err: any) {
-      this.logger.error(`Sync de estados Dropi falló: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Sync de estados Dropi falló: ${message}`);
     }
 
     try {
@@ -115,8 +122,9 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
           `Sync automático: ${deleted.length} envío(s) eliminado(s) en Dropi marcados como cancelados`,
         );
       }
-    } catch (err: any) {
-      this.logger.error(`Sync de envíos eliminados falló: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Sync de envíos eliminados falló: ${message}`);
     }
   }
 
@@ -174,17 +182,18 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
       // productos de la propia tienda del dropshipper, no el catalogo del
       // proveedor: ningun producto importado aparecia nunca y el stock local
       // se quedaba congelado sin dar error. La busqueda por id si los ve.
-      let dropiProduct: any = null;
+      let dropiProduct: DropiProduct | null = null;
       try {
         dropiProduct = await this.products.getProductById(dropiId);
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
         summary.errors++;
-        summary.errorNames.push(`${local.name} (${dropiId}): ${err.message}`);
+        summary.errorNames.push(`${local.name} (${dropiId}): ${message}`);
         summary.details.push({
           id: dropiId,
           name: local.name,
           updated: false,
-          error: `Dropi no respondio: ${err.message}`,
+          error: `Dropi no respondio: ${message}`,
         });
         continue;
       }
@@ -235,14 +244,15 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
             `Sync: "${local.name}" esta en ${localPrice} y Dropi exige minimo ${suggested}; la orden sera rechazada`,
           );
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
         summary.errors++;
-        summary.errorNames.push(`${local.name} (${dropiId}): ${err.message}`);
+        summary.errorNames.push(`${local.name} (${dropiId}): ${message}`);
         summary.details.push({
           id: dropiId,
           name: local.name,
           updated: false,
-          error: err.message,
+          error: message,
         });
       }
     }

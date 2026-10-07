@@ -13,6 +13,23 @@ import {
 type TrackingIn = z.infer<typeof TrackingInput>;
 type TrackingOut = z.infer<typeof TrackingOutput>;
 
+/**
+ * Respuesta del catalogo de Dropi tipada con lo minimo que lee esta
+ * herramienta: `getDropiProducts` devuelve `any`, asi que se describe aqui el
+ * contrato real que consume el tracking.
+ */
+type DropiCatalogResult = {
+  isSuccess?: boolean;
+  objects?: DropiCatalogObject[];
+};
+
+/** Objeto del catalogo de Dropi con los campos de estado que se usan. */
+type DropiCatalogObject = {
+  status?: string | null;
+  last_event?: string | null;
+  status_detail?: string | null;
+};
+
 @Injectable()
 export class TrackingTool implements AgentTool<TrackingIn, TrackingOut> {
   name = 'rastrearPedidoDropi';
@@ -76,12 +93,12 @@ export class TrackingTool implements AgentTool<TrackingIn, TrackingOut> {
       }
 
       const now = new Date();
-      const result = await this.dropiService.getDropiProducts({
+      const result = (await this.dropiService.getDropiProducts({
         search_type: 'guide',
         keywords: guideId,
-      });
+      })) as DropiCatalogResult;
 
-      if (result?.isSuccess && result?.objects?.length > 0) {
+      if (result?.isSuccess && result.objects && result.objects.length > 0) {
         const trackingData = result.objects[0];
         const status = trackingData.status || 'UNKNOWN';
 
@@ -124,7 +141,7 @@ export class TrackingTool implements AgentTool<TrackingIn, TrackingOut> {
         error: 'No se encontró información de rastreo para esta guía',
       };
     } catch (error: any) {
-      this.logger.error(`Error tracking order: ${error.message}`);
+      this.logger.error(`Error tracking order: ${(error as Error).message}`);
       return {
         success: false,
         error: 'Error al consultar el estado del pedido. Intenta de nuevo.',

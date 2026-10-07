@@ -36,6 +36,45 @@ export interface DropiSupplierWarehouseContext {
   suggestedPrice: number;
 }
 
+/**
+ * Forma minima de un producto del catalogo de Dropi con los campos que usa
+ * este servicio: bodegas, stock, precios y media. Las respuestas de Dropi se
+ * parsean como `any`; aqui se les da forma local para no regar `any` por el
+ * resto del archivo.
+ */
+export interface DropiProduct {
+  id?: number;
+  name: string;
+  type?: string;
+  sku?: string | null;
+  description?: string | null;
+  sale_price?: number | string | null;
+  suggested_price?: number | string | null;
+  user?: { id?: number | string };
+  warehouse_product?: DropiWarehouseProduct[];
+  variations?: DropiVariation[];
+  gallery?: DropiGalleryItem[];
+  categories?: Array<{ name?: string } | null>;
+}
+
+/** Bodega asociada a un producto en el catalogo de Dropi. */
+interface DropiWarehouseProduct {
+  warehouse_id?: number | string;
+  stock?: number;
+}
+
+/** Variante de un producto variable (talla/color) en el catalogo de Dropi. */
+interface DropiVariation {
+  stock?: number;
+}
+
+/** Elemento de la galeria de un producto de Dropi. */
+interface DropiGalleryItem {
+  url?: string | null;
+  urlS3?: string | null;
+  main?: boolean;
+}
+
 interface DropiMediaItem {
   url?: string | null;
   urlS3?: string | null;
@@ -218,10 +257,7 @@ export class DropiProductsService {
 
     const supplierId = Number(product.user?.id);
     const warehouses = Array.isArray(product.warehouse_product)
-      ? (product.warehouse_product as {
-          warehouse_id?: number | string;
-          stock?: number;
-        }[])
+      ? product.warehouse_product
       : [];
 
     if (!supplierId || warehouses.length === 0) return null;
@@ -255,7 +291,7 @@ export class DropiProductsService {
     };
   }
 
-  async getProductById(dropiProductId: number): Promise<any> {
+  async getProductById(dropiProductId: number): Promise<DropiProduct | null> {
     const result = await this.fetchCatalog({
       pageSize: 1,
       startData: 0,
@@ -274,7 +310,7 @@ export class DropiProductsService {
       return null;
     }
 
-    return result.objects[0];
+    return result.objects[0] as DropiProduct;
   }
 
   async getRealStock(dropiProductId: number): Promise<number> {
@@ -296,22 +332,22 @@ export class DropiProductsService {
       return 0;
     }
 
-    return this.computeStock(result.objects[0]);
+    return this.computeStock(result.objects[0] as DropiProduct);
   }
 
-  computeStock(product: any): number {
+  computeStock(product: DropiProduct): number {
     if (!product) return 0;
 
     if (product.type === 'VARIABLE' && product.variations) {
       return product.variations.reduce(
-        (sum: number, v: any) => sum + (v.stock || 0),
+        (sum: number, v: DropiVariation) => sum + (v.stock || 0),
         0,
       );
     }
 
     if (product.warehouse_product) {
       return product.warehouse_product.reduce(
-        (sum: number, w: any) => sum + (w.stock || 0),
+        (sum: number, w: DropiWarehouseProduct) => sum + (w.stock || 0),
         0,
       );
     }
@@ -345,9 +381,10 @@ export class DropiProductsService {
             available,
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
         this.logger.error(
-          `Stock check failed for ${item.name} (${item.dropiProductId}): ${err.message}`,
+          `Stock check failed for ${item.name} (${item.dropiProductId}): ${message}`,
         );
         insufficient.push({
           name: item.name,
@@ -461,8 +498,9 @@ export class DropiProductsService {
         keywords: String(dropiProductId),
         with_collection: true,
       });
-    } catch (e: any) {
-      this.logger.error(`Dropi API call failed: ${e.message}`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.logger.error(`Dropi API call failed: ${message}`);
       throw new Error('Error al conectar con Dropi');
     }
 
@@ -473,7 +511,7 @@ export class DropiProductsService {
       throw new Error(`Producto ${dropiProductId} no encontrado en Dropi.`);
     }
 
-    const dropiProduct = result.objects[0];
+    const dropiProduct = result.objects[0] as DropiProduct;
     const name = dropiProduct.name;
 
     let slug = name
@@ -507,9 +545,9 @@ export class DropiProductsService {
     const stock = this.computeStock(dropiProduct);
 
     const mainGallery =
-      dropiProduct.gallery?.find((g: any) => g.main) ||
+      dropiProduct.gallery?.find((g: DropiGalleryItem) => g.main) ||
       dropiProduct.gallery?.[0];
-    const toAbsolute = (g: any): string | undefined => {
+    const toAbsolute = (g?: DropiGalleryItem): string | undefined => {
       const u = g?.url || g?.urlS3;
       if (!u) return undefined;
       if (/^https?:\/\//.test(u)) return u;
@@ -518,7 +556,7 @@ export class DropiProductsService {
 
     const image = toAbsolute(mainGallery);
     const gallery = (dropiProduct.gallery || [])
-      .filter((g: any) => g !== mainGallery)
+      .filter((g: DropiGalleryItem) => g !== mainGallery)
       .map(toAbsolute)
       .filter(Boolean) as string[];
 

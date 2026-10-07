@@ -9,12 +9,7 @@ import { CartModule } from '../cart/cart.module';
 @Global()
 @Module({
   imports: [DropiModule, CartModule],
-  providers: [
-    AIService,
-    StockPriceTool,
-    TrackingTool,
-    PromptInjectionGuard,
-  ],
+  providers: [AIService, StockPriceTool, TrackingTool, PromptInjectionGuard],
   exports: [AIService],
 })
 export class AIModule {}

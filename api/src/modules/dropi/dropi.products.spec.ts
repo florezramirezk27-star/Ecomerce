@@ -1,4 +1,8 @@
 import { DropiProductsService } from './dropi.products';
+import { DropiClient } from './dropi.client';
+import { DropiAuthService } from './dropi.auth';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 
 /**
  * Lo que cubre este archivo: el producto de Dropi solo se puede importar una
@@ -33,10 +37,12 @@ describe('DropiProductsService — importar una sola vez', () => {
       },
     };
     service = new DropiProductsService(
-      client as any,
-      { getToken: jest.fn().mockResolvedValue('token') } as any,
-      prisma as any,
-      { invalidate: jest.fn() } as any,
+      client as unknown as DropiClient,
+      {
+        getToken: jest.fn().mockResolvedValue('token'),
+      } as unknown as DropiAuthService,
+      prisma as unknown as PrismaService,
+      { invalidate: jest.fn() } as unknown as CatalogCacheService,
     );
   });
 

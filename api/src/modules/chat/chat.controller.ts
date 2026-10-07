@@ -15,8 +15,12 @@ import { Throttle } from '@nestjs/throttler';
 import { ChatService } from './chat.service';
 import { AIService } from '../ai/ai.service';
 import { SendMessageDto } from './dto/chat-message.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import type { Request } from 'express';
+import type { AuthUser } from '../../common/types/auth-request';
+
+// El guard es opcional (`OptionalJwtAuthGuard`), así que `user` puede faltar.
+type ChatRequest = Request & { user?: AuthUser };
 
 @ApiTags('Chat')
 @Controller('chat')
@@ -30,7 +34,7 @@ export class ChatController {
   @HttpCode(200)
   @UseGuards(OptionalJwtAuthGuard)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
-  async sendMessage(@Body() dto: SendMessageDto, @Req() req: any) {
+  async sendMessage(@Body() dto: SendMessageDto, @Req() req: ChatRequest) {
     const userId = req.user?.id;
     const isAdmin = req.user?.role === 'ADMIN';
     const message = dto.message.trim();
@@ -89,13 +93,14 @@ export class ChatController {
           ? { guestSecret: context.newGuestSecret }
           : {}),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
       }
+      const e = error as { message?: string; status?: number };
       throw new HttpException(
-        error?.message || 'Error al procesar el mensaje en el chat',
-        error?.status || 500,
+        e.message || 'Error al procesar el mensaje en el chat',
+        e.status || 500,
       );
     }
   }
@@ -104,7 +109,7 @@ export class ChatController {
   @UseGuards(OptionalJwtAuthGuard)
   async getHistory(
     @Query('sessionId') sessionId: string,
-    @Req() req: any,
+    @Req() req: ChatRequest,
     @Query('limit') limit?: string,
     @Query('before') before?: string,
     @Headers('x-guest-secret') guestSecret?: string,

@@ -72,7 +72,7 @@ export class PresenceService implements OnModuleDestroy {
     this.sweeper.unref?.();
   }
 
-  async onModuleDestroy(): Promise<void> {
+  onModuleDestroy(): void {
     if (this.sweeper) clearInterval(this.sweeper);
   }
 
@@ -95,7 +95,10 @@ export class PresenceService implements OnModuleDestroy {
     if (!meta) return;
 
     const orphans = Object.keys(meta).filter((id) => {
-      const firstSeenAt = Number(JSON.parse(meta[id] || '{}').firstSeenAt ?? 0);
+      const parsed = JSON.parse(meta[id] || '{}') as {
+        firstSeenAt?: unknown;
+      };
+      const firstSeenAt = Number(parsed.firstSeenAt ?? 0);
       return Number.isFinite(firstSeenAt) && firstSeenAt < cutoff;
     });
 
@@ -206,7 +209,7 @@ export class PresenceService implements OnModuleDestroy {
 
   private parseMeta(raw: string): PresenceMeta | null {
     try {
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(raw) as { firstSeenAt?: unknown } | null;
       if (!parsed || typeof parsed.firstSeenAt !== 'number') return null;
       return parsed as PresenceMeta;
     } catch {

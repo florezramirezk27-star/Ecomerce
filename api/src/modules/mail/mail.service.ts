@@ -144,12 +144,7 @@ export class MailService implements OnModuleInit {
     });
   }
 
-  private async autoSelectSmtpConfig(
-    host: string,
-    port: number,
-    user: string,
-    pass: string,
-  ) {
+  private async autoSelectSmtpConfig(host: string, port: number) {
     const candidates = [
       { port, secure: Number(port) === 465, source: 'SMTP_PORT' },
       { port: 465, secure: true, source: 'fallback 465' },
@@ -185,7 +180,7 @@ export class MailService implements OnModuleInit {
         },
         (e) => {
           clearTimeout(timer);
-          reject(e);
+          reject(e as Error);
         },
       );
     });
@@ -296,7 +291,7 @@ export class MailService implements OnModuleInit {
     const pass = process.env.SMTP_PASS;
 
     if (host && port && user && pass) {
-      const cfg = await this.autoSelectSmtpConfig(host, port, user, pass);
+      const cfg = await this.autoSelectSmtpConfig(host, port);
       this.transporter = nodemailer.createTransport({
         ...cfg,
         auth: { user, pass },
@@ -523,7 +518,8 @@ export class MailService implements OnModuleInit {
           );
           return true;
         } catch (err) {
-          const message = err instanceof Error ? err.message : err;
+          const message: string =
+            err instanceof Error ? err.message : String(err);
           if (attempt === 1) {
             this.logger.warn(
               `[${options.tag}] intento 1 falló (${message}); reintentando...`,
@@ -575,7 +571,8 @@ export class MailService implements OnModuleInit {
           );
           return true;
         } catch (err) {
-          const message = err instanceof Error ? err.message : err;
+          const message: string =
+            err instanceof Error ? err.message : String(err);
           if (attempt === 1) {
             this.logger.warn(
               `[${options.tag}] intento 1 falló (${message}); reintentando...`,

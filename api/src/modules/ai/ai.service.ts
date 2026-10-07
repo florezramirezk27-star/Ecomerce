@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { generateText, streamText, tool, isStepCount } from 'ai';
+import { ChatIntent, ConversationState, Prisma } from '@prisma/client';
 
 /**
  * Modelo que aceptan `generateText` y `streamText`. Se toma del tipo de sus
@@ -46,6 +47,34 @@ type LocalIntent =
   | 'ORDER_STATUS'
   | 'THANKS'
   | 'UNKNOWN';
+
+/**
+ * Resultado de `consultarStockYPrecio` visto desde este servicio. El output de
+ * las herramientas llega como `unknown` (no como el zod de
+ * `StockPriceOutput`), asi que se tipa aqui solo lo que se consume.
+ */
+interface StockToolOutput {
+  success: boolean;
+  products?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    price: number;
+    oldPrice?: number | null;
+    stock: number;
+    image?: string | null;
+    categoryName?: string;
+  }>;
+}
+
+/** Resultado de `rastrearPedidoDropi` visto desde este servicio. */
+interface TrackingToolOutput {
+  success: boolean;
+  status?: string;
+  lastEvent?: string;
+  carrier?: string;
+  error?: string;
+}
 
 /**
  * Aviso que se antepone a la respuesta local cuando el modelo fallo.
@@ -357,9 +386,9 @@ FORMATO:
       const stockCall = toolCalls.find(
         (tc) => tc.name === 'consultarStockYPrecio',
       );
-      if (stockCall?.result && (stockCall.result as any).success) {
-        const productsData = (stockCall.result as any).products;
-        if (productsData?.length > 0) {
+      if (stockCall?.result && (stockCall.result as StockToolOutput).success) {
+        const productsData = (stockCall.result as StockToolOutput).products;
+        if (productsData !== undefined && productsData.length > 0) {
           ui.push({
             type: 'product_carousel',
             data: { products: productsData },
@@ -370,7 +399,10 @@ FORMATO:
       const trackingCall = toolCalls.find(
         (tc) => tc.name === 'rastrearPedidoDropi',
       );
-      if (trackingCall?.result && (trackingCall.result as any).success) {
+      if (
+        trackingCall?.result &&
+        (trackingCall.result as TrackingToolOutput).success
+      ) {
         ui.push({
           type: 'tracking_update',
           data: trackingCall.result as Record<string, unknown>,
@@ -492,9 +524,9 @@ FORMATO:
       const stockCall = toolCalls.find(
         (tc) => tc.name === 'consultarStockYPrecio',
       );
-      if (stockCall?.result && (stockCall.result as any).success) {
-        const prods = (stockCall.result as any).products;
-        if (prods?.length > 0) {
+      if (stockCall?.result && (stockCall.result as StockToolOutput).success) {
+        const prods = (stockCall.result as StockToolOutput).products;
+        if (prods !== undefined && prods.length > 0) {
           uis.push({ type: 'product_carousel', data: { products: prods } });
         }
       }
@@ -502,7 +534,10 @@ FORMATO:
       const trackingCall = toolCalls.find(
         (tc) => tc.name === 'rastrearPedidoDropi',
       );
-      if (trackingCall?.result && (trackingCall.result as any).success) {
+      if (
+        trackingCall?.result &&
+        (trackingCall.result as TrackingToolOutput).success
+      ) {
         uis.push({
           type: 'tracking_update',
           data: trackingCall.result as Record<string, unknown>,
@@ -559,8 +594,8 @@ FORMATO:
     await this.prisma.chatSession.update({
       where: { id: sessionId },
       data: {
-        state: newState as any,
-        intent: intent as any,
+        state: newState as ConversationState,
+        intent: intent as ChatIntent,
       },
     });
   }
@@ -736,7 +771,7 @@ FORMATO:
 
     const searchTerms = words.length > 0 ? words : [];
 
-    const where: any = { active: true };
+    const where: Prisma.ProductWhereInput = { active: true };
     if (searchTerms.length > 0) {
       where.OR = searchTerms.map((term) => ({
         OR: [

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { DropiAuthService } from './dropi.auth';
 import { DropiProductsService } from './dropi.products';
@@ -8,6 +9,7 @@ import { DropiSyncService, StockSyncSummary } from './dropi.sync';
 import {
   DropiCancelResult,
   DropiCatalogBody,
+  DropiCatalogResponse,
   DropiCreateOrderRequest,
   DropiCreateOrderResponse,
   DropiFinalOrderResult,
@@ -48,6 +50,11 @@ const webhookPayloadSchema = z
 /** Formato de identificador que usa Prisma para los pedidos. */
 const CUID_PATTERN = /^c[0-9a-z]{20,32}$/;
 
+/** Resultado de `DropiProductsService.importProduct`: el producto creado con su categoría. */
+type ProductoImportado = Prisma.ProductGetPayload<{
+  include: { category: true };
+}>;
+
 @Injectable()
 export class DropiService {
   private readonly logger = new Logger(DropiService.name);
@@ -74,12 +81,16 @@ export class DropiService {
     return this.auth.getStatus();
   }
 
-  async getDropiProducts(body?: object): Promise<any> {
-    return this.products.fetchCatalog(body as DropiCatalogBody);
+  async getDropiProducts(
+    body?: DropiCatalogBody,
+  ): Promise<DropiCatalogResponse> {
+    return this.products.fetchCatalog(body ?? {});
   }
 
-  async importProduct(dropiProductId: number): Promise<any> {
-    return this.products.importProduct(dropiProductId);
+  async importProduct(dropiProductId: number): Promise<ProductoImportado> {
+    return (await this.products.importProduct(
+      dropiProductId,
+    )) as ProductoImportado;
   }
 
   async validateStock(items: DropiStockItem[]): Promise<DropiStockValidation> {
@@ -141,15 +152,30 @@ export class DropiService {
     return this.tracking.translateStatus(dropiStatus);
   }
 
-  async syncOrderStatus(orderId: string): Promise<any> {
+  async syncOrderStatus(orderId: string): Promise<{
+    synced: boolean;
+    previousStatus: string;
+    newStatus: string;
+    dropiStatus: string;
+  }> {
     return this.tracking.syncOrderStatus(orderId);
   }
 
-  async syncAllPendingOrders(): Promise<any> {
+  async syncAllPendingOrders(): Promise<
+    { orderId: string; previous: string; current: string; dropi: string }[]
+  > {
     return this.tracking.syncAllPendingOrders();
   }
 
-  async syncDeletedOrders(): Promise<any> {
+  async syncDeletedOrders(): Promise<
+    {
+      orderId: string;
+      dropiOrderId: string;
+      previous: string;
+      current: string;
+      reason: string;
+    }[]
+  > {
     return this.tracking.syncDeletedOrders();
   }
 
@@ -211,18 +237,26 @@ export class DropiService {
     return { received: true };
   }
 
-  private findField(obj: any, keys: string[]): string | null {
+  private findField(obj: unknown, keys: string[]): string | null {
     if (!obj || typeof obj !== 'object') return null;
 
+    const record = obj as Record<string, unknown>;
+
     for (const key of keys) {
-      if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') {
-        return String(obj[key]);
+      if (
+        record[key] !== undefined &&
+        record[key] !== null &&
+        record[key] !== ''
+      ) {
+        // El flujo de narrowing de TS deja `record[key]` como `{}` aqui; el
+        // cast a `any` solo afecta al tipo y preserva el String() original.
+        return String(record[key] as any);
       }
     }
 
-    for (const k of Object.keys(obj)) {
-      if (typeof obj[k] === 'object' && obj[k] !== null) {
-        const found = this.findField(obj[k], keys);
+    for (const k of Object.keys(record)) {
+      if (typeof record[k] === 'object' && record[k] !== null) {
+        const found = this.findField(record[k], keys);
         if (found) return found;
       }
     }

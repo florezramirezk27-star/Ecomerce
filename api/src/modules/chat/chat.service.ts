@@ -12,6 +12,13 @@ interface SessionContext {
   expiresAt: number;
 }
 
+// Filtro mínimo de `getHistory`, con la misma forma del `WhereInput` de Prisma
+// para no depender de `any`.
+interface FiltroHistorialChat {
+  sessionId: string;
+  id?: { lt?: string };
+}
+
 @Injectable()
 export class ChatService {
   private readonly memoryStore = new Map<string, SessionContext>();
@@ -134,7 +141,7 @@ INFORMACIÓN DE LA TIENDA:
     };
   }
 
-  async detectIntent(message: string): Promise<ChatIntent> {
+  detectIntent(message: string): ChatIntent {
     const lower = message.toLowerCase();
 
     if (
@@ -199,9 +206,9 @@ INFORMACIÓN DE LA TIENDA:
     }));
   }
 
-  async getContextFromCache(
+  getContextFromCache(
     sessionId: string,
-  ): Promise<Array<{ role: string; content: string }> | null> {
+  ): Array<{ role: string; content: string }> | null {
     const cached = this.memoryStore.get(sessionId);
     if (cached && Date.now() < cached.expiresAt) {
       return cached.messages;
@@ -318,7 +325,7 @@ INSTRUCCIONES ESPECÍFICAS:
   }
 
   async getHistory(sessionId: string, limit = 50, before?: string) {
-    const where: any = { sessionId };
+    const where: FiltroHistorialChat = { sessionId };
     if (before) {
       where.id = { lt: before };
     }

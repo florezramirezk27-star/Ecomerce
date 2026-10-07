@@ -12,12 +12,14 @@ import {
 import { Throttle } from '@nestjs/throttler';
 
 import { OrdersService } from './orders.service';
+import { CheckoutDto } from './dto/checkout.dto';
 import { parsePagination } from '../../common/pipes/parse-pagination';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { checkoutSchema, updateOrderStatusSchema } from '../../common/schemas';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import type { AuthenticatedRequest } from '../../common/types/auth-request';
 
 @Controller('orders')
 export class OrdersController {
@@ -42,8 +44,8 @@ export class OrdersController {
   // que necesita un comprador legitimo.
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async checkout(
-    @Req() req,
-    @Body(new ZodValidationPipe(checkoutSchema)) dto: any,
+    @Req() req: AuthenticatedRequest,
+    @Body(new ZodValidationPipe(checkoutSchema)) dto: CheckoutDto,
   ) {
     return this.ordersService.checkout(req.user.id, dto);
   }
@@ -51,7 +53,7 @@ export class OrdersController {
   @Get('my-orders')
   @UseGuards(JwtAuthGuard)
   findMyOrders(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -86,7 +88,7 @@ export class OrdersController {
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  findOne(@Param('id') id: string, @Req() req) {
+  findOne(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.ordersService.findOne(id, req.user.id, req.user.role);
   }
 }

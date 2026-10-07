@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 
 import { CategoriesService } from './categories.service';
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import {
   createCategorySchema,
@@ -36,7 +38,9 @@ export class CategoriesController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  create(@Body(new ZodValidationPipe(createCategorySchema)) dto: any) {
+  create(
+    @Body(new ZodValidationPipe(createCategorySchema)) dto: CreateCategoryDto,
+  ) {
     return this.categoriesService.create(dto);
   }
 
@@ -45,7 +49,7 @@ export class CategoriesController {
   @Roles('ADMIN')
   update(
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(updateCategorySchema)) dto: any,
+    @Body(new ZodValidationPipe(updateCategorySchema)) dto: UpdateCategoryDto,
   ) {
     return this.categoriesService.update(id, dto);
   }

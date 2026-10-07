@@ -287,7 +287,9 @@ describe('AIService sin clave de IA', () => {
     // alarga el fallo y tarda mas en llegar el aviso de modo basico.
     await expect(
       service.processMessage('hola', [], config),
-    ).resolves.toMatchObject({ text: expect.stringContaining('modo básico') });
+    ).resolves.toMatchObject({
+      text: expect.stringContaining('modo básico') as string,
+    });
     expect(gen).toHaveBeenCalledTimes(1);
 
     gen.mockReset();

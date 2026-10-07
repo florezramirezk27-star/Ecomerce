@@ -7,7 +7,9 @@ export class OptionalJwtAuthGuard extends AuthGuard('jwt') {
     return super.canActivate(context);
   }
 
-  handleRequest(err: any, user: any) {
-    return user || null;
+  handleRequest<TUser = any>(err: any, user: TUser): TUser {
+    // Passport entrega `false`/`null` cuando no hay usuario: se devuelve tal
+    // cual para que el controlador decida (guard opcional).
+    return (user || null) as TUser;
   }
 }

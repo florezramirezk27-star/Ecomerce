@@ -10,44 +10,73 @@ const LOCAL = [
   { id: 'p3', dropiProductId: 291738, name: 'Brasier Copa', price: 18000 },
 ];
 
+/** Stock por bodega como lo devuelve Dropi (solo lo que sumamos). */
+interface DropiWarehouseStock {
+  warehouse_id?: number;
+  stock?: number;
+}
+
+/** Producto de Dropi, tal como lo usa el sync (solo los campos que toca). */
+interface DropiProduct {
+  id: number;
+  name: string;
+  suggested_price?: number;
+  sale_price?: number;
+  warehouse_product?: DropiWarehouseStock[];
+}
+
+/** Fila local escrita por el sync: id del producto y stock nuevo. */
+interface ProductUpdate {
+  id: string;
+  data: { stock: number };
+}
+
 function makeSync(opts: {
-  byId: Record<number, any>;
+  byId: Record<number, DropiProduct>;
   throwOn?: number[];
   local?: typeof LOCAL;
 }) {
-  const updates: any[] = [];
+  const updates: ProductUpdate[] = [];
 
   const products = {
-    getProductById: jest.fn(async (id: number) => {
+    getProductById: jest.fn((id: number) => {
       if (opts.throwOn?.includes(id)) throw new Error('timeout');
       return opts.byId[id] ?? null;
     }),
     // Si el sync volviera a paginar el catalogo generico, esto se llamaria.
-    fetchCatalog: jest.fn(async () => ({
+    fetchCatalog: jest.fn(() => ({
       isSuccess: true,
       objects: [{ id: 1, name: 'Otro', warehouse_product: [] }],
     })),
-    computeStock: jest.fn((p: any) =>
+    computeStock: jest.fn((p: DropiProduct) =>
       (p.warehouse_product || []).reduce(
-        (s: number, w: any) => s + (w.stock || 0),
+        (s: number, w: DropiWarehouseStock) => s + (w.stock || 0),
         0,
       ),
     ),
-  } as unknown as DropiProductsService;
+  };
 
   const prisma = {
     product: {
       findMany: jest.fn().mockResolvedValue(opts.local ?? LOCAL),
-      update: jest.fn(async ({ where, data }: any) => {
-        updates.push({ id: where.id, data });
-        return {};
-      }),
+      update: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: { stock: number };
+        }) => {
+          updates.push({ id: where.id, data });
+          return {};
+        },
+      ),
     },
   } as unknown as PrismaService;
 
   const cache = {
     invalidate: jest.fn().mockResolvedValue(undefined),
-  } as unknown as CatalogCacheService;
+  };
 
   const tracking = {
     syncAllPendingOrders: jest.fn(),
@@ -55,10 +84,15 @@ function makeSync(opts: {
   } as unknown as DropiTrackingService;
 
   return {
-    service: new DropiSyncService(products, prisma, tracking, cache),
-    products: products as any,
+    service: new DropiSyncService(
+      products as unknown as DropiProductsService,
+      prisma,
+      tracking,
+      cache as unknown as CatalogCacheService,
+    ),
+    products,
     updates,
-    cache: cache as any,
+    cache,
   };
 }
 
@@ -119,7 +153,12 @@ describe('DropiSyncService: sincronizacion de stock', () => {
     const { service } = makeSync({
       byId: { 1734566: dropiProduct(1734566, 100, 219900) },
       local: [
-        { id: 'p1', dropiProductId: 1734566, name: 'Reloj Naviforce', price: 175900 },
+        {
+          id: 'p1',
+          dropiProductId: 1734566,
+          name: 'Reloj Naviforce',
+          price: 175900,
+        },
       ],
     });
 

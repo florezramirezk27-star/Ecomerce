@@ -5,6 +5,16 @@ import { Request } from 'express';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { SessionCacheService } from '../session-cache.service';
 
+/**
+ * Payload del JWT firmado en `AuthService`. `sessionId` es opcional aquí
+ * porque el `validate` lo comprueba explícitamente y debe seguir existiendo
+ * ese chequeo en runtime (tokens viejos sin `sessionId` no valen).
+ */
+interface JwtPayload {
+  sub: string;
+  sessionId?: string;
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   private readonly logger = new Logger(JwtStrategy.name);
@@ -28,7 +38,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
-        (req: Request) => req?.cookies?.token || null,
+        (req: Request) => (req?.cookies?.token as string) || null,
       ]),
       ignoreExpiration: false,
       secretOrKey: jwtSecret,
@@ -38,7 +48,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: any) {
+  async validate(payload: JwtPayload) {
     if (!payload.sessionId) {
       throw new UnauthorizedException('Sesión inválida');
     }

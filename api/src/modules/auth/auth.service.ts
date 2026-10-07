@@ -23,6 +23,17 @@ const EXCHANGE_CODE_TTL_MS = 60_000;
 const EXCHANGE_CODE_TTL_S = 60;
 const EXCHANGE_CODE_PREFIX = 'auth:exchange:';
 
+/**
+ * Usuario que viaja junto al `access_token` en los códigos de intercambio de
+ * OAuth. Misma forma que la que devuelven `googleLogin`/`facebookLogin`.
+ */
+export interface ExchangeUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'ADMIN' | 'CUSTOMER';
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -138,7 +149,10 @@ export class AuthService {
 
     if (!isPasswordValid) {
       const newAttempts = user.failedLoginAttempts + 1;
-      const updateData: any = { failedLoginAttempts: newAttempts };
+      const updateData: {
+        failedLoginAttempts: number;
+        lockedUntil?: Date | null;
+      } = { failedLoginAttempts: newAttempts };
 
       if (newAttempts >= MAX_FAILED_ATTEMPTS) {
         updateData.lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
@@ -200,7 +214,9 @@ export class AuthService {
 
   async logoutByToken(token: string) {
     try {
-      const payload = this.jwtService.verify(token, { ignoreExpiration: true });
+      const payload = this.jwtService.verify<{ sub: string }>(token, {
+        ignoreExpiration: true,
+      });
       await this.prisma.session.deleteMany({
         where: { userId: payload.sub },
       });
@@ -221,7 +237,7 @@ export class AuthService {
    */
   private readonly exchangeCodes = new Map<
     string,
-    { token: string; user: any; expiresAt: number }
+    { token: string; user: ExchangeUser; expiresAt: number }
   >();
 
   private pruneExchangeCodes() {
@@ -231,7 +247,10 @@ export class AuthService {
     }
   }
 
-  async generateExchangeCode(token: string, user: any): Promise<string> {
+  async generateExchangeCode(
+    token: string,
+    user: ExchangeUser,
+  ): Promise<string> {
     const code = randomUUID();
     const expiresAt = Date.now() + EXCHANGE_CODE_TTL_MS;
 
@@ -253,7 +272,7 @@ export class AuthService {
 
   async exchangeCode(
     code: string,
-  ): Promise<{ access_token: string; user: any } | null> {
+  ): Promise<{ access_token: string; user: ExchangeUser } | null> {
     if (this.redis.isEnabled()) {
       const raw = await this.redis
         .getAndDelete(`${EXCHANGE_CODE_PREFIX}${code}`)
@@ -261,7 +280,10 @@ export class AuthService {
 
       if (raw) {
         try {
-          const parsed = JSON.parse(raw);
+          const parsed = JSON.parse(raw) as {
+            token: string;
+            user: ExchangeUser;
+          };
           return { access_token: parsed.token, user: parsed.user };
         } catch {
           return null;

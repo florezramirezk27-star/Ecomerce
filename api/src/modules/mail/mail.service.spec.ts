@@ -10,16 +10,49 @@ const ENV_MAIL = [
   'SMTP_FROM',
 ];
 
+/** Argumentos de la llamada a `fetch` que el servicio manda a Resend. */
+interface FetchRequest {
+  headers: Record<string, string>;
+  body: string;
+}
+
+/** Respuesta mínima que devuelve el mock de `fetch`. */
+interface FetchResponse {
+  ok: boolean;
+  status: number;
+  json?: () => Promise<unknown>;
+  text?: () => Promise<string>;
+}
+
+/** Cuerpo JSON enviado a Resend, tal como lo leen los tests. */
+interface ResendBody {
+  to?: string[];
+  html?: string;
+  text?: string;
+  from?: string;
+}
+
+/** Parte privada de `MailService` que solo los tests necesitan leer. */
+type MailServiceTestable = { transporter: unknown };
+
 describe('MailService: envio por API HTTP (Resend)', () => {
   const original: Record<string, string | undefined> = {};
-  let fetchMock: jest.Mock;
+  let fetchMock: jest.Mock<
+    Promise<FetchResponse>,
+    [string, FetchRequest],
+    unknown
+  >;
 
   beforeEach(() => {
     for (const k of ENV_MAIL) original[k] = process.env[k];
     for (const k of ENV_MAIL) delete process.env[k];
 
-    fetchMock = jest.fn();
-    (global as any).fetch = fetchMock;
+    fetchMock = jest.fn<
+      Promise<FetchResponse>,
+      [string, FetchRequest],
+      unknown
+    >();
+    (globalThis as { fetch: unknown }).fetch = fetchMock;
   });
 
   afterEach(() => {
@@ -30,14 +63,15 @@ describe('MailService: envio por API HTTP (Resend)', () => {
     jest.restoreAllMocks();
   });
 
-  const cuerpo = () => JSON.parse(fetchMock.mock.calls[0][1].body);
+  const cuerpo = (): ResendBody =>
+    JSON.parse(fetchMock.mock.calls[0][1].body) as ResendBody;
 
   it('con RESEND_API_KEY manda por HTTP y no toca nodemailer', async () => {
     process.env.RESEND_API_KEY = 're_123';
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ id: 'abc-123' }),
+      json: () => Promise.resolve({ id: 'abc-123' }),
     });
 
     const service = new MailService();
@@ -69,7 +103,7 @@ describe('MailService: envio por API HTTP (Resend)', () => {
     const service = new MailService();
     await service.onModuleInit();
 
-    expect((service as any).transporter).toBeNull();
+    expect((service as unknown as MailServiceTestable).transporter).toBeNull();
   });
 
   it('envia el html y su version en texto plano', async () => {
@@ -77,7 +111,7 @@ describe('MailService: envio por API HTTP (Resend)', () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ id: 'x' }),
+      json: () => Promise.resolve({ id: 'x' }),
     });
 
     const service = new MailService();
@@ -105,7 +139,7 @@ describe('MailService: envio por API HTTP (Resend)', () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ id: 'x' }),
+      json: () => Promise.resolve({ id: 'x' }),
     });
 
     const service = new MailService();
@@ -125,7 +159,7 @@ describe('MailService: envio por API HTTP (Resend)', () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 422,
-      text: async () => '{"message":"domain not verified"}',
+      text: () => Promise.resolve('{"message":"domain not verified"}'),
     });
 
     const service = new MailService();
@@ -166,7 +200,9 @@ describe('MailService: envio por API HTTP (Resend)', () => {
     await service.onModuleInit();
 
     // Se construye el transporter de nodemailer, asi que no se llama a fetch.
-    expect((service as any).transporter).not.toBeNull();
+    expect(
+      (service as unknown as MailServiceTestable).transporter,
+    ).not.toBeNull();
   });
 
   it('el diagnostico no pide autenticacion SMTP cuando el envio es por HTTP', async () => {
@@ -174,7 +210,7 @@ describe('MailService: envio por API HTTP (Resend)', () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ id: 'x' }),
+      json: () => Promise.resolve({ id: 'x' }),
     });
 
     const service = new MailService();
@@ -195,7 +231,7 @@ describe('MailService: envio por API HTTP (Resend)', () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 422,
-      text: async () => '{"message":"domain not verified"}',
+      text: () => Promise.resolve('{"message":"domain not verified"}'),
     });
 
     const service = new MailService();
@@ -215,7 +251,7 @@ describe('MailService: envio por API HTTP (Resend)', () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ id: 'x' }),
+      json: () => Promise.resolve({ id: 'x' }),
     });
 
     const service = new MailService();

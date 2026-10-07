@@ -61,8 +61,8 @@ describe('PresenceService', () => {
     service = module.get<PresenceService>(PresenceService);
   });
 
-  afterEach(async () => {
-    await service.onModuleDestroy();
+  afterEach(() => {
+    service.onModuleDestroy();
   });
 
   describe('heartbeat con Redis', () => {
