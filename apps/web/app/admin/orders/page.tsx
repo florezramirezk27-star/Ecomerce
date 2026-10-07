@@ -47,7 +47,7 @@ const STATUS_CONFIG: Record<
   { tone: BadgeTone; label: string; icon: typeof Package }
 > = {
   PENDING: { tone: 'yellow', label: 'Pendiente', icon: Clock },
-  PAID: { tone: 'blue', label: 'Pagado', icon: CheckCircle2 },
+  PAID: { tone: 'blue', label: 'Confirmado', icon: CheckCircle2 },
   SHIPPED: { tone: 'purple', label: 'Enviado', icon: Truck },
   DELIVERED: { tone: 'green', label: 'Entregado', icon: Package },
   CANCELLED: { tone: 'red', label: 'Cancelado', icon: XCircle },
@@ -392,8 +392,9 @@ export default function AdminOrdersPage() {
                                 'Dropi rechazó la orden.'}
                             </p>
                             <p className="mt-1 text-red-500">
-                              El cliente ya tiene la factura pero está sin
-                              guía de envío.
+                              {order.status === 'CANCELLED'
+                                ? 'Pedido cancelado automáticamente; el cliente fue avisado con el motivo.'
+                                : 'Fallo técnico (no un rechazo): el pedido sigue pendiente y puedes reprocesarlo.'}
                             </p>
                           </div>
                         ) : order.tracking?.dropiOrderId ? (

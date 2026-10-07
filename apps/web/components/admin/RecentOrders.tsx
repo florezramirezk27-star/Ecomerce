@@ -22,7 +22,7 @@ const statusConfig: Record<
     ring: 'ring-amber-200',
   },
   PAID: {
-    label: 'Pagado',
+    label: 'Confirmado',
     icon: CheckCircle,
     bg: 'bg-blue-50',
     text: 'text-blue-700',

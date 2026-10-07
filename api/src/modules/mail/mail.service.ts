@@ -224,9 +224,7 @@ export class MailService implements OnModuleInit {
    */
   private mailFrom(): string {
     return (
-      process.env.MAIL_FROM ||
-      process.env.SMTP_FROM ||
-      'onboarding@resend.dev'
+      process.env.MAIL_FROM || process.env.SMTP_FROM || 'onboarding@resend.dev'
     );
   }
 
@@ -282,9 +280,7 @@ export class MailService implements OnModuleInit {
       return false;
     } catch (err) {
       const message =
-        err instanceof Error
-          ? `${err.name}: ${err.message}`
-          : String(err);
+        err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       this.lastSendError = `No se pudo llamar a Resend: ${message}`;
       this.logger.error(`[${options.tag}] fallo llamando a Resend: ${message}`);
       return false;
@@ -536,9 +532,7 @@ export class MailService implements OnModuleInit {
             continue;
           }
           this.lastSendError = message;
-          this.logger.error(
-            `Error sending ${options.tag} email: ${message}`,
-          );
+          this.logger.error(`Error sending ${options.tag} email: ${message}`);
           return false;
         }
       }
@@ -590,9 +584,7 @@ export class MailService implements OnModuleInit {
             continue;
           }
           this.lastSendError = message;
-          this.logger.error(
-            `Error sending ${options.tag} email: ${message}`,
-          );
+          this.logger.error(`Error sending ${options.tag} email: ${message}`);
           return false;
         }
       }
@@ -867,6 +859,7 @@ export class MailService implements OnModuleInit {
     orderId: string,
     items: OrderItemInfo[],
     total: number,
+    motivo?: string,
   ): Promise<boolean> {
     const orderNumber = orderId.slice(0, 8).toUpperCase();
     const itemsHtml = items
@@ -901,6 +894,13 @@ export class MailService implements OnModuleInit {
         No se te cobrará nada y tu dinero no está comprometido, ya que el pago era contra entrega.
         Si ya realizaste algún pago, será reintegrado por el mismo medio.
       </div>
+      ${
+        motivo
+          ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:14px 16px;font-size:13px;color:#92400e;line-height:1.5;margin-top:12px">
+        <strong>Motivo:</strong> ${escapeHtml(motivo)}
+      </div>`
+          : ''
+      }
 
       <h3 style="font-size:15px;color:#18181b;margin:24px 0 10px;font-weight:700">Productos del pedido</h3>
       <table style="width:100%;border-collapse:collapse">
@@ -941,7 +941,7 @@ export class MailService implements OnModuleInit {
   ): Promise<boolean> {
     const statusLabels: Record<string, string> = {
       PENDING: 'Pendiente',
-      PAID: 'Pagada',
+      PAID: 'Confirmada',
       SHIPPED: 'Enviada',
       DELIVERED: 'Entregada',
       CANCELLED: 'Cancelada',
@@ -1006,9 +1006,13 @@ export class MailService implements OnModuleInit {
       };
     }
 
+    // El literal tiene que ir tipado: sin anotarlo se ensancha a `string` y el
+    // objeto `base` deja de casar con el tipo de retorno declarado.
+    const transport: 'resend' | 'smtp' = porHttp ? 'resend' : 'smtp';
+
     const base = {
       smtpConfigured: !porHttp,
-      transport: (porHttp ? 'resend' : 'smtp') as 'resend' | 'smtp',
+      transport,
       remitente: this.mailFrom(),
       mailerHost,
       smtpUser,
@@ -1072,8 +1076,8 @@ export class MailService implements OnModuleInit {
           // (ej: "Resend (HTTP 422): {\"message\":\"domain not verified\"}").
           // Antes se devolvia siempre este generico y el motivo quedaba solo
           // en el log del servicio.
-          (this.lastSendError ||
-            'El mensaje no pudo enviarse (revisa los logs del servicio)'),
+          this.lastSendError ||
+          'El mensaje no pudo enviarse (revisa los logs del servicio)',
     };
   }
 }

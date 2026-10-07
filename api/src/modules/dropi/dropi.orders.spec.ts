@@ -58,8 +58,7 @@ function makeService(opts: {
 
   const request = jest.fn((_path: string, _method: string, body: any) => {
     posted.push(body);
-    const next =
-      opts.responses[Math.min(call, opts.responses.length - 1)];
+    const next = opts.responses[Math.min(call, opts.responses.length - 1)];
     call++;
     if (next instanceof Error) return Promise.reject(next);
     return Promise.resolve(next);
@@ -107,7 +106,7 @@ describe('DropiOrdersService: eleccion y reintento de bodega', () => {
   const checkout = (service: DropiOrdersService, price = ITEM.price) =>
     service.createOrder({
       items: [{ ...ITEM, price }],
-      shipping: SHIPPING as any,
+      shipping: SHIPPING,
     });
 
   it('usa la bodega del proveedor cuando la primera es valida', async () => {
@@ -202,5 +201,115 @@ describe('DropiOrdersService: eleccion y reintento de bodega', () => {
     expect(result.success).toBe(false);
     expect(result.results[0].status).toContain('219900');
     expect(posted).toHaveLength(0);
+  });
+});
+
+/**
+ * El pedido solo se cancela si Dropi dijo "no" de verdad. Si fue un fallo
+ * tecnico (5xx, excepcion), el pedido tiene que seguir en PENDING para que el
+ * admin pueda reprocesarlo: cancelarlo ahi seria perder la venta por un parpadeo
+ * de Dropi.
+ */
+describe('DropiOrdersService: rechazo de negocio vs fallo tecnico', () => {
+  const OLD_ENV = { ...process.env };
+
+  beforeEach(() => {
+    process.env.DROPI_USER_ID = '660824';
+    process.env.DROPI_SUPPLIER_ID = '29151';
+    process.env.DROPI_WAREHOUSE_ID = '3577';
+    process.env.DROPI_DISTRIBUTION_COMPANY_ID = '3';
+    process.env.DROPI_SHIPPING_AMOUNT = '41295';
+  });
+
+  afterAll(() => {
+    process.env = OLD_ENV;
+  });
+
+  const checkout = (service: DropiOrdersService) =>
+    service.createOrder({
+      items: [ITEM],
+      shipping: SHIPPING,
+    });
+
+  it('marca rechazo ante un 4xx: repetir la llamada no cambia nada', async () => {
+    const { service } = makeService({
+      warehouseIds: [2015],
+      responses: [
+        httpResponse(400, {
+          is_successful: false,
+          status_code: 400,
+          status_reason: 'No se puede crear una orden menor a $45.000 COP.',
+          data: null,
+        }),
+      ],
+    });
+
+    const result = await checkout(service);
+
+    expect(result.success).toBe(false);
+    expect(result.results[0].rechazo).toBe(true);
+    expect(result.rechazo).toBe(true);
+    expect(result.message).toContain('$45.000');
+  });
+
+  it('no marca rechazo ante un 5xx: es un fallo tecnico reprocesable', async () => {
+    const { service } = makeService({
+      warehouseIds: [2015],
+      responses: [
+        httpResponse(503, {
+          is_successful: false,
+          status_reason: 'Service Unavailable',
+          data: null,
+        }),
+      ],
+    });
+
+    const result = await checkout(service);
+
+    expect(result.success).toBe(false);
+    expect(result.results[0].rechazo).toBe(false);
+    expect(result.rechazo).toBe(false);
+  });
+
+  it('no marca rechazo cuando la llamada a Dropi revienta', async () => {
+    const { service } = makeService({
+      warehouseIds: [2015],
+      responses: [new Error('getaddrinfo ENOTFOUND')],
+    });
+
+    const result = await checkout(service);
+
+    expect(result.success).toBe(false);
+    expect(result.results[0].rechazo).toBe(false);
+    expect(result.rechazo).toBe(false);
+  });
+
+  it('marca rechazo cuando el precio esta bajo el sugerido de Dropi', async () => {
+    const { service, posted } = makeService({
+      warehouseIds: [2015],
+      suggestedPrice: 219900,
+      responses: [CREATED],
+    });
+
+    const result = await service.createOrder({
+      items: [{ ...ITEM, price: 175900 }],
+      shipping: SHIPPING,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.rechazo).toBe(true);
+    expect(posted).toHaveLength(0);
+  });
+
+  it('no marca rechazo cuando el pedido se creo completo', async () => {
+    const { service } = makeService({
+      warehouseIds: [2015],
+      responses: [CREATED],
+    });
+
+    const result = await checkout(service);
+
+    expect(result.success).toBe(true);
+    expect(result.rechazo).toBe(false);
   });
 });

@@ -63,12 +63,21 @@ export interface DropiOrderResult {
   carrier: string | null;
   status: string | null;
   rawResponse: any;
+  /**
+   * true cuando fue un "no" de Dropi (respondio 4xx, el precio esta por debajo
+   * del sugerido, etc.): reintentar no va a cambiar nada. false cuando fue un
+   * fallo tecnico (red, 5xx, excepcion) y el pedido conviene dejarlo en
+   * PENDING para reprocesarlo desde el panel.
+   */
+  rechazo?: boolean;
 }
 
 export interface DropiCreateOrderResponse {
   success: boolean;
   message: string;
   results: DropiOrderResult[];
+  /** true si al menos un producto fue rechazado de forma definitiva. */
+  rechazo?: boolean;
 }
 
 export interface DropiStockItem {
@@ -92,34 +101,85 @@ export interface DropiTrackingData {
   status: string | null;
   lastEvent: string | null;
   carrier: string | null;
+  /** Guía de envío, si Dropi ya la tiene; se guarda para las próximas consultas. */
+  guide?: string | null;
   rawResponse: any;
 }
 
+/**
+ * Estados de Dropi -> estados internos del pedido.
+ *
+ * Dropi responde en español y en mayúsculas (`"status":"CANCELADO"`,
+ * historial `PENDIENTE` -> `CANCELADO`), pero el mapa también cubre los nombres
+ * en inglés que usaba la documentación vieja. Cualquier clave se consulta ya
+ * normalizada (sin acentos, mayúsculas y espacios a `_`, ver
+ * `DropiTrackingService.translateStatus`), así que "En tránsito" o "en proceso"
+ * también caen acá. Lo que no esté aquí queda PENDING y no mueve nada.
+ */
 export const DROPI_STATUS_MAP: Record<string, string> = {
+  // Recién creado / nadie lo ha confirmado todavía.
   PENDING: 'PENDING',
+  PENDIENTE: 'PENDING',
   CREATED: 'PENDING',
+  CREADO: 'PENDING',
+  NUEVO: 'PENDING',
+  NEW: 'PENDING',
+
+  // Dropi o el proveedor lo aceptó y ya está en preparación.
   CONFIRMED: 'PAID',
+  CONFIRMADO: 'PAID',
+  CONFIRMADA: 'PAID',
   ACCEPTED: 'PAID',
+  ACEPTADO: 'PAID',
+  ACEPTADA: 'PAID',
   APPROVED: 'PAID',
+  APROBADO: 'PAID',
+  APROBADA: 'PAID',
   PROCESSING: 'PAID',
+  EN_PROCESO: 'PAID',
   IN_PREPARATION: 'PAID',
+  EN_PREPARACION: 'PAID',
+  PREPARANDO: 'PAID',
+
+  // En camino hacia el cliente.
   IN_TRANSIT: 'SHIPPED',
   SHIPPED: 'SHIPPED',
   SENT: 'SHIPPED',
+  ENVIADO: 'SHIPPED',
+  ENVIADA: 'SHIPPED',
+  EN_TRANSITO: 'SHIPPED',
+  DESPACHADO: 'SHIPPED',
+  DESPACHADA: 'SHIPPED',
+  EN_REPARTO: 'SHIPPED',
   IN_DELIVERY: 'SHIPPED',
+
+  // Entregado.
   DELIVERED: 'DELIVERED',
   COMPLETED: 'DELIVERED',
+  ENTREGADO: 'DELIVERED',
+  ENTREGADA: 'DELIVERED',
+  COMPLETADO: 'DELIVERED',
+  FINALIZADO: 'DELIVERED',
+
+  // Cancelado / rechazado / borrado en Dropi.
   CANCELLED: 'CANCELLED',
   CANCELADO: 'CANCELLED',
+  CANCELADA: 'CANCELLED',
   CANCELED: 'CANCELLED',
   CANCELLATION: 'CANCELLED',
   ELIMINADO: 'CANCELLED',
+  ELIMINADA: 'CANCELLED',
   DELETED: 'CANCELLED',
   REMOVED: 'CANCELLED',
   ANULADO: 'CANCELLED',
+  ANULADA: 'CANCELLED',
   REJECTED: 'CANCELLED',
+  RECHAZADO: 'CANCELLED',
+  RECHAZADA: 'CANCELLED',
   RETURNED: 'CANCELLED',
   REFUNDED: 'CANCELLED',
+  DEVUELTO: 'CANCELLED',
+  DEVUELTA: 'CANCELLED',
 };
 
 export const DROPI_CDN =

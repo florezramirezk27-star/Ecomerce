@@ -5,6 +5,15 @@ import { DropiAuthService } from './dropi.auth';
 import { MailService } from '../mail/mail.service';
 import { DropiTrackingData, DROPI_STATUS_MAP } from './dropi.types';
 
+/** Pedazo de `GET /api/orders/myorders/{id}` que de verdad se usa. */
+interface DropiOrderEstado {
+  id?: number | string;
+  status?: string;
+  shipping_guide?: string | null;
+  shipping_company?: string | null;
+  updated_at?: string | number | null;
+}
+
 @Injectable()
 export class DropiTrackingService {
   private readonly logger = new Logger(DropiTrackingService.name);
@@ -79,16 +88,121 @@ export class DropiTrackingService {
       where: { orderId },
     });
 
-    if (!tracking?.dropiGuideId) {
+    if (!tracking) {
       return null;
     }
 
-    return this.trackByGuide(tracking.dropiGuideId);
+    if (tracking.dropiGuideId) {
+      return this.trackByGuide(tracking.dropiGuideId);
+    }
+
+    if (!tracking.dropiOrderId) {
+      return null;
+    }
+
+    // Sin guía de envío (Dropi recién creó el pedido): se le pregunta a Dropi
+    // por el id del pedido, que responde desde el minuto cero y además trae la
+    // guía. Antes esto devolvía null y por eso ningún pedido nuevo podía
+    // avanzar de estado.
+    return this.consultarEstadoPorId(tracking.dropiOrderId);
+  }
+
+  /**
+   * `GET /api/orders/myorders/{id}`: estado real del pedido en Dropi sin
+   * necesidad de guía de envío. Devuelve `status` ("PENDIENTE", "CANCELADO",
+   * ...) y `shipping_guide` en cuanto Dropi tenga algo que reportar.
+   */
+  private async consultarEstadoPorId(
+    dropiOrderId: string,
+  ): Promise<DropiTrackingData | null> {
+    let token = await this.auth.getToken();
+
+    const pedir = () =>
+      this.client.request(
+        `/api/orders/myorders/${dropiOrderId}`,
+        'GET',
+        undefined,
+        token,
+      );
+
+    let { statusCode, data } = await pedir();
+
+    if (statusCode === 401) {
+      this.auth.invalidateToken();
+      token = await this.auth.getToken();
+
+      const retry = await pedir();
+      if (retry.statusCode === 401) {
+        throw new Error('Dropi token renew failed during tracking');
+      }
+      ({ statusCode, data } = retry);
+    }
+
+    if (statusCode === 404) {
+      // Dropi ya no lo tiene: eso no es un estado, lo resuelve syncDeletedOrders.
+      return null;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      parsed = null;
+    }
+
+    // `{ objects: {...} }` (a veces llega como arreglo). Se tipa explicitamente
+    // para no arrastrar el `any` de JSON.parse por todo el metodo.
+    const crudo = (parsed as { objects?: unknown } | null)?.objects;
+    const orden = (Array.isArray(crudo) ? crudo[0] : crudo) as
+      DropiOrderEstado | null | undefined;
+
+    if (statusCode !== 200 || !orden?.status) {
+      return null;
+    }
+
+    const guide =
+      typeof orden.shipping_guide === 'string' && orden.shipping_guide
+        ? orden.shipping_guide
+        : null;
+
+    return {
+      status: String(orden.status),
+      lastEvent: guide ? `Guía ${guide}` : `Estado en Dropi: ${orden.status}`,
+      carrier:
+        typeof orden.shipping_company === 'string'
+          ? orden.shipping_company
+          : null,
+      guide,
+      // Solo lo útil: el objeto completo trae `history`, `orderdetails` y media
+      // docena de campos enormes que no aportan y sí pesan en la BD.
+      rawResponse: {
+        id: orden.id ?? null,
+        status: orden.status,
+        shipping_guide: guide,
+        shipping_company: orden.shipping_company ?? null,
+        updated_at: orden.updated_at ?? null,
+      },
+    };
   }
 
   translateStatus(dropiStatus: string | null): string {
     if (!dropiStatus) return 'PENDING';
-    return DROPI_STATUS_MAP[dropiStatus] || 'PENDING';
+    return DROPI_STATUS_MAP[this.normalizarEstado(dropiStatus)] || 'PENDING';
+  }
+
+  /**
+   * Dropi responde en español y sin uniformidad ("CANCELADO", "En tránsito",
+   * "en proceso"), mientras que el mapa está en mayúsculas y con guiones bajos.
+   * Sin normalizar, todo estado que no fuera literal caía a PENDING y los
+   * pedidos nunca avanzaban.
+   */
+  private normalizarEstado(estado: string): string {
+    return estado
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/\s+/g, '_');
   }
 
   async upsertTracking(
@@ -162,8 +276,12 @@ export class DropiTrackingService {
     const currentOrderStatus = order.status;
 
     const VALID_TRANSITIONS: Record<string, string[]> = {
-      PENDING: ['PAID', 'CANCELLED'],
-      PAID: ['SHIPPED', 'CANCELLED'],
+      // Se permiten los saltos (PENDING → SHIPPED → DELIVERED encadenados no
+      // siempre se reportan: Dropi a veces salta estados o el pedido se quedó
+      // en PENDING por un fallo técnico y aun así se creó). Si no se permitiera
+      // el salto directo, esos pedidos quedarían colgados para siempre.
+      PENDING: ['PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'],
+      PAID: ['SHIPPED', 'DELIVERED', 'CANCELLED'],
       SHIPPED: ['DELIVERED', 'CANCELLED'],
       DELIVERED: [],
       CANCELLED: [],
@@ -183,6 +301,9 @@ export class DropiTrackingService {
           where: { id: orderId },
           data: { status: translatedDropiStatus as any },
         });
+        this.logger.log(
+          `Pedido ${orderId}: ${currentOrderStatus} → ${translatedDropiStatus} (Dropi: ${trackingData.status})`,
+        );
       }
     }
 
@@ -190,6 +311,7 @@ export class DropiTrackingService {
       status: trackingData.status,
       lastEvent: trackingData.lastEvent,
       carrier: trackingData.carrier,
+      dropiGuideId: trackingData.guide,
       rawResponse: trackingData.rawResponse,
     });
 

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { DropiService } from '../../dropi/dropi.service';
+import { DROPI_STATUS_MAP } from '../../dropi/dropi.types';
 import {
   AgentTool,
   ToolContext,
@@ -141,14 +142,29 @@ export class TrackingTool implements AgentTool<TrackingIn, TrackingOut> {
   }
 
   private mapDropiStatus(status: string): string {
-    const map: Record<string, string> = {
+    // Dropi responde en español y sin uniformidad ("PENDIENTE", "En tránsito"),
+    // así que primero se normaliza y se traduce con el mismo mapa que usa el
+    // resto de la tienda; si el estado es desconocido se devuelve tal cual.
+    const normalizado = status
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/\s+/g, '_');
+
+    if (['RETURNED', 'DEVUELTO', 'DEVUELTA'].includes(normalizado)) {
+      return 'Devuelto';
+    }
+
+    const etiquetas: Record<string, string> = {
       PENDING: 'Pendiente',
-      CONFIRMED: 'Confirmado',
-      IN_TRANSIT: 'En tránsito',
+      PAID: 'Confirmado',
+      SHIPPED: 'Enviado',
       DELIVERED: 'Entregado',
       CANCELLED: 'Cancelado',
-      RETURNED: 'Devuelto',
     };
-    return map[status] || status;
+
+    const interno = DROPI_STATUS_MAP[normalizado];
+    return (interno && etiquetas[interno]) || status;
   }
 }

@@ -18,13 +18,31 @@ interface OrderItem {
   };
 }
 
+interface OrderTracking {
+  dropiOrderId?: string | null;
+  dropiGuideId?: string | null;
+  carrier?: string | null;
+  status?: string | null;
+  lastEvent?: string | null;
+}
+
 interface Order {
   id: string;
   status: "PENDING" | "PAID" | "SHIPPED" | "DELIVERED" | "CANCELLED";
   total: string | number;
   createdAt: string;
   items: OrderItem[];
+  tracking?: OrderTracking | null;
 }
+
+/** "Dropi falló: No se puede crear una orden menor a $45.000" → solo el motivo. */
+const motivoDelProveedor = (lastEvent?: string | null) => {
+  const texto = (lastEvent || "").trim();
+  return (
+    texto.replace(/^Dropi\s+(falló|error):\s*/i, "").trim() ||
+    "el proveedor no indicó el motivo"
+  );
+};
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -111,7 +129,7 @@ export default function OrdersPage() {
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       PENDING: "Pendiente",
-      PAID: "Pagado",
+      PAID: "Confirmado",
       SHIPPED: "Enviado",
       DELIVERED: "Entregado",
       CANCELLED: "Cancelado",
@@ -255,6 +273,40 @@ export default function OrdersPage() {
                     {getStatusLabel(order.status)}
                   </span>
                 </div>
+
+                {/* Resultado en el proveedor (lo que antes solo veía el admin) */}
+                {order.tracking &&
+                  (order.tracking.status === "ERROR" ||
+                    order.tracking.dropiOrderId) && (
+                    <div className="border-t border-gray-200 px-6 py-3 text-sm">
+                      {order.tracking.status === "ERROR" ? (
+                        <p className="text-red-700">
+                          <span className="font-semibold">
+                            ⚠ No se pudo enviar al proveedor:
+                          </span>{" "}
+                          {motivoDelProveedor(order.tracking.lastEvent)}
+                        </p>
+                      ) : (
+                        <p className="text-gray-600">
+                          <span className="font-semibold text-gray-700">
+                            En el proveedor:
+                          </span>{" "}
+                          pedido #{order.tracking.dropiOrderId}
+                          {order.tracking.dropiGuideId ? (
+                            <>
+                              {" "}
+                              · guía de envío{" "}
+                              <span className="font-medium text-gray-800">
+                                {order.tracking.dropiGuideId}
+                              </span>
+                            </>
+                          ) : (
+                            <> · en espera de guía de envío</>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                 {/* Items */}
                 <div className="border-t border-gray-200 px-6 py-4">

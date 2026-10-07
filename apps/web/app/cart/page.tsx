@@ -73,7 +73,7 @@ const POSTAL_DEBOUNCE_MS = 600;
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "Pendiente",
-  PAID: "Pagado",
+  PAID: "Confirmado",
   SHIPPED: "Enviado",
   DELIVERED: "Entregado",
   CANCELLED: "Cancelado",
@@ -331,6 +331,7 @@ export default function CartPage() {
       setShowCheckout(false);
 
       const dropiStatus = res?.dropi?.success;
+      const rechazado = dropiStatus === false && res?.dropi?.rechazo === true;
       const emailsStatus = res?.emails ?? {};
       const warnings: string[] = [];
       if (dropiStatus === false) {
@@ -342,6 +343,21 @@ export default function CartPage() {
       if (emailsStatus.admin === "failed") {
         warnings.push("No se notificó al correo de la tienda (revisa SMTP).");
       }
+
+      if (rechazado) {
+        // Dropi dijo "no": el pedido quedó cancelado, así que no tiene sentido
+        // decirle al cliente que salió bien ni vaciarle el carrito (necesita
+        // corregir e intentar de nuevo).
+        setMessage({
+          type: "error",
+          text: `✗ El proveedor no pudo aceptar el pedido: ${
+            res?.dropi?.message || "motivo desconocido"
+          }. No se envió nada; ajusta la cantidad o los datos e inténtalo de nuevo.`,
+        });
+        void loadOrders();
+        return;
+      }
+
       setMessage({
         type: "success",
         text: warnings.length > 0

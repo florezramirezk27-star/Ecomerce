@@ -166,7 +166,28 @@ export class DropiOrdersService {
         )
         .join(' | '),
       results,
+      // Si al menos un producto fue rechazado de forma definitiva, el pedido no
+      // se va a poder enviar completo aunque otro sí se haya creado.
+      rechazo: !allOk && results.some((r) => r.rechazo === true),
     };
+  }
+
+  /**
+   * ¿Dropi respondió "no" de verdad (4xx con `status_reason`) o simplemente no
+   * se pudo hablar con él (5xx, timeout, excepción)?
+   *
+   * Un 4xx es un rechazo de negocio: repetir la llamada no cambia nada, así que
+   * el pedido se cancela. Cualquier otra cosa es un fallo técnico y el pedido se
+   * queda PENDING para que el admin pueda reprocesarlo.
+   */
+  private esRechazoDeDropi(
+    statusCode: number | undefined,
+    parsed: unknown,
+  ): boolean {
+    const codigo = Number(
+      (parsed as { status_code?: number } | null)?.status_code ?? statusCode,
+    );
+    return Number.isFinite(codigo) && codigo >= 400 && codigo < 500;
   }
 
   private async createSingleOrder(
@@ -188,6 +209,8 @@ export class DropiOrdersService {
         carrier: null,
         status: `Error al resolver producto en Dropi (${item.name}): ${message}`,
         rawResponse: null,
+        // Fallo técnico hablando con Dropi, no un "no": se puede reintentar.
+        rechazo: false,
       };
     }
 
@@ -205,6 +228,9 @@ export class DropiOrdersService {
         carrier: null,
         status: `El precio de venta del producto debe ser al menos el sugerido de Dropi (${minPrice}) para que la orden se cree`,
         rawResponse: null,
+        // Regla de negocio nuestra: mientras no subas el precio, jamás va a
+        // pasar, así que es un "no" definitivo.
+        rechazo: true,
       };
     }
 
@@ -228,6 +254,8 @@ export class DropiOrdersService {
           carrier: null,
           status: `Falta configuración de Dropi (${this.lastMissingFields.join(', ')})`,
           rawResponse: null,
+          // Es de nosotros, no de Dropi: se arregla en .env y se reprocesa.
+          rechazo: false,
         };
       }
 
@@ -268,6 +296,7 @@ export class DropiOrdersService {
           carrier: null,
           status: reason,
           rawResponse: parsed ?? resData.data,
+          rechazo: this.esRechazoDeDropi(resData.statusCode, parsed),
         };
 
         if (i === attempts.length - 1 || !this.isWarehouseRejection(reason)) {
@@ -292,6 +321,8 @@ export class DropiOrdersService {
           carrier: null,
           status: 'error',
           rawResponse: { error: message },
+          // Nunca un rechazo: Dropi ni siquiera respondió.
+          rechazo: false,
         };
       }
     }
@@ -303,6 +334,7 @@ export class DropiOrdersService {
         carrier: null,
         status: `Dropi no devolvio respuesta para ${item.name}`,
         rawResponse: null,
+        rechazo: false,
       }
     );
   }
@@ -432,10 +464,7 @@ export class DropiOrdersService {
       ...item,
       supplierId: item.supplierId ?? ctx.supplierId,
       warehouseId: item.warehouseId ?? ctx.warehouseId,
-      warehouseIds: [
-        ...(item.warehouseIds ?? []),
-        ...(ctx.warehouseIds ?? []),
-      ],
+      warehouseIds: [...(item.warehouseIds ?? []), ...(ctx.warehouseIds ?? [])],
       suggestedPrice: ctx.suggestedPrice,
     };
   }

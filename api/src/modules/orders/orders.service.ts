@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, OrderStatus } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
 import { CheckoutDto } from './dto/checkout.dto';
@@ -39,6 +39,13 @@ type DropiResult = {
   orderId: string | null;
   carrier: string | null;
   raw: unknown;
+  /**
+   * `true` cuando Dropi dijo "no" de verdad (4xx, precio por debajo del
+   * sugerido, ...): reintentar no cambia nada y el pedido se cancela.
+   * `false` cuando fue un fallo técnico (red, 5xx, excepción) y el pedido se
+   * queda en PENDING para poder reprocesarlo. Ausente = no aplica Dropi.
+   */
+  rechazo?: boolean;
 };
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -219,55 +226,9 @@ export class OrdersService {
       throw err;
     }
 
-    if (customerEmail) {
-      const emailTask = this.mailService.sendOrderConfirmationEmail(
-        customerEmail,
-        user?.name || dto.shippingName || 'Cliente',
-        order.id,
-        cart.items.map((item) => ({
-          name: item.product.name,
-          quantity: item.quantity,
-          price: Number(item.product.price),
-        })),
-        Number(order.total),
-        {
-          name: dto.shippingName,
-          phone: dto.shippingPhone,
-          email: customerEmail,
-          address: dto.shippingAddress,
-          city: dto.shippingCity,
-          state: dto.shippingState,
-          zip: dto.shippingZip,
-          notes: dto.notes,
-          docType: dto.shippingDocType,
-          docNumber: dto.shippingDocNumber,
-        },
-      );
-      void emailTask.then(
-        (sent) => {
-          if (!sent) {
-            this.logger.warn(
-              `No se pudo enviar la factura a ${customerEmail} (pedido ${order.id})`,
-            );
-          }
-        },
-        (err) => {
-          this.logger.error(
-            `Error enviando factura a ${customerEmail}: ${err instanceof Error ? err.message : err}`,
-          );
-        },
-      );
-    }
-
     const dropiItems = cart.items.filter((i) => i.product.dropiProductId);
 
-    let dropiResult: {
-      success: boolean | null;
-      message: string;
-      orderId: string | null;
-      carrier: string | null;
-      raw: unknown;
-    };
+    let dropiResult: DropiResult;
 
     if (dropiItems.length > 0) {
       try {
@@ -301,6 +262,7 @@ export class OrdersService {
           orderId: firstOk?.dropiOrderId ?? null,
           carrier: firstOk?.carrier ?? null,
           raw: result.results,
+          rechazo: result.rechazo === true,
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'unknown error';
@@ -310,6 +272,8 @@ export class OrdersService {
           orderId: null,
           carrier: null,
           raw: { error: message },
+          // Excepción hablando con Dropi: fallo técnico, no un rechazo.
+          rechazo: false,
         };
       }
     } else {
@@ -360,18 +324,71 @@ export class OrdersService {
       }
     }
 
+    // Dropi ya contestó: aquí es donde el pedido sale (o no) de "Pendiente".
+    const estadoFinal = await this.aplicarDecisionDropi(order.id, dropiResult);
+
+    // La factura se manda después de conocer el veredicto de Dropi: si el
+    // pedido terminó cancelado, decirle al cliente "lo recibimos" para luego
+    // cancelarlo es peor que mandarle de una vez el aviso de cancelación con
+    // el motivo (que sale desde aplicarDecisionDropi).
+    if (customerEmail && estadoFinal !== 'CANCELLED') {
+      const emailTask = this.mailService.sendOrderConfirmationEmail(
+        customerEmail,
+        user?.name || dto.shippingName || 'Cliente',
+        order.id,
+        cart.items.map((item) => ({
+          name: item.product.name,
+          quantity: item.quantity,
+          price: Number(item.product.price),
+        })),
+        Number(order.total),
+        {
+          name: dto.shippingName,
+          phone: dto.shippingPhone,
+          email: customerEmail,
+          address: dto.shippingAddress,
+          city: dto.shippingCity,
+          state: dto.shippingState,
+          zip: dto.shippingZip,
+          notes: dto.notes,
+          docType: dto.shippingDocType,
+          docNumber: dto.shippingDocNumber,
+        },
+      );
+      void emailTask.then(
+        (sent) => {
+          if (!sent) {
+            this.logger.warn(
+              `No se pudo enviar la factura a ${customerEmail} (pedido ${order.id})`,
+            );
+          }
+        },
+        (err) => {
+          this.logger.error(
+            `Error enviando factura a ${customerEmail}: ${err instanceof Error ? err.message : err}`,
+          );
+        },
+      );
+    }
+
     const adminEmail =
       process.env.ADMIN_EMAIL || process.env.ADMIN_GOOGLE_EMAIL || '';
     if (adminEmail) {
-      this.notifyDropiFailure(adminEmail, order.id, {
-        name: user?.name || dto.shippingName,
-        phone: dto.shippingPhone,
-        email: customerEmail,
-        address: dto.shippingAddress,
-        city: dto.shippingCity,
-        state: dto.shippingState,
-        zip: dto.shippingZip,
-      }, dropiResult, dropiItems.length);
+      this.notifyDropiFailure(
+        adminEmail,
+        order.id,
+        {
+          name: user?.name || dto.shippingName,
+          phone: dto.shippingPhone,
+          email: customerEmail,
+          address: dto.shippingAddress,
+          city: dto.shippingCity,
+          state: dto.shippingState,
+          zip: dto.shippingZip,
+        },
+        dropiResult,
+        dropiItems.length,
+      );
 
       const adminTask = this.mailService.sendAdminOrderNotification(
         adminEmail,
@@ -416,16 +433,97 @@ export class OrdersService {
 
     return {
       ...order,
+      status: estadoFinal,
       dropi: {
         success: dropiResult?.success ?? null,
         message: dropiResult?.message ?? 'Sin integración con proveedor',
         orderId: dropiResult?.orderId ?? null,
+        rechazo: dropiResult?.rechazo ?? null,
       },
       emails: {
         customer: customerEmail ? 'queued' : 'skipped',
         admin: adminEmail ? 'queued' : 'skipped',
       },
     };
+  }
+
+  /**
+   * Traduce lo que Dropi acaba de responder al estado del pedido.
+   *
+   * - `success: true` → PENDING → PAID, que en la tienda se lee "Confirmado":
+   *   el proveedor aceptó el pedido y ya está en proceso.
+   * - `success: false` + `rechazo: true` → CANCELLED (con stock devuelto y
+   *   aviso al cliente): Dropi dijo "no" de verdad y ese pedido no va a salir.
+   * - `success: false` sin rechazo → fallo técnico; se queda PENDING para que
+   *   el admin pueda reprocesarlo desde el panel (la alerta de Dropi ya salió).
+   * - `success: null` → pedido sin productos de proveedor: no toca nada.
+   *
+   * Antes el estado nunca se movía: el pedido se creaba en PENDING y ahí se
+   * quedaba para siempre aunque Dropi lo hubiera aceptado.
+   */
+  private async aplicarDecisionDropi(
+    orderId: string,
+    dropiResult: DropiResult,
+  ): Promise<OrderStatus> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true },
+    });
+
+    if (!order) {
+      // No existe: no hay nada que decidir (el caller ya habría fallado antes).
+      return OrderStatus.PENDING;
+    }
+
+    if (dropiResult.success === true) {
+      if (order.status !== OrderStatus.PENDING) return order.status;
+
+      const updated = await this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.PAID },
+        select: { status: true },
+      });
+      this.logger.log(`Pedido ${orderId}: Dropi lo aceptó → Confirmado`);
+      return updated.status;
+    }
+
+    if (dropiResult.success !== false) return order.status;
+
+    if (dropiResult.rechazo !== true) {
+      this.logger.warn(
+        `Pedido ${orderId}: Dropi falló por un problema técnico (${dropiResult.message}); se deja en ${order.status} para poder reprocesarlo`,
+      );
+      return order.status;
+    }
+
+    if (!VALID_TRANSITIONS[order.status]?.includes(OrderStatus.CANCELLED)) {
+      // Ya estaba cancelado o entregado: nada que hacer.
+      return order.status;
+    }
+
+    this.logger.warn(
+      `Pedido ${orderId}: Dropi rechazó el pedido (${dropiResult.message}) → Cancelado`,
+    );
+
+    try {
+      // Se reutiliza updateStatus para no duplicar la lógica de cancelación:
+      // devuelve el stock, cancela en Dropi si llegó a crearse (caso de pedido
+      // mixto), actualiza el tracking y avisa al cliente y al admin con el
+      // motivo del rechazo.
+      const cancelada = await this.updateStatus(
+        orderId,
+        OrderStatus.CANCELLED,
+        dropiResult.message,
+      );
+      return cancelada.status;
+    } catch (err) {
+      this.logger.error(
+        `No se pudo cancelar el pedido ${orderId} tras el rechazo de Dropi: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+      return order.status;
+    }
   }
 
   private async processExistingOrder(
@@ -538,6 +636,7 @@ export class OrdersService {
           orderId: firstOk?.dropiOrderId ?? null,
           carrier: firstOk?.carrier ?? null,
           raw: result.results,
+          rechazo: result.rechazo === true,
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'unknown error';
@@ -548,6 +647,8 @@ export class OrdersService {
           orderId: null,
           carrier: null,
           raw: { error: message },
+          // Excepción hablando con Dropi: fallo técnico, no un rechazo.
+          rechazo: false,
         };
       }
 
@@ -585,6 +686,9 @@ export class OrdersService {
       }
     }
 
+    // Dropi ya contestó: aquí es donde el pedido sale (o no) de "Pendiente".
+    const estadoFinal = await this.aplicarDecisionDropi(order.id, dropiResult);
+
     const itemSummary = itemDetails.map((i) => ({
       name: i.name,
       quantity: i.quantity,
@@ -594,17 +698,26 @@ export class OrdersService {
     const adminEmail =
       process.env.ADMIN_EMAIL || process.env.ADMIN_GOOGLE_EMAIL || '';
     if (adminEmail) {
-      this.notifyDropiFailure(adminEmail, order.id, {
-        name: user?.name || shipping.name,
-        phone: shipping.phone,
-        email: customerEmail,
-        address: shipping.address,
-        city: shipping.city,
-        state: shipping.state,
-        zip: shipping.zip,
-      }, dropiResult, dropiItems.length);
+      this.notifyDropiFailure(
+        adminEmail,
+        order.id,
+        {
+          name: user?.name || shipping.name,
+          phone: shipping.phone,
+          email: customerEmail,
+          address: shipping.address,
+          city: shipping.city,
+          state: shipping.state,
+          zip: shipping.zip,
+        },
+        dropiResult,
+        dropiItems.length,
+      );
     }
-    const skipEmails = alreadyInDropi && !force;
+    // Si Dropi rechazó el pedido y quedó cancelado, la factura ya no procede:
+    // el cliente recibe el aviso de cancelación con el motivo, no "lo recibimos".
+    const skipEmails =
+      (alreadyInDropi && !force) || estadoFinal === 'CANCELLED';
 
     let customerQueued = false;
     let adminQueued = false;
@@ -669,10 +782,12 @@ export class OrdersService {
 
     return {
       ...order,
+      status: estadoFinal,
       dropi: {
         success: dropiResult?.success ?? null,
         message: dropiResult?.message ?? 'Sin integración con proveedor',
         orderId: dropiResult?.orderId ?? null,
+        rechazo: dropiResult?.rechazo ?? null,
       },
       emails: {
         customer: skipEmails
@@ -785,6 +900,9 @@ export class OrdersService {
               product: true,
             },
           },
+          // El cliente también ve el resultado de Dropi (nº de pedido en el
+          // proveedor, guía y si hubo error); antes solo lo veía el admin.
+          tracking: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -833,7 +951,7 @@ export class OrdersService {
     };
   }
 
-  async updateStatus(id: string, status: string) {
+  async updateStatus(id: string, status: string, motivo?: string) {
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: {
@@ -957,6 +1075,7 @@ export class OrdersService {
               order.id,
               itemsForMail,
               Number(order.total),
+              motivo,
             )
           : this.mailService.sendOrderStatusEmail(
               customerEmail,
