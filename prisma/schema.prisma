@@ -91,7 +91,7 @@ model Product {
   price       Decimal   @db.Decimal(10,2)
   oldPrice    Decimal?  @db.Decimal(10,2)
   customCode          String?
-  dropiProductId      Int?
+  dropiProductId      Int?   @unique
   stock               Int
   lowStockThreshold   Int       @default(5)
   image       String?
@@ -115,7 +115,6 @@ model Product {
   @@index([categoryId, active])
   @@index([price])
   @@index([active, createdAt])
-  @@index([dropiProductId])
 }
 
 model ProductEmbedding {

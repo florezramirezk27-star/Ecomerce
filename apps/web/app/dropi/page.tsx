@@ -57,6 +57,8 @@ interface DropiProduct {
   favorite?: boolean;
   privated_product?: boolean;
   description: string | null;
+  /** true si ese id de Dropi ya esta en la tienda: el boton queda bloqueado. */
+  imported?: boolean;
 }
 
 const DROPI_CDN = process.env.NEXT_PUBLIC_DROPI_CDN || 'https://d39ru7awumhhs2.cloudfront.net/';
@@ -352,6 +354,18 @@ export default function DropiCatalogPage() {
       // donde salio el numero.
       const g = priceGuide(p);
       const saved = Number(product.price);
+
+      // El producto ya quedo en la tienda: se marca aqui para que los tres
+      // botones pasen a "Ya importado" sin tener que recargar el catalogo.
+      // Ojo: p.id es el id de Dropi y product.id es el id local (cuid), por eso
+      // se compara contra p.id.
+      setProducts((prev) =>
+        prev.map((x) => (x.id === p.id ? { ...x, imported: true } : x)),
+      );
+      setSelectedProduct((prev) =>
+        prev && prev.id === p.id ? { ...prev, imported: true } : prev,
+      );
+
       setImportMsg({
         ok: true,
         text:
@@ -510,10 +524,17 @@ export default function DropiCatalogPage() {
               e.stopPropagation();
               handleImport(p);
             }}
-            disabled={importing === p.id || stock === 0}
+            disabled={importing === p.id || stock === 0 || p.imported}
             className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {importing === p.id ? (
+            {p.imported ? (
+              <>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Ya importado en tu tienda
+              </>
+            ) : importing === p.id ? (
               <>
                 <div className="h-3.5 w-3.5 border-2 border-white border-t-transparent animate-spin rounded-full" />
                 Importando...
@@ -947,10 +968,17 @@ export default function DropiCatalogPage() {
                         </span>
                         <button
                           onClick={() => handleImport(p)}
-                          disabled={importing === p.id || stock === 0}
+                          disabled={importing === p.id || stock === 0 || p.imported}
                           className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                         >
-                          {importing === p.id ? (
+                          {p.imported ? (
+                            <>
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Ya importado
+                            </>
+                          ) : importing === p.id ? (
                             <>
                               <div className="h-3.5 w-3.5 border-2 border-white border-t-transparent animate-spin rounded-full" />
                               Importando...
@@ -1262,10 +1290,19 @@ Importar a mi tienda
 
               <button
                 onClick={() => handleImport(selectedProduct)}
-                disabled={importing === selectedProduct.id}
+                disabled={
+                  importing === selectedProduct.id || selectedProduct.imported
+                }
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-4 text-lg font-bold text-white transition hover:bg-blue-700 disabled:bg-slate-300"
               >
-                {importing === selectedProduct.id ? (
+                {selectedProduct.imported ? (
+                  <>
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Ya importado en tu tienda
+                  </>
+                ) : importing === selectedProduct.id ? (
                   <>
                     <div className="h-5 w-5 border-2 border-white border-t-transparent animate-spin rounded-full" />
                     Importando...

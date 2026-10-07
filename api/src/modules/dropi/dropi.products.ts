@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 import { DropiClient } from './dropi.client';
@@ -115,10 +115,71 @@ export class DropiProductsService {
         );
       }
 
-      return this.normalizeCatalogEnvelope(this.tryParse(retryResult.data));
+      return this.marcarImportados(
+        this.normalizeCatalogEnvelope(this.tryParse(retryResult.data)),
+      );
     }
 
-    return this.normalizeCatalogEnvelope(this.tryParse(data));
+    return this.marcarImportados(
+      this.normalizeCatalogEnvelope(this.tryParse(data)),
+    );
+  }
+
+  /**
+   * Anade a cada objeto del catalogo `imported: true` cuando ese id de Dropi
+   * ya esta en la tienda, para que la UI bloquee el boton de importar en vez
+   * de dejar crear un duplicado. Una sola consulta por pagina, no una por
+   * producto.
+   */
+  private async marcarImportados(
+    response: DropiCatalogResponse,
+  ): Promise<DropiCatalogResponse> {
+    // `objects` viene del JSON de Dropi, tipado como any[]; aqui se le da forma
+    // local para no regar `any` por el resto del metodo.
+    const objects = (response.objects ?? []) as Array<{
+      id?: number | string;
+      imported?: boolean;
+    }>;
+    const ids = objects
+      .map((o) => Number(o.id))
+      .filter((id) => Number.isFinite(id));
+
+    if (ids.length === 0) return response;
+
+    const enTienda = await this.prisma.product.findMany({
+      where: { dropiProductId: { in: ids } },
+      select: { dropiProductId: true },
+    });
+    const importados = new Set(
+      enTienda
+        .map((p) => p.dropiProductId)
+        .filter((v): v is number => typeof v === 'number'),
+    );
+
+    for (const o of objects) {
+      o.imported = importados.has(Number(o.id));
+    }
+    return response;
+  }
+
+  /**
+   * Un producto de Dropi solo se importa una vez: si ya esta en la tienda se
+   * devuelve 409 antes de gastar una llamada a Dropi. El indice unico de
+   * `dropiProductId` es la garantia de fondo; esto es el mensaje claro.
+   */
+  private async assertNoImportado(dropiProductId: number): Promise<void> {
+    const existente = await this.prisma.product.findFirst({
+      where: { dropiProductId },
+      select: { id: true, name: true },
+    });
+
+    if (existente) {
+      throw new HttpException(
+        `El producto ya está importado en la tienda ("${existente.name}"). ` +
+          'Edítalo desde Productos en lugar de importarlo otra vez.',
+        409,
+      );
+    }
   }
 
   private tryParse(data: string): DropiCatalogEnvelope | null {
@@ -381,6 +442,10 @@ export class DropiProductsService {
   }
 
   async importProduct(dropiProductId: number): Promise<any> {
+    // Un solo import por producto: si ya esta en la tienda se contesta 409
+    // sin siquiera llamar a Dropi.
+    await this.assertNoImportado(dropiProductId);
+
     let result: DropiCatalogResponse;
     try {
       result = await this.fetchCatalog({
@@ -461,22 +526,46 @@ export class DropiProductsService {
     const cost = Number(dropiProduct.sale_price) || 0;
     const sellable = suggested > 0 ? suggested : cost;
 
-    const product = await this.prisma.product.create({
-      data: {
-        name,
-        slug,
-        price: sellable,
-        oldPrice: suggested > 0 ? Math.round(suggested * 1.15) : undefined,
-        stock,
-        customCode: dropiProduct.sku || undefined,
-        dropiProductId: dropiProduct.id || undefined,
-        image: image || undefined,
-        gallery,
-        description: dropiProduct.description || undefined,
-        categoryId: category.id,
-      },
-      include: { category: true },
-    });
+    const product = await this.prisma.product
+      .create({
+        data: {
+          name,
+          slug,
+          price: sellable,
+          oldPrice: suggested > 0 ? Math.round(suggested * 1.15) : undefined,
+          stock,
+          customCode: dropiProduct.sku || undefined,
+          // Si Dropi no devuelve el id se guarda el con el que se pidio: es el
+          // mismo, y sin el la fila quedaria sin `dropiProductId` y se podria
+          // importar otra vez.
+          dropiProductId: dropiProduct.id ?? dropiProductId,
+          image: image || undefined,
+          gallery,
+          description: dropiProduct.description || undefined,
+          categoryId: category.id,
+        },
+        include: { category: true },
+      })
+      .catch((e: unknown) => {
+        // Dos imports simultaneos del mismo producto: gana el indice unico de
+        // dropiProductId y aqui se traduce a un mensaje entendible.
+        const prismaError = e as {
+          code?: string;
+          meta?: { target?: string | string[] };
+        };
+        const target = prismaError.meta?.target;
+        const chocoEnDropi = Array.isArray(target)
+          ? target.includes('dropiProductId')
+          : target === 'dropiProductId';
+
+        if (prismaError.code === 'P2002' && chocoEnDropi) {
+          throw new HttpException(
+            'El producto ya está importado en la tienda',
+            409,
+          );
+        }
+        throw e;
+      });
 
     if (suggested > 0) {
       this.logger.log(
