@@ -160,7 +160,11 @@ export class StockPriceTool implements AgentTool<StockPriceIn, StockPriceOut> {
     });
   }
 
-  /** Segunda pasada: coincide por términos normalizados, sin acentos. */
+  /**
+   * Segunda pasada: coincide por términos normalizados, sin acentos. Con OR
+   * entre términos ("reloj naviforce") devolvía todo lo que casara con uno
+   * solo (todos los relojes); aquí cada término debe aparecer en el producto.
+   */
   private async buscarFuzzy(
     query?: string,
     category?: string,
@@ -180,7 +184,7 @@ export class StockPriceTool implements AgentTool<StockPriceIn, StockPriceOut> {
 
     return fallbackCatalog
       .filter((p) =>
-        terms.some(
+        terms.every(
           (term) =>
             this.normalizeText(p.name).includes(term) ||
             this.normalizeText(p.description ?? '').includes(term) ||

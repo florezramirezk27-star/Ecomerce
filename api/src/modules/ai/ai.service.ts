@@ -104,6 +104,53 @@ function esFalloDeModelo(mensaje: string): boolean {
   );
 }
 
+/**
+ * Elige cuál resultado de `consultarStockYPrecio` se muestra como carrusel.
+ *
+ * El modelo puede llamar la herramienta varias veces en un turno (primero el
+ * producto concreto y luego el catálogo general, o al revés) y `toolResults`
+ * trae los pasos juntos. Quedarse con el primero mostraba el catálogo
+ * completo cuando el cliente había pedido un producto. Se prefiere la llamada
+ * que llevó filtros de búsqueda (query/category/productId/slug) y, entre
+ * esas, la que devolvió menos productos (la más específica). Si ninguna llevó
+ * filtros (pedido de catálogo), se usa esa.
+ */
+function elegirStockParaUI(
+  toolCalls: Array<{ name: string; input: unknown; result: unknown }>,
+): StockToolOutput | null {
+  const validos = toolCalls
+    .filter((tc) => tc.name === 'consultarStockYPrecio')
+    .map((tc) => ({
+      input: (tc.input ?? {}) as Record<string, unknown>,
+      output: tc.result as StockToolOutput,
+    }))
+    .filter(
+      (c) =>
+        c.output?.success &&
+        Array.isArray(c.output.products) &&
+        c.output.products.length > 0,
+    );
+
+  if (validos.length === 0) return null;
+
+  const texto = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const tieneFiltros = (input: Record<string, unknown>) =>
+    texto(input.query).length > 0 ||
+    texto(input.category).length > 0 ||
+    texto(input.productId).length > 0 ||
+    texto(input.slug).length > 0;
+
+  const conFiltros = validos.filter((c) => tieneFiltros(c.input));
+  const pool = conFiltros.length > 0 ? conFiltros : validos;
+
+  pool.sort(
+    (a, b) =>
+      (a.output.products?.length ?? 0) - (b.output.products?.length ?? 0),
+  );
+
+  return pool[0].output;
+}
+
 const AVISO_MODO_BASICO =
   '⚠️ **Estoy en modo básico**: tuve una falla con mi asistente IA, así que lo que sigue es una respuesta automática y puede que no encaje con tu pregunta. Perdón. Escríbeme de nuevo en unos minutos y vuelvo a responderte normal.\n\n';
 
@@ -388,17 +435,12 @@ FORMATO:
 
       const ui: GenerativeUI[] = [];
 
-      const stockCall = toolCalls.find(
-        (tc) => tc.name === 'consultarStockYPrecio',
-      );
-      if (stockCall?.result && (stockCall.result as StockToolOutput).success) {
-        const productsData = (stockCall.result as StockToolOutput).products;
-        if (productsData !== undefined && productsData.length > 0) {
-          ui.push({
-            type: 'product_carousel',
-            data: { products: productsData },
-          });
-        }
+      const stockOutput = elegirStockParaUI(toolCalls);
+      if (stockOutput?.products && stockOutput.products.length > 0) {
+        ui.push({
+          type: 'product_carousel',
+          data: { products: stockOutput.products },
+        });
       }
 
       const trackingCall = toolCalls.find(
@@ -526,14 +568,12 @@ FORMATO:
 
       const uis: GenerativeUI[] = [];
 
-      const stockCall = toolCalls.find(
-        (tc) => tc.name === 'consultarStockYPrecio',
-      );
-      if (stockCall?.result && (stockCall.result as StockToolOutput).success) {
-        const prods = (stockCall.result as StockToolOutput).products;
-        if (prods !== undefined && prods.length > 0) {
-          uis.push({ type: 'product_carousel', data: { products: prods } });
-        }
+      const stockOutput = elegirStockParaUI(toolCalls);
+      if (stockOutput?.products && stockOutput.products.length > 0) {
+        uis.push({
+          type: 'product_carousel',
+          data: { products: stockOutput.products },
+        });
       }
 
       const trackingCall = toolCalls.find(
@@ -768,6 +808,18 @@ FORMATO:
       'busco',
       'quiero',
       'quieres',
+      'cuanto',
+      'cuánto',
+      'cuesta',
+      'cuestan',
+      'costar',
+      'costo',
+      'precio',
+      'precios',
+      'valor',
+      'valores',
+      'vale',
+      'valen',
     ]);
 
     const words = query
@@ -780,7 +832,10 @@ FORMATO:
 
     const where: Prisma.ProductWhereInput = { active: true };
     if (searchTerms.length > 0) {
-      where.OR = searchTerms.map((term) => ({
+      // Cada término debe aparecer en el producto (en nombre, descripción o
+      // categoría). Con "OR entre términos" un pedido como "reloj naviforce"
+      // devolvía todos los relojes porque solo hacía falta que casara uno.
+      where.AND = searchTerms.map((term) => ({
         OR: [
           { name: { contains: term, mode: 'insensitive' as const } },
           { description: { contains: term, mode: 'insensitive' as const } },
@@ -812,7 +867,7 @@ FORMATO:
 
       result = fallback
         .filter((p) =>
-          normalizedTerms.some(
+          normalizedTerms.every(
             (term) =>
               this.normalizeText(p.name).includes(term) ||
               this.normalizeText(p.description ?? '').includes(term) ||
