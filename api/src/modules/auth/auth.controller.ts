@@ -25,7 +25,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { WsTicketStore } from '../../common/ws-ticket.store';
 import type { AuthenticatedRequest } from '../../common/types/auth-request';
-import { accessTokenLifetimeMs } from '../../common/token-expiry';
+import { sessionLifetimeMs } from '../../common/token-expiry';
 import { createCsrfToken, setCsrfCookie } from '../../common/csrf';
 import { frontendUrl } from '../../common/config/origins';
 import {
@@ -34,10 +34,6 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
 } from '../../common/schemas';
-
-function accessTokenMs(): number {
-  return accessTokenLifetimeMs();
-}
 
 /**
  * El callback de Google puede llegar desde la app movil o desde el navegador.
@@ -91,7 +87,14 @@ export class AuthController {
   // lo use. Por eso login, refresh y exchange devuelven solo el usuario.
   private setTokenCookie(res: Response, token: string) {
     const isProduction = process.env.NODE_ENV === 'production';
-    const maxAge = accessTokenMs();
+    // La cookie vive lo que la sesion (refresh), no lo que el JWT. El JWT
+    // expira antes (1h) y /auth/refresh lo renueva mientras la sesion en BD
+    // siga viva; si la cookie muriera con el JWT, el navegador la borraria y no
+    // quedaria nada que renovar, que era lo que cerraba la sesion pasada 1h sin
+    // usar la web. El tope real de inactividad es JWT_REFRESH_EXPIRES_IN (24h
+    // por defecto): sin uso, /auth/refresh ya no encuentra sesion valida y se
+    // manda al login; con uso, cada refresh la renueva (sliding).
+    const maxAge = sessionLifetimeMs();
     res.cookie('token', token, {
       httpOnly: true,
       secure: isProduction,

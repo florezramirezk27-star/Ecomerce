@@ -21,5 +21,8 @@ export function accessTokenLifetimeMs(): number {
 }
 
 export function sessionLifetimeMs(): number {
-  return parseExpiresIn(process.env.JWT_REFRESH_EXPIRES_IN || '7d');
+  // Sesión ociosa: 24h por defecto. Quien sigue usando la web renueva su sesión
+  // con cada refresh (sliding), así que en uso no expira; sin uso, se cierra a
+  // las 24h, que es el comportamiento que se quiere para la tienda.
+  return parseExpiresIn(process.env.JWT_REFRESH_EXPIRES_IN || '24h');
 }
