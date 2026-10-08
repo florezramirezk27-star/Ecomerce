@@ -31,6 +31,12 @@ export const StockPriceInput = z.object({
   // concreta ("relojes", "zapatos", "electrodomésticos", ...). Puede usarse
   // junto con `query` para un producto dentro de una categoría.
   category: z.string().optional(),
+  // Orden del listado: para "el producto más caro" usa 'price_desc' y para
+  // "el más barato" 'price_asc'. 'newest' es el orden por defecto.
+  sortBy: z.enum(['price_desc', 'price_asc', 'newest']).optional(),
+  // Cuántos productos devolver (máx. 10, por defecto 10). Para mostrar un
+  // solo producto (p. ej. "el más caro") pasa limit: 1.
+  limit: z.number().int().min(1).max(10).optional(),
 });
 export type StockPriceInput = z.infer<typeof StockPriceInput>;
 

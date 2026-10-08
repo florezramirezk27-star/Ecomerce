@@ -74,7 +74,9 @@ export class StockPriceTool implements AgentTool<StockPriceIn, StockPriceOut> {
     '- Productos de UNA categoría (p. ej. "relojes", "zapatos", "electrodomésticos", "tecnología"): pasa el nombre de la categoría en el parámetro category.\n' +
     '- Producto dentro de una categoría: usa los dos parámetros a la vez (query y category).\n' +
     '- SOLO cuando el cliente pida ver todo el catálogo sin nombrar nada ("qué productos tienes", "qué venden", "muéstrame el catálogo"): invócala SIN query ni category.\n' +
-    'Debes pasar SIEMPRE los términos que nombre el cliente; el resultado se acota a lo que nombre. Devuelve hasta 10 productos.';
+    '- Precios: para "el producto más caro" usa sortBy="price_desc" y limit=1; para "el más barato" sortBy="price_asc" y limit=1.\n' +
+    '- limit acepta de 1 a 10 (por defecto 10) y acota cuántos productos devolver.\n' +
+    'Debes pasar SIEMPRE los términos que nombre el cliente; el resultado se acota a lo que nombre.';
   parameters = StockPriceInput;
 
   constructor(private readonly prisma: PrismaService) {}
@@ -101,7 +103,7 @@ export class StockPriceTool implements AgentTool<StockPriceIn, StockPriceOut> {
       // Segunda pasada sin acentos ni plurales sobre el catálogo completo:
       // cubre los casos en que lo que escribe el cliente no coincide letra
       // por letra con el nombre o la categoría del producto.
-      const fuzzy = await this.buscarFuzzy(query, category);
+      const fuzzy = await this.buscarFuzzy(query, category, args);
       if (fuzzy.length > 0) {
         return { success: true, products: fuzzy };
       }
@@ -155,8 +157,13 @@ export class StockPriceTool implements AgentTool<StockPriceIn, StockPriceOut> {
     return this.prisma.product.findMany({
       where,
       include: { category: { select: { name: true } } },
-      take: 10,
-      orderBy: { createdAt: 'desc' },
+      take: args.limit ?? 10,
+      orderBy:
+        args.sortBy === 'price_desc'
+          ? { price: 'desc' }
+          : args.sortBy === 'price_asc'
+            ? { price: 'asc' }
+            : { createdAt: 'desc' },
     });
   }
 
@@ -168,6 +175,7 @@ export class StockPriceTool implements AgentTool<StockPriceIn, StockPriceOut> {
   private async buscarFuzzy(
     query?: string,
     category?: string,
+    args?: StockPriceIn,
   ): Promise<StockPriceOut['products']> {
     const terms = this.normalizeText(`${query ?? ''} ${category ?? ''}`)
       .split(/\s+/)
@@ -182,17 +190,22 @@ export class StockPriceTool implements AgentTool<StockPriceIn, StockPriceOut> {
       orderBy: { createdAt: 'desc' },
     });
 
-    return fallbackCatalog
-      .filter((p) =>
-        terms.every(
-          (term) =>
-            this.normalizeText(p.name).includes(term) ||
-            this.normalizeText(p.description ?? '').includes(term) ||
-            this.normalizeText(p.category?.name ?? '').includes(term),
-        ),
-      )
-      .slice(0, 10)
-      .map((p) => this.toOutput(p));
+    const matches = fallbackCatalog.filter((p) =>
+      terms.every(
+        (term) =>
+          this.normalizeText(p.name).includes(term) ||
+          this.normalizeText(p.description ?? '').includes(term) ||
+          this.normalizeText(p.category?.name ?? '').includes(term),
+      ),
+    );
+
+    if (args?.sortBy === 'price_desc') {
+      matches.sort((a, b) => Number(b.price) - Number(a.price));
+    } else if (args?.sortBy === 'price_asc') {
+      matches.sort((a, b) => Number(a.price) - Number(b.price));
+    }
+
+    return matches.slice(0, args?.limit ?? 10).map((p) => this.toOutput(p));
   }
 
   private toOutput(p: RowCatalogo): StockPriceOut['products'][number] {

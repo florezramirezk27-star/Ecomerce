@@ -74,6 +74,7 @@ interface ChatHistoryResponse {
     id: string;
     role: "user" | "assistant";
     content: string;
+    metadata?: { ui?: GenerativeUI[] } | null;
   }>;
 }
 
@@ -149,6 +150,9 @@ export default function StoreChat() {
               id: item.id,
               role: item.role,
               content: item.content,
+              ...(item.metadata?.ui
+                ? { ui: item.metadata.ui }
+                : {}),
             }))
         );
       } catch (error) {

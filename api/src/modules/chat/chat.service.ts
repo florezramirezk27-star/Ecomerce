@@ -263,12 +263,14 @@ INSTRUCCIONES ESPECÍFICAS:
     role: 'user' | 'assistant' | 'system',
     content: string,
     intent?: ChatIntent,
+    opts?: { ui?: unknown },
   ): Promise<void> {
     await this.prisma.chatMessage.create({
       data: {
         sessionId,
         role,
         content,
+        ...(opts?.ui !== undefined ? { metadata: { ui: opts.ui } } : {}),
       },
     });
 
@@ -330,10 +332,15 @@ INSTRUCCIONES ESPECÍFICAS:
       where.id = { lt: before };
     }
 
-    return this.prisma.chatMessage.findMany({
+    const messages = await this.prisma.chatMessage.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
+
+    // La búsqueda va en desc para que la paginación por `before` sirva, pero la
+    // conversación se entrega en orden cronológico: sin esto, al recargar el
+    // chat las respuestas aparecían encima de sus preguntas.
+    return messages.reverse();
   }
 }

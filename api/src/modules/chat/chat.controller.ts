@@ -82,6 +82,8 @@ export class ChatController {
         context.sessionId,
         'assistant',
         result.text,
+        undefined,
+        { ui: result.ui },
       );
 
       return {

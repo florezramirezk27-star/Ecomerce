@@ -195,6 +195,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         context.sessionId,
         'assistant',
         fullText,
+        undefined,
+        { ui: lastUIs.length > 0 ? lastUIs : undefined },
       );
 
       client.emit('chat.done', {

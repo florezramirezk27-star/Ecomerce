@@ -138,7 +138,8 @@ function elegirStockParaUI(
     texto(input.query).length > 0 ||
     texto(input.category).length > 0 ||
     texto(input.productId).length > 0 ||
-    texto(input.slug).length > 0;
+    texto(input.slug).length > 0 ||
+    texto(input.sortBy).length > 0;
 
   const conFiltros = validos.filter((c) => tieneFiltros(c.input));
   const pool = conFiltros.length > 0 ? conFiltros : validos;
@@ -238,6 +239,7 @@ REGLAS PARA PRODUCTOS:
   · Producto dentro de una categoría: pasa los dos parámetros a la vez (query y category).
 - NUNCA omitas query ni category cuando el cliente haya nombrado algo concreto. Solo invócala SIN parámetros cuando el cliente pida ver TODO el catálogo sin nombrar nada (por ejemplo: "qué productos tienes", "qué venden", "qué hay disponible", "muéstrame el catálogo").
 - Si la primera búsqueda no devuelve resultados, intenta de nuevo con menos palabras clave o con el nombre de la categoría antes de decir que el producto no existe.
+- Para "el producto más caro" usa los parámetros sortBy="price_desc" y limit=1; para "el más barato" sortBy="price_asc" y limit=1. limit acepta de 1 a 10 (por defecto 10).
 - Nunca inventes precios.
 - Nunca inventes stock.
 - Nunca inventes productos.
