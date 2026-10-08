@@ -184,8 +184,13 @@ CAPACIDADES:
 4. Ayudar al cliente a encontrar productos adecuados de nuestro catálogo.
 
 REGLAS PARA PRODUCTOS:
-- Si el usuario pregunta por el precio, stock o disponibilidad de un producto, DEBES utilizar consultarStockYPrecio.
-- Cuando el usuario pregunte de manera general qué productos hay en la tienda (por ejemplo: "qué productos tienes", "qué venden", "qué hay disponible", "muéstrame el catálogo"), DEBES utilizar consultarStockYPrecio SIN el parámetro query para listar el catálogo disponible.
+- Si el usuario pregunta por el precio, stock o disponibilidad de un producto, o quiere ver productos, DEBES utilizar consultarStockYPrecio.
+- Aprovecha SIEMPRE lo que nombre el cliente. La herramienta tiene dos parámetros de búsqueda (query y category) y se usan así:
+  · Producto concreto o marca (p. ej. "reloj naviforce", "tennis blancos"): pasa las palabras del producto en el parámetro query.
+  · Los productos de UNA categoría (p. ej. "relojes", "zapatos", "electrodomésticos", "tecnología"): pasa el nombre de la categoría en el parámetro category.
+  · Producto dentro de una categoría: pasa los dos parámetros a la vez (query y category).
+- NUNCA omitas query ni category cuando el cliente haya nombrado algo concreto. Solo invócala SIN parámetros cuando el cliente pida ver TODO el catálogo sin nombrar nada (por ejemplo: "qué productos tienes", "qué venden", "qué hay disponible", "muéstrame el catálogo").
+- Si la primera búsqueda no devuelve resultados, intenta de nuevo con menos palabras clave o con el nombre de la categoría antes de decir que el producto no existe.
 - Nunca inventes precios.
 - Nunca inventes stock.
 - Nunca inventes productos.
@@ -761,6 +766,8 @@ FORMATO:
       'busque',
       'buscas',
       'busco',
+      'quiero',
+      'quieres',
     ]);
 
     const words = query
@@ -777,6 +784,7 @@ FORMATO:
         OR: [
           { name: { contains: term, mode: 'insensitive' as const } },
           { description: { contains: term, mode: 'insensitive' as const } },
+          { category: { name: { contains: term, mode: 'insensitive' } } },
         ],
       }));
     }
@@ -807,7 +815,8 @@ FORMATO:
           normalizedTerms.some(
             (term) =>
               this.normalizeText(p.name).includes(term) ||
-              this.normalizeText(p.description ?? '').includes(term),
+              this.normalizeText(p.description ?? '').includes(term) ||
+              this.normalizeText(p.category?.name ?? '').includes(term),
           ),
         )
         .slice(0, limit)

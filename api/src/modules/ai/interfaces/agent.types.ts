@@ -27,6 +27,10 @@ export const StockPriceInput = z.object({
   productId: z.string().optional(),
   slug: z.string().optional(),
   query: z.string().optional(),
+  // Nombre de la categoría cuando el cliente pide productos de una categoría
+  // concreta ("relojes", "zapatos", "electrodomésticos", ...). Puede usarse
+  // junto con `query` para un producto dentro de una categoría.
+  category: z.string().optional(),
 });
 export type StockPriceInput = z.infer<typeof StockPriceInput>;
 
