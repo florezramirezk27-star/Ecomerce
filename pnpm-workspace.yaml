@@ -1,22 +1,10 @@
 packages:
-  - 'api'
-  - 'apps/*'
+  - "apps/*"
+  - "api"
+  - "packages/*"
 
-allowBuilds:
-  '@nestjs/core': true
-  '@prisma/client': true
-  '@prisma/engines': true
-  '@scarf/scarf': true
-  bcrypt: true
-  core-js: true
-  prisma: true
-  sharp: true
-  unrs-resolver: true
-
-onlyBuiltDependencies:
-  - '@nestjs/core'
-  - '@prisma/client'
-  - '@prisma/engines'
-  - core-js
-  - prisma
-  - '@scarf/scarf'
+overrides:
+  shell-quote: ^1.11.0
+  proxy-addr: ^2.0.8
+  handlebars: ">=4.7.10"
+  multer: "^2.3.0"
