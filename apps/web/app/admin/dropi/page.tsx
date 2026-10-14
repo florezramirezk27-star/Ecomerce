@@ -97,8 +97,10 @@ export default function AdminDropiPage() {
     setSyncMessage(null);
     try {
       const summary = await apiFetch('/dropi/sync-stock', { method: 'POST' });
+      const unchanged =
+        typeof summary.unchanged === 'number' ? summary.unchanged : 0;
       setSyncMessage(
-        `Sincronizados ${summary.updated} de ${summary.checked} productos importados.`,
+        `Sincronizados ${summary.updated} de ${summary.checked} productos importados (${unchanged} sin cambios).`,
       );
       apiFetch('/products?limit=10')
         .then((data) =>

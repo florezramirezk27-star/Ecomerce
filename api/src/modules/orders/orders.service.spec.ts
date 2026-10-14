@@ -3,6 +3,7 @@ import { OrdersService } from './orders.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
+import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 import type { CheckoutDto } from './dto/checkout.dto';
 
 /**
@@ -60,6 +61,7 @@ describe('OrdersService', () => {
 
   const dropiCreateOrder = jest.fn();
   const dropiValidateStock = jest.fn();
+  const dropiSyncStock = jest.fn();
   const dropiCancelOrder = jest.fn();
 
   beforeEach(async () => {
@@ -88,6 +90,17 @@ describe('OrdersService', () => {
 
     dropiCreateOrder.mockResolvedValue({ success: true, message: 'ok' });
     dropiValidateStock.mockResolvedValue({ ok: true, insufficient: [] });
+    dropiSyncStock.mockResolvedValue({
+      checked: 0,
+      updated: 0,
+      unchanged: 0,
+      errors: 0,
+      skipped: 0,
+      skippedNames: [],
+      errorNames: [],
+      details: [],
+      priceWarnings: [],
+    });
     dropiCancelOrder.mockResolvedValue({ success: true });
 
     const module: TestingModule = await Test.createTestingModule({
@@ -119,7 +132,14 @@ describe('OrdersService', () => {
           useValue: {
             createOrder: dropiCreateOrder,
             validateStock: dropiValidateStock,
+            syncStock: dropiSyncStock,
             cancelOrder: dropiCancelOrder,
+          },
+        },
+        {
+          provide: CatalogCacheService,
+          useValue: {
+            invalidate: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
@@ -326,6 +346,16 @@ describe('OrdersService', () => {
       expect(mailMocks.sendOrderConfirmationEmail).toHaveBeenCalled();
     });
 
+    it('re-sincroniza el stock de Dropi justo antes de comprar', async () => {
+      await service.checkout(user.id, dto);
+
+      // Con el id del producto importado, para que el stock local quede igual
+      // al de Dropi antes de validar y descontar.
+      expect(dropiSyncStock).toHaveBeenCalledWith([1734566]);
+      // La validacion con el proveedor sigue existiendo como red de seguridad.
+      expect(dropiValidateStock).toHaveBeenCalled();
+    });
+
     it('no toca el estado cuando el pedido no tiene productos de proveedor', async () => {
       const sinDropi = { ...producto, dropiProductId: null };
       cartFindUnique.mockResolvedValue({
@@ -347,6 +377,8 @@ describe('OrdersService', () => {
       expect(res.status).toBe('PENDING');
       expect(res.dropi.success).toBeNull();
       expect(dropiCreateOrder).not.toHaveBeenCalled();
+      // Sin productos de proveedor no hay nada que re-sincronizar.
+      expect(dropiSyncStock).not.toHaveBeenCalled();
     });
   });
 });

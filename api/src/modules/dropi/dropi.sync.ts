@@ -12,6 +12,8 @@ import { DropiTrackingService } from './dropi.tracking';
 export interface StockSyncSummary {
   checked: number;
   updated: number;
+  /** Productos cuyo stock de Dropi es identico al local: no se tocaron. */
+  unchanged: number;
   errors: number;
   skipped: number;
   /**
@@ -21,7 +23,13 @@ export interface StockSyncSummary {
    */
   skippedNames: string[];
   errorNames: string[];
-  details: { id: number; name: string; updated: boolean; error?: string }[];
+  details: {
+    id: number;
+    name: string;
+    updated: boolean;
+    unchanged?: boolean;
+    error?: string;
+  }[];
   /**
    * Productos cuyo precio local quedo por debajo del minimo que exige Dropi.
    * No se corrigen solos: el precio lo define el_dueno a mano y el sync no debe
@@ -80,7 +88,7 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
     try {
       const summary = await this.syncStock();
       this.logger.log(
-        `Stock sync automático: ${summary.checked} revisados, ${summary.updated} actualizados, ${summary.errors} errores, ${summary.skipped} sin datos en Dropi`,
+        `Stock sync automático: ${summary.checked} revisados, ${summary.updated} actualizados, ${summary.unchanged} sin cambios, ${summary.errors} errores, ${summary.skipped} sin datos en Dropi`,
       );
 
       // Los numeros solos no dicen nada. Un "2 sin datos en Dropi" obliga a
@@ -131,7 +139,13 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
   async syncStock(targetIds?: number[]): Promise<StockSyncSummary> {
     const localProducts = await this.prisma.product.findMany({
       where: { dropiProductId: { not: null } },
-      select: { id: true, dropiProductId: true, name: true, price: true },
+      select: {
+        id: true,
+        dropiProductId: true,
+        name: true,
+        price: true,
+        stock: true,
+      },
     });
 
     if (localProducts.length === 0) {
@@ -139,6 +153,7 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
       return {
         checked: 0,
         updated: 0,
+        unchanged: 0,
         errors: 0,
         skipped: 0,
         skippedNames: [],
@@ -157,6 +172,7 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
     const summary: StockSyncSummary = {
       checked: 0,
       updated: 0,
+      unchanged: 0,
       errors: 0,
       skipped: 0,
       skippedNames: [],
@@ -215,6 +231,36 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
       const stock = this.products.computeStock(dropiProduct);
       const suggested = Number(dropiProduct.suggested_price) || 0;
 
+      // Aviso, no correccion: si el precio quedo por debajo del minimo de
+      // Dropi, la orden se va a rechazar aunque el stock este bien. Se revisa
+      // siempre, incluso si el stock no cambia.
+      const localPrice = Number(local.price) || 0;
+      if (suggested > 0 && localPrice < suggested) {
+        summary.priceWarnings.push({
+          id: dropiId,
+          name: local.name,
+          local: localPrice,
+          suggested,
+        });
+        this.logger.warn(
+          `Sync: "${local.name}" esta en ${localPrice} y Dropi exige minimo ${suggested}; la orden sera rechazada`,
+        );
+      }
+
+      // Solo se escribe si el stock cambio. Antes se actualizaba (y se contaba
+      // como "actualizado") aunque Dropi devolviera el mismo numero, lo que
+      // ensuciaba el conteo del panel y golpeaba la base sin motivo.
+      if (stock === local.stock) {
+        summary.unchanged++;
+        summary.details.push({
+          id: dropiId,
+          name: local.name,
+          updated: false,
+          unchanged: true,
+        });
+        continue;
+      }
+
       try {
         // Solo el stock. El sync antes tambien sobrescribia `price` y
         // `oldPrice` con el precio sugerido de Dropi, lo que deshacia a mano
@@ -229,21 +275,6 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
           name: local.name,
           updated: true,
         });
-
-        // Aviso, no correccion: si el precio quedo por debajo del minimo de
-        // Dropi, la orden se va a rechazar aunque el stock este bien.
-        const localPrice = Number(local.price) || 0;
-        if (suggested > 0 && localPrice < suggested) {
-          summary.priceWarnings.push({
-            id: dropiId,
-            name: local.name,
-            local: localPrice,
-            suggested,
-          });
-          this.logger.warn(
-            `Sync: "${local.name}" esta en ${localPrice} y Dropi exige minimo ${suggested}; la orden sera rechazada`,
-          );
-        }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         summary.errors++;

@@ -1,112 +1,123 @@
-import { DropiProductsService } from './dropi.products';
+import { DropiProductsService, DropiProduct } from './dropi.products';
 import { DropiClient } from './dropi.client';
 import { DropiAuthService } from './dropi.auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 
-/**
- * Lo que cubre este archivo: el producto de Dropi solo se puede importar una
- * vez. La defensa es doble y aqui se prueba la del codigo (el indice unico de
- * `dropiProductId` vive en schema.prisma y en la migracion, no se puede
- * ejercitar sin la BD):
- *
- *  - `importProduct` se niega con 409 antes de gastar una llamada a Dropi.
- *  - `fetchCatalog` marca `imported` para que la UI bloquee el boton.
- */
-describe('DropiProductsService — importar una sola vez', () => {
-  let service: DropiProductsService;
-  let client: { request: jest.Mock };
-  let prisma: {
-    product: {
-      findFirst: jest.Mock;
-      findMany: jest.Mock;
-      create: jest.Mock;
-      update: jest.Mock;
-    };
+function makeService(): DropiProductsService {
+  return new DropiProductsService(
+    {} as DropiClient,
+    {} as DropiAuthService,
+    {} as PrismaService,
+    {} as CatalogCacheService,
+  );
+}
+
+function variableProduct(variations: { stock?: number }[]): DropiProduct {
+  return {
+    name: 'Camiseta',
+    type: 'VARIABLE',
+    variations,
+    warehouse_product: [{ warehouse_id: 1, stock: 42 }],
   };
+}
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    client = { request: jest.fn() };
-    prisma = {
-      product: {
-        findFirst: jest.fn(),
-        findMany: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-      },
-    };
-    service = new DropiProductsService(
-      client as unknown as DropiClient,
-      {
-        getToken: jest.fn().mockResolvedValue('token'),
-      } as unknown as DropiAuthService,
-      prisma as unknown as PrismaService,
-      { invalidate: jest.fn() } as unknown as CatalogCacheService,
-    );
-  });
+describe('DropiProductsService.computeStock', () => {
+  it('suma el stock de las variaciones de un producto VARIABLE', () => {
+    const service = makeService();
 
-  it('devuelve 409 y no llama a Dropi cuando el producto ya esta importado', async () => {
-    prisma.product.findFirst.mockResolvedValue({
-      id: 'prod-ya-importado',
-      name: 'Reloj Naviforce',
-    });
-
-    await expect(service.importProduct(1734566)).rejects.toMatchObject({
-      status: 409,
-    });
-
-    expect(client.request).not.toHaveBeenCalled();
-    expect(prisma.product.create).not.toHaveBeenCalled();
-  });
-
-  it('pasa a Dropi cuando el producto todavia no esta en la tienda', async () => {
-    prisma.product.findFirst.mockResolvedValue(null);
-    client.request.mockResolvedValue({
-      statusCode: 200,
-      data: JSON.stringify({ is_succesfull: false }),
-    });
-
-    await expect(service.importProduct(999)).rejects.toThrow(
-      'no encontrado en Dropi',
+    const stock = service.computeStock(
+      variableProduct([{ stock: 3 }, { stock: 4 }, { stock: 5 }]),
     );
 
-    expect(prisma.product.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { dropiProductId: 999 } }),
-    );
-    expect(client.request).toHaveBeenCalledTimes(1);
-    expect(prisma.product.create).not.toHaveBeenCalled();
+    expect(stock).toBe(12);
   });
 
-  it('marca en el catalogo los productos que ya estan en la tienda', async () => {
-    client.request.mockResolvedValue({
-      statusCode: 200,
-      data: JSON.stringify({
-        is_succesfull: true,
-        data: { objects: [{ id: 111 }, { id: 222 }, { id: 333 }] },
-      }),
+  it('cae a warehouse_product cuando variations viene vacío', () => {
+    // La regresion: un arreglo vacio es truthy, asi que el reduce daba 0 y
+    // nunca se usaba la bodega. El producto se veia con stock en Dropi pero el
+    // backend calculaba 0 y bloqueaba la venta.
+    const service = makeService();
+
+    const stock = service.computeStock(variableProduct([]));
+
+    expect(stock).toBe(42);
+  });
+
+  it('usa warehouse_product para un producto SIMPLE', () => {
+    const service = makeService();
+
+    const stock = service.computeStock({
+      name: 'Reloj',
+      type: 'SIMPLE',
+      warehouse_product: [
+        { warehouse_id: 1, stock: 10 },
+        { warehouse_id: 2, stock: 7 },
+      ],
     });
-    prisma.product.findMany.mockResolvedValue([{ dropiProductId: 222 }]);
 
-    const res = await service.fetchCatalog({ pageSize: 50 });
+    expect(stock).toBe(17);
+  });
 
-    expect(prisma.product.findMany).toHaveBeenCalledTimes(1);
-    expect(res.objects).toEqual([
-      { id: 111, imported: false },
-      { id: 222, imported: true },
-      { id: 333, imported: false },
+  it('devuelve 0 cuando no hay datos de stock', () => {
+    const service = makeService();
+
+    expect(service.computeStock({ name: 'X' })).toBe(0);
+  });
+});
+
+describe('DropiProductsService.validateStock', () => {
+  const item = { dropiProductId: 123, quantity: 2, name: 'Reloj' };
+
+  it('no bloquea la venta si Dropi no se puede consultar', async () => {
+    // Antes un timeout se contaba como `available: 0` y el cliente recibia
+    // "stock insuficiente" aunque Dropi tuviera el producto.
+    const service = makeService();
+    jest
+      .spyOn(service, 'getProductById')
+      .mockRejectedValue(new Error('timeout'));
+
+    const result = await service.validateStock([item]);
+
+    expect(result.ok).toBe(true);
+    expect(result.insufficient).toEqual([]);
+  });
+
+  it('no bloquea la venta si Dropi no devuelve el producto', async () => {
+    const service = makeService();
+    jest.spyOn(service, 'getProductById').mockResolvedValue(null);
+
+    const result = await service.validateStock([item]);
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('bloquea solo cuando Dropi confirma stock menor al pedido', async () => {
+    const service = makeService();
+    jest.spyOn(service, 'getProductById').mockResolvedValue({
+      name: 'Reloj',
+      type: 'SIMPLE',
+      warehouse_product: [{ warehouse_id: 1, stock: 1 }],
+    });
+
+    const result = await service.validateStock([item]);
+
+    expect(result.ok).toBe(false);
+    expect(result.insufficient).toEqual([
+      { name: 'Reloj', requested: 2, available: 1 },
     ]);
   });
 
-  it('no consulta la tienda si el catalogo vino vacio', async () => {
-    client.request.mockResolvedValue({
-      statusCode: 200,
-      data: JSON.stringify({ is_succesfull: true, data: { objects: [] } }),
+  it('deja pasar cuando Dropi tiene stock suficiente', async () => {
+    const service = makeService();
+    jest.spyOn(service, 'getProductById').mockResolvedValue({
+      name: 'Reloj',
+      type: 'SIMPLE',
+      warehouse_product: [{ warehouse_id: 1, stock: 9 }],
     });
 
-    const res = await service.fetchCatalog({ pageSize: 50 });
+    const result = await service.validateStock([item]);
 
-    expect(res.objects).toEqual([]);
-    expect(prisma.product.findMany).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
   });
 });

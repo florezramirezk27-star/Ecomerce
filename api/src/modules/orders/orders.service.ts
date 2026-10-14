@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 import { Prisma, OrderStatus } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
@@ -64,6 +65,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly dropiService: DropiService,
+    private readonly cache: CatalogCacheService,
   ) {}
 
   async checkout(userId: string, dto: CheckoutDto) {
@@ -104,6 +106,15 @@ export class OrdersService {
 
     const dropiCartItems = cart.items.filter((i) => i.product.dropiProductId);
     if (dropiCartItems.length > 0) {
+      // Re-sincroniza el stock local con el de Dropi justo antes de comprar:
+      // asi el stock que valida (y descuenta) la transaccion de abajo es el
+      // real del proveedor en este instante, no el del ultimo sync de 30 min.
+      // Si Dropi ya no tiene, el stock local baja y el pedido se corta con el
+      // numero real; si la red falla, syncStock no lanza y se sigue igual.
+      await this.dropiService.syncStock([
+        ...new Set(dropiCartItems.map((i) => i.product.dropiProductId!)),
+      ]);
+
       const stockCheck = await this.dropiService.validateStock(
         dropiCartItems.map((i) => ({
           dropiProductId: i.product.dropiProductId!,
@@ -431,6 +442,11 @@ export class OrdersService {
       );
     }
 
+    // El checkout baja el stock dentro de una transaccion, por fuera de
+    // ProductsService: sin invalidar, la ficha sigue mostrando el stock viejo
+    // hasta que expire el TTL (por defecto ~60s).
+    await this.invalidateProductCache();
+
     return {
       ...order,
       status: estadoFinal,
@@ -445,6 +461,20 @@ export class OrdersService {
         admin: adminEmail ? 'queued' : 'skipped',
       },
     };
+  }
+
+  /** Invalida la cache del catalogo tras cambiar stock, sin propagar fallos. */
+  private async invalidateProductCache(): Promise<void> {
+    try {
+      await this.cache.invalidate('products');
+      await this.cache.invalidate('product');
+    } catch (e) {
+      this.logger.warn(
+        `No se pudo invalidar la cache de productos: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
   }
 
   /**
@@ -1132,6 +1162,16 @@ export class OrdersService {
             },
           );
       }
+    }
+
+    try {
+      await this.cache.invalidate('product');
+    } catch (e) {
+      this.logger.error(
+        `No se pudo invalidar cache tras actualizar estado ${id} → ${status}: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
     }
 
     return updatedOrder;

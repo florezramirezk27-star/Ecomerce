@@ -34,7 +34,13 @@ interface ProductUpdate {
 function makeSync(opts: {
   byId: Record<number, DropiProduct>;
   throwOn?: number[];
-  local?: typeof LOCAL;
+  local?: Array<{
+    id: string;
+    dropiProductId: number;
+    name: string;
+    price: number;
+    stock?: number;
+  }>;
 }) {
   const updates: ProductUpdate[] = [];
 
@@ -265,6 +271,52 @@ describe('DropiSyncService: sincronizacion de stock', () => {
     expect(summary.details.find((d) => d.id === 241380)?.error).toContain(
       'timeout',
     );
+  });
+
+  it('no reescribe ni cuenta como actualizado lo que Dropi dejo igual', async () => {
+    // Antes el sync hacia un UPDATE por producto sin comparar: 88 escrituras
+    // por corrida aunque el stock fuera el mismo, y el panel reportaba todos
+    // como "actualizados". Ahora solo se toca lo que cambio.
+    const { service, updates, cache } = makeSync({
+      byId: {
+        1734566: dropiProduct(1734566, 100),
+        241380: dropiProduct(241380, 1276),
+        291738: dropiProduct(291738, 4),
+      },
+      local: [
+        {
+          id: 'p1',
+          dropiProductId: 1734566,
+          name: 'Reloj Naviforce',
+          price: 269000,
+          stock: 100, // igual al de Dropi
+        },
+        {
+          id: 'p2',
+          dropiProductId: 241380,
+          name: 'Kit Microfono',
+          price: 150000,
+          stock: 1270, // distinto: 6 de diferencia
+        },
+        {
+          id: 'p3',
+          dropiProductId: 291738,
+          name: 'Brasier Copa',
+          price: 18000,
+          stock: 4, // igual
+        },
+      ],
+    });
+
+    const summary = await service.syncStock();
+
+    expect(summary.checked).toBe(3);
+    expect(summary.updated).toBe(1);
+    expect(summary.unchanged).toBe(2);
+    expect(updates.map((u) => u.id)).toEqual(['p2']);
+    expect(updates[0].data.stock).toBe(1276);
+    // Solo hubo un cambio: la cache igual se invalida una vez.
+    expect(cache.invalidate).toHaveBeenCalledWith('products');
   });
 
   it('invalida la cache de productos cuando cambia el stock', async () => {

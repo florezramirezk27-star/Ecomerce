@@ -338,16 +338,29 @@ export class DropiProductsService {
   computeStock(product: DropiProduct): number {
     if (!product) return 0;
 
-    if (product.type === 'VARIABLE' && product.variations) {
-      return product.variations.reduce(
-        (sum: number, v: DropiVariation) => sum + (v.stock || 0),
+    // Un producto VARIABLE guarda su stock en `variations`. Antes bastaba con
+    // que el arreglo EXISTIERA (aunque fuera `[]`) para devolver 0 y no caer
+    // nunca a `warehouse_product`: el producto se veia con stock en Dropi pero
+    // el backend calculaba 0, dejaba el stock local en 0 y rechazaba la venta
+    // con "stock insuficiente". El frontend ya exige `length > 0`; aqui igual.
+    const variations = product.variations;
+    if (
+      String(product.type).toUpperCase() === 'VARIABLE' &&
+      Array.isArray(variations) &&
+      variations.length > 0
+    ) {
+      return variations.reduce(
+        (sum: number, v: DropiVariation) => sum + (Number(v.stock) || 0),
         0,
       );
     }
 
-    if (product.warehouse_product) {
+    if (
+      Array.isArray(product.warehouse_product) &&
+      product.warehouse_product.length > 0
+    ) {
       return product.warehouse_product.reduce(
-        (sum: number, w: DropiWarehouseProduct) => sum + (w.stock || 0),
+        (sum: number, w: DropiWarehouseProduct) => sum + (Number(w.stock) || 0),
         0,
       );
     }
@@ -363,33 +376,38 @@ export class DropiProductsService {
     }[] = [];
 
     for (const item of items) {
+      let product: DropiProduct | null;
       try {
-        const product = await this.getProductById(item.dropiProductId);
-        if (!product) {
-          insufficient.push({
-            name: item.name,
-            requested: item.quantity,
-            available: 0,
-          });
-          continue;
-        }
-        const available = this.computeStock(product);
-        if (available < item.quantity) {
-          insufficient.push({
-            name: item.name,
-            requested: item.quantity,
-            available,
-          });
-        }
+        product = await this.getProductById(item.dropiProductId);
       } catch (err: unknown) {
+        // No se pudo hablar con Dropi (red, token, timeout). Eso NO es "sin
+        // stock": antes se contaba como `available: 0` y el cliente recibia
+        // "stock insuficiente" aunque el producto existiera. Se deja pasar y,
+        // si de verdad no hay, Dropi rechaza la orden al crearla.
         const message = err instanceof Error ? err.message : String(err);
         this.logger.error(
-          `Stock check failed for ${item.name} (${item.dropiProductId}): ${message}`,
+          `No se pudo verificar el stock de ${item.name} (${item.dropiProductId}): ${message}. Se intenta crear la orden igualmente.`,
         );
+        continue;
+      }
+
+      if (!product) {
+        // La busqueda por id no devolvio el producto. Puede ser un fallo de la
+        // busqueda, no necesariamente falta de stock: se avisa, pero no se
+        // bloquea la venta. El stock local (sincronizado con Dropi) sigue
+        // siendo el que manda en el checkout.
+        this.logger.warn(
+          `Dropi no devolvio ${item.name} (${item.dropiProductId}) al verificar el stock; se intenta crear la orden igualmente.`,
+        );
+        continue;
+      }
+
+      const available = this.computeStock(product);
+      if (available < item.quantity) {
         insufficient.push({
           name: item.name,
           requested: item.quantity,
-          available: 0,
+          available,
         });
       }
     }
