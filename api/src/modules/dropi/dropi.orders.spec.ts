@@ -43,9 +43,21 @@ const NO_STOCK_ERROR = httpResponse(400, {
   data: null,
 });
 
+// El error que reporto el usuario: Dropi pide recotizar porque la bodega no
+// pudo surtir la cantidad en ese momento. No crea la orden, asi que se puede
+// probar la siguiente bodega.
+const EXISTENCIAS_ERROR = httpResponse(400, {
+  is_successful: false,
+  status_code: 400,
+  status_reason:
+    'Intenta cotizar nuevamente tu pedido, al parecer las existencias han variado mientras cotizabas.',
+  data: null,
+});
+
 /** Cuerpo de la orden enviada a Dropi (solo lo que mira el test). */
 interface PostedOrderBody {
   warehouses_selected_id?: number;
+  products?: Array<{ id?: number; variation_id?: number | null }>;
 }
 
 /**
@@ -56,6 +68,7 @@ interface PostedOrderBody {
 function makeService(opts: {
   warehouseIds: number[];
   suggestedPrice?: number;
+  variationId?: number | null;
   responses: Array<{ statusCode: number; data: string } | Error>;
 }) {
   const posted: PostedOrderBody[] = [];
@@ -81,6 +94,7 @@ function makeService(opts: {
       supplierId: 12108,
       warehouseId: opts.warehouseIds[0],
       warehouseIds: opts.warehouseIds,
+      variationId: opts.variationId ?? null,
       salePrice: 175900,
       suggestedPrice: opts.suggestedPrice ?? 0,
     }),
@@ -167,6 +181,31 @@ describe('DropiOrdersService: eleccion y reintento de bodega', () => {
     expect(result.results[0].status).toContain('sucursal');
     // La del proveedor y el respaldo de .env: no mas intentos.
     expect(usedWarehouses(posted)).toEqual([2015, 3577]);
+  });
+
+  it('reintenta con la siguiente bodega cuando las existencias variaron', async () => {
+    const { service, posted } = makeService({
+      warehouseIds: [2015, 2020],
+      responses: [EXISTENCIAS_ERROR, CREATED],
+    });
+
+    const result = await checkout(service);
+
+    expect(result.success).toBe(true);
+    expect(result.results[0].dropiOrderId).toBe('90660000');
+    expect(usedWarehouses(posted)).toEqual([2015, 2020]);
+  });
+
+  it('envia el variation_id resuelto para un producto VARIABLE', async () => {
+    const { service, posted } = makeService({
+      warehouseIds: [2015],
+      variationId: 555,
+      responses: [CREATED],
+    });
+
+    await checkout(service);
+
+    expect(posted[0].products?.[0].variation_id).toBe(555);
   });
 
   it('no reintenta si el fallo no es de bodega: evita ordenes duplicadas', async () => {

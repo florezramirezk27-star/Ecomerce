@@ -66,6 +66,63 @@ describe('DropiProductsService.computeStock', () => {
   });
 });
 
+describe('DropiProductsService.resolveDropshipperContext', () => {
+  it('resuelve la variacion de mas stock para un producto VARIABLE', async () => {
+    const service = makeService();
+    jest.spyOn(service, 'getProductById').mockResolvedValue({
+      name: 'Camiseta',
+      type: 'VARIABLE',
+      user: { id: 29151 },
+      variations: [
+        { id: 10, stock: 1 },
+        { id: 11, stock: 9 },
+        { id: 12, stock: 4 },
+      ],
+      warehouse_product: [{ warehouse_id: 3577, stock: 9 }],
+    });
+
+    const ctx = await service.resolveDropshipperContext(123);
+
+    expect(ctx).not.toBeNull();
+    expect(ctx?.supplierId).toBe(29151);
+    expect(ctx?.variationId).toBe(11);
+    expect(ctx?.warehouseId).toBe(3577);
+  });
+
+  it('devuelve la variacion aunque el producto no traiga bodegas', async () => {
+    const service = makeService();
+    jest.spyOn(service, 'getProductById').mockResolvedValue({
+      name: 'Camiseta',
+      type: 'VARIABLE',
+      user: { id: 29151 },
+      variations: [{ id: 10, stock: 3 }],
+      warehouse_product: [],
+    });
+
+    const ctx = await service.resolveDropshipperContext(123);
+
+    expect(ctx).not.toBeNull();
+    expect(ctx?.supplierId).toBe(29151);
+    expect(ctx?.variationId).toBe(10);
+    expect(ctx?.warehouseId).toBeUndefined();
+  });
+
+  it('no inventa variacion para un producto SIMPLE', async () => {
+    const service = makeService();
+    jest.spyOn(service, 'getProductById').mockResolvedValue({
+      name: 'Reloj',
+      type: 'SIMPLE',
+      user: { id: 29151 },
+      warehouse_product: [{ warehouse_id: 3577, stock: 5 }],
+    });
+
+    const ctx = await service.resolveDropshipperContext(123);
+
+    expect(ctx?.variationId).toBeNull();
+    expect(ctx?.warehouseId).toBe(3577);
+  });
+});
+
 describe('DropiProductsService.validateStock', () => {
   const item = { dropiProductId: 123, quantity: 2, name: 'Reloj' };
 

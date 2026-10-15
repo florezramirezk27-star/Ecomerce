@@ -24,14 +24,23 @@ interface DropiCatalogEnvelope {
 
 export interface DropiSupplierWarehouseContext {
   supplierId: number;
-  /** Bodega con mas stock. Se conserva por compatibilidad. */
-  warehouseId: number;
+  /**
+   * Bodega con mas stock. Es `undefined` cuando el producto no trae
+   * `warehouse_product` (pasa en algunos VARIABLE): en ese caso se usa el
+   * `DROPI_WAREHOUSE_ID` de .env como ultimo recurso.
+   */
+  warehouseId?: number;
   /**
    * Todas las bodegas del proveedor, de mas a menos stock. El catalogo de
    * Dropi no expone `sucursal_id`, asi que no se puede saber de antemano
    * cuales son pedibles: se prueban en orden hasta que una pase.
    */
   warehouseIds: number[];
+  /**
+   * Variacion a pedir. Dropi exige `variation_id` en los productos VARIABLE;
+   * como la tienda no modela variaciones, se elige la de mas stock.
+   */
+  variationId?: number | null;
   salePrice: number;
   suggestedPrice: number;
 }
@@ -65,7 +74,10 @@ interface DropiWarehouseProduct {
 
 /** Variante de un producto variable (talla/color) en el catalogo de Dropi. */
 interface DropiVariation {
+  id?: number | string;
   stock?: number;
+  sale_price?: number | string | null;
+  attribute_values?: Array<{ id?: number; value?: string }>;
 }
 
 /** Elemento de la galeria de un producto de Dropi. */
@@ -260,11 +272,11 @@ export class DropiProductsService {
       ? product.warehouse_product
       : [];
 
-    if (!supplierId || warehouses.length === 0) return null;
+    if (!supplierId) return null;
 
     // De mas a menos stock, deduplicando. El orden importa: la primera es la
     // que se intenta primero, y las siguientes son el reintento cuando Dropi
-    // dice que esa bodega no tiene sucursal.
+    // dice que esa bodega no tiene stock o no tiene sucursal.
     const warehouseIds = warehouses
       .slice()
       .sort((a, b) => (b.stock || 0) - (a.stock || 0))
@@ -273,10 +285,16 @@ export class DropiProductsService {
       .filter((id, idx, all) => all.indexOf(id) === idx);
 
     const warehouseId = warehouseIds[0];
-    if (!warehouseId) return null;
+    const variationId = this.pickVariationId(product);
+
+    // Sin bodega NI variacion no hay con que pedir: se cae a los defaults de
+    // .env. Con cualquiera de las dos alcanza para armar una orden valida.
+    if (!warehouseId && variationId == null) return null;
 
     this.logger.log(
-      `Dropi contexto resuelto para ${dropiProductId}: supplier=${supplierId}, warehouse=${warehouseId}` +
+      `Dropi contexto resuelto para ${dropiProductId}: supplier=${supplierId}` +
+        (warehouseId ? `, warehouse=${warehouseId}` : '') +
+        (variationId ? `, variation=${variationId}` : '') +
         (warehouseIds.length > 1
           ? ` (candidatas: ${warehouseIds.join(', ')})`
           : ''),
@@ -286,9 +304,35 @@ export class DropiProductsService {
       supplierId,
       warehouseId,
       warehouseIds,
+      variationId,
       salePrice: Number(product.sale_price) || 0,
       suggestedPrice: Number(product.suggested_price) || 0,
     };
+  }
+
+  /**
+   * Elige la variacion con mas stock de un producto VARIABLE. La tienda no
+   * modela variaciones, pero Dropi exige `variation_id` para crearlas: sin el
+   * la orden se rechaza con "las existencias han variado". Se toma la de mas
+   * stock porque es la que mas probablemente alcance la cantidad pedida.
+   */
+  private pickVariationId(product: DropiProduct): number | null {
+    if (String(product.type).toUpperCase() !== 'VARIABLE') return null;
+    const variations = Array.isArray(product.variations)
+      ? product.variations
+      : [];
+    if (variations.length === 0) return null;
+
+    const best = variations
+      .slice()
+      .sort((a, b) => (Number(b.stock) || 0) - (Number(a.stock) || 0))
+      .find((v) => {
+        const id = Number(v.id);
+        return Number.isFinite(id) && id > 0;
+      });
+
+    const id = best ? Number(best.id) : NaN;
+    return Number.isFinite(id) && id > 0 ? id : null;
   }
 
   async getProductById(dropiProductId: number): Promise<DropiProduct | null> {

@@ -311,7 +311,7 @@ export class DropiOrdersService {
           rechazo: this.esRechazoDeDropi(resData.statusCode, parsed),
         };
 
-        if (i === attempts.length - 1 || !this.isWarehouseRejection(reason)) {
+        if (i === attempts.length - 1 || !this.isRetryableRejection(reason)) {
           this.logger.warn(
             `Dropi order failed for ${item.name}: ${resData.statusCode} ${resData.data.slice(0, 300)}`,
           );
@@ -371,6 +371,23 @@ export class DropiOrdersService {
 
   private isWarehouseRejection(reason: string): boolean {
     return /bodega|warehouse|sucursal|branch/i.test(reason);
+  }
+
+  /**
+   * Dropi devuelve "intenta cotizar nuevamente... las existencias han variado"
+   * cuando la bodega elegida no puede surtir la cantidad pedida en ese momento.
+   * No crea la orden, asi que es seguro probar la siguiente bodega candidata
+   * (la de mas stock va primero). Un "no tiene stock disponible" global NO entra
+   * aqui: ahi ninguna bodega va a servir.
+   */
+  private isStockChangedRejection(reason: string): boolean {
+    return /existencias han variado|cotiza[r]? nuevamente/i.test(reason);
+  }
+
+  private isRetryableRejection(reason: string): boolean {
+    return (
+      this.isWarehouseRejection(reason) || this.isStockChangedRejection(reason)
+    );
   }
 
   async cancelOrder(dropiOrderId: number): Promise<DropiCancelResult> {
@@ -477,6 +494,7 @@ export class DropiOrdersService {
       supplierId: item.supplierId ?? ctx.supplierId,
       warehouseId: item.warehouseId ?? ctx.warehouseId,
       warehouseIds: [...(item.warehouseIds ?? []), ...(ctx.warehouseIds ?? [])],
+      variationId: item.variationId ?? ctx.variationId ?? null,
       suggestedPrice: ctx.suggestedPrice,
     };
   }
