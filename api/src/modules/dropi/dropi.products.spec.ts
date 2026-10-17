@@ -66,6 +66,62 @@ describe('DropiProductsService.computeStock', () => {
   });
 });
 
+describe('DropiProductsService: exito del catalogo', () => {
+  /**
+   * Dropi cambio la grafia del flag (`is_succesfull` -> `is_successful`). Si el
+   * catalogo se lee como error, `getProductById` devuelve null y la orden sale
+   * con el proveedor/bodega de .env: Dropi la rechaza con "las existencias han
+   * variado".
+   */
+  function normalize(parsed: unknown) {
+    const service = makeService() as unknown as {
+      normalizeCatalogEnvelope: (p: unknown) => {
+        isSuccess: boolean;
+        objects?: unknown[];
+      };
+    };
+    return service.normalizeCatalogEnvelope(parsed);
+  }
+
+  it('acepta is_successful (grafia nueva del BFF)', () => {
+    const result = normalize({
+      is_successful: true,
+      status_code: 200,
+      data: { objects: [{ id: 2160787 }] },
+    });
+
+    expect(result.isSuccess).toBe(true);
+    expect(result.objects).toHaveLength(1);
+  });
+
+  it('sigue aceptando is_succesfull (grafia vieja)', () => {
+    expect(
+      normalize({ is_succesfull: true, data: { objects: [{ id: 1 }] } })
+        .isSuccess,
+    ).toBe(true);
+  });
+
+  it('es exito si hay productos aunque el flag venga con otra grafia o sin el', () => {
+    expect(
+      normalize({
+        status_reason: 'Success request',
+        data: { objects: [{ id: 1 }] },
+      }).isSuccess,
+    ).toBe(true);
+  });
+
+  it('es fallo cuando Dropi rechaza (flag falso / 4xx) y no hay productos', () => {
+    expect(
+      normalize({
+        is_successful: false,
+        status_code: 400,
+        status_reason: 'Invalid request body',
+        data: null,
+      }).isSuccess,
+    ).toBe(false);
+  });
+});
+
 describe('DropiProductsService.resolveDropshipperContext', () => {
   it('resuelve la variacion de mas stock para un producto VARIABLE', async () => {
     const service = makeService();

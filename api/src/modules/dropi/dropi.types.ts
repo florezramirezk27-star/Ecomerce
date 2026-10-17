@@ -3,6 +3,57 @@ export interface DropiHttpResponse {
   data: string;
 }
 
+/**
+ * Campos con los que Dropi dice si la operacion salio bien. La grafia del flag
+ * no es estable: Dropi traia `is_succesfull` (con la errata, doble l) y hoy el
+ * BFF manda `is_successful` (bien escrita). Mirar una sola grafia hacia que
+ * toda respuesta valida se leyera como error.
+ */
+export interface DropiSuccessFlags {
+  is_succesfull?: boolean;
+  is_successful?: boolean;
+  isSuccess?: boolean;
+  status_code?: number;
+  status_reason?: string;
+  reason?: string;
+}
+
+/**
+ * ¿Dropi dice que la operacion salio bien?
+ *
+ * Se acepta cualquiera de las grafias del flag. Si el cuerpo no trae ninguno,
+ * se cae a `status_code` y, de ultimo, al status HTTP.
+ *
+ * Esto es critico: cuando Dropi cambio la grafia (`is_succesfull` ->
+ * `is_successful`) el catalogo paso a leerse como error, `getProductById`
+ * devolvio `null`, la orden se armo con el proveedor/bodega de `.env` y Dropi
+ * la rechazo con "las existencias han variado". Lo mismo hacia que una orden
+ * creada con exito se reportara como fallida.
+ */
+export function isDropiSuccess(
+  parsed: DropiSuccessFlags | null | undefined,
+  httpStatus?: number,
+): boolean {
+  if (!parsed || typeof parsed !== 'object') return false;
+
+  const hasFlag =
+    parsed.is_succesfull !== undefined ||
+    parsed.is_successful !== undefined ||
+    parsed.isSuccess !== undefined;
+
+  if (hasFlag) {
+    return (
+      parsed.is_succesfull === true ||
+      parsed.is_successful === true ||
+      parsed.isSuccess === true
+    );
+  }
+
+  if (parsed.status_code !== undefined) return parsed.status_code === 200;
+
+  return httpStatus === 200;
+}
+
 export interface DropiCatalogBody {
   pageSize?: number;
   startData?: number;

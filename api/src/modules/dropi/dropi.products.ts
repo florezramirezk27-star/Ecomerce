@@ -10,10 +10,12 @@ import {
   DropiStockItem,
   DROPI_CDN,
   DROPI_API_HOST,
+  isDropiSuccess,
 } from './dropi.types';
 
 interface DropiCatalogEnvelope {
   is_succesfull?: boolean;
+  is_successful?: boolean;
   isSuccess?: boolean;
   status_code?: number;
   status_reason?: string;
@@ -255,7 +257,11 @@ export class DropiProductsService {
         : [];
 
     return {
-      isSuccess: parsed.is_succesfull === true || parsed.isSuccess === true,
+      // Un catalogo con productos es un exito aunque el flag venga con otra
+      // grafia (o sin flag): de eso depende `getProductById`, y si esto queda
+      // en false la orden sale con el proveedor/bodega de .env y Dropi la
+      // rechaza con "las existencias han variado".
+      isSuccess: isDropiSuccess(parsed) || objects.length > 0,
       message: parsed.status_reason ?? parsed.message ?? undefined,
       objects,
     };

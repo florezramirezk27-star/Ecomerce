@@ -143,6 +143,29 @@ describe('DropiOrdersService: eleccion y reintento de bodega', () => {
     expect(usedWarehouses(posted)).toEqual([19860]);
   });
 
+  // Dropi cambio la grafia del flag (`is_succesfull` -> `is_successful`). Si no
+  // se reconoce, una orden creada en Dropi se reporta como fallida y el pedido
+  // queda en PENDING aunque el proveedor ya lo tenga.
+  it('reconoce el exito con la grafia nueva is_successful', async () => {
+    const { service, posted } = makeService({
+      warehouseIds: [19860],
+      responses: [
+        httpResponse(200, {
+          is_successful: true,
+          status_code: 200,
+          status_reason: 'El registro ha sido creado con exito!.',
+          data: { orderId: { id: 90660000 } },
+        }),
+      ],
+    });
+
+    const result = await checkout(service);
+
+    expect(result.success).toBe(true);
+    expect(result.results[0].dropiOrderId).toBe('90660000');
+    expect(usedWarehouses(posted)).toEqual([19860]);
+  });
+
   it('reintenta con la siguiente bodega cuando Dropi culpa a la bodega', async () => {
     const { service, posted } = makeService({
       warehouseIds: [2015, 2020],

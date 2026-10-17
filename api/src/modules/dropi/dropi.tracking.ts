@@ -25,7 +25,10 @@ interface TrackGuideObject {
 }
 
 interface TrackGuideResponse {
+  is_succesfull?: boolean;
+  is_successful?: boolean;
   isSuccess?: boolean;
+  status_code?: number;
   objects?: TrackGuideObject[];
 }
 
@@ -87,7 +90,10 @@ export class DropiTrackingService {
     // `any` de JSON.parse por todo el método.
     const respuesta = parsed as TrackGuideResponse | null;
 
-    if (!respuesta?.isSuccess || !respuesta?.objects?.length) {
+    // Dropi cambio la grafia del flag de exito (`is_succesfull` ->
+    // `is_successful`); si se mira una sola, un rastreo valido se pierde. Los
+    // `objects` son la señal que no cambia.
+    if (!respuesta?.objects?.length) {
       return null;
     }
 

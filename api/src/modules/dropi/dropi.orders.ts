@@ -13,6 +13,7 @@ import {
   DropiQuoteResult,
   DROPI_API_HOST,
   DROPI_BFF_HOST,
+  isDropiSuccess,
 } from './dropi.types';
 
 interface DropiBffOrderData {
@@ -23,6 +24,8 @@ interface DropiBffOrderData {
 
 interface DropiBffOrderResponse {
   is_succesfull?: boolean;
+  is_successful?: boolean;
+  isSuccess?: boolean;
   status_code?: number;
   status_reason?: string;
   reason?: string;
@@ -96,7 +99,7 @@ export class DropiOrdersService {
     }
 
     const parsed = this.safeParse(resData.data);
-    const isOk = resData.statusCode === 200 && parsed?.is_succesfull === true;
+    const isOk = resData.statusCode === 200 && isDropiSuccess(parsed);
 
     if (!isOk) {
       this.logger.warn(
@@ -135,7 +138,7 @@ export class DropiOrdersService {
     }
 
     const parsed = this.safeParse(resData.data);
-    if (resData.statusCode !== 200 || parsed?.is_succesfull !== true) {
+    if (resData.statusCode !== 200 || !isDropiSuccess(parsed)) {
       return {
         success: false,
         quotes: [],
@@ -285,7 +288,7 @@ export class DropiOrdersService {
 
         const parsed = this.safeParse(resData.data);
 
-        if (resData.statusCode === 200 && parsed?.is_succesfull === true) {
+        if (resData.statusCode === 200 && isDropiSuccess(parsed)) {
           const orderId = this.extractOrderId(parsed);
           if (i > 0) {
             this.logger.warn(
