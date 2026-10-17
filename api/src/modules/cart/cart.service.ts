@@ -1,11 +1,28 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  effectiveStock,
+  findProductVariation,
+} from '../../common/utils/product-variations';
 
 @Injectable()
 export class CartService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async addToCart(userId: string, productId: string, quantity: number) {
+  /**
+   * Agrega una presentacion al carrito.
+   *
+   * `variationId` es 0 cuando el producto es simple (o el cliente no eligio
+   * presentacion). Si el producto tiene presentaciones, se valida contra la
+   * elegida y se guarda su nombre, para mostrarlo y para que el pedido lo
+   * arrastre hasta Dropi.
+   */
+  async addToCart(
+    userId: string,
+    productId: string,
+    quantity: number,
+    variationId = 0,
+  ) {
     if (quantity > 100) {
       throw new BadRequestException('Cantidad inválida');
     }
@@ -28,18 +45,44 @@ export class CartService {
       throw new BadRequestException('Producto no disponible');
     }
 
-    if (quantity > product.stock) {
+    // Presentacion elegida. Si no existe entre las del producto, se rechaza:
+    // con un id inventado el pedido llegaria a Dropi y lo rechazaria alla.
+    const variation = findProductVariation(product.variations, variationId);
+    if (variationId > 0 && !variation) {
+      throw new BadRequestException('La presentación seleccionada no existe');
+    }
+    const variationName = variation ? variation.name : null;
+
+    // El stock a validar es el de la presentacion elegida, no el total: el
+    // total es la suma de todas y dejaria vender una ya agotada.
+    const available = effectiveStock(product, variationId);
+
+    if (quantity > available) {
       throw new BadRequestException('Stock insuficiente');
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // La presentacion entra en la llave unica: el mismo producto puede estar
+      // dos veces en el carrito, una por variante.
       const item = await tx.cartItem.upsert({
-        where: { cartId_productId: { cartId: cart.id, productId } },
-        create: { cartId: cart.id, productId, quantity },
+        where: {
+          cartId_productId_variationId: {
+            cartId: cart.id,
+            productId,
+            variationId,
+          },
+        },
+        create: {
+          cartId: cart.id,
+          productId,
+          quantity,
+          variationId,
+          variationName,
+        },
         update: { quantity: { increment: quantity } },
       });
 
-      if (item.quantity > product.stock) {
+      if (item.quantity > available) {
         throw new BadRequestException('Stock insuficiente');
       }
 
@@ -74,6 +117,7 @@ export class CartService {
       return {
         productId: item.product.id,
         name: item.product.name,
+        variationName: item.variationName,
         price,
         quantity,
         subtotal: price * quantity,
@@ -156,7 +200,9 @@ export class CartService {
       throw new BadRequestException('Producto no disponible');
     }
 
-    if (quantity > item.product.stock) {
+    // Contra la presentacion elegida en la fila, no contra el stock total.
+    const available = effectiveStock(item.product, item.variationId);
+    if (quantity > available) {
       throw new BadRequestException('Stock insuficiente');
     }
 

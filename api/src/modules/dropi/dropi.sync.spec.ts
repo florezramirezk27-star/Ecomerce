@@ -1,8 +1,11 @@
 import { DropiSyncService } from './dropi.sync';
 import { DropiProductsService } from './dropi.products';
 import { DropiTrackingService } from './dropi.tracking';
+import { DropiClient } from './dropi.client';
+import { DropiAuthService } from './dropi.auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
+import { Prisma } from '@prisma/client';
 
 const LOCAL = [
   { id: 'p1', dropiProductId: 1734566, name: 'Reloj Naviforce', price: 269000 },
@@ -16,21 +19,36 @@ interface DropiWarehouseStock {
   stock?: number;
 }
 
+/** Variante de un producto VARIABLE, como la devuelve Dropi. */
+interface DropiVariationFixture {
+  id: number;
+  stock?: number;
+  attribute_values?: Array<{ value?: string }>;
+}
+
 /** Producto de Dropi, tal como lo usa el sync (solo los campos que toca). */
 interface DropiProduct {
   id: number;
   name: string;
+  type?: string;
   suggested_price?: number;
   sale_price?: number;
   warehouse_product?: DropiWarehouseStock[];
+  variations?: DropiVariationFixture[];
 }
 
-/** Fila local escrita por el sync: id del producto y stock nuevo. */
+/** Fila local escrita por el sync: id del producto y lo que se actualiza. */
 interface ProductUpdate {
   id: string;
-  data: { stock: number };
+  data: { stock: number; variations?: unknown };
 }
 
+/**
+ * Doble del catalogo: una instancia REAL del servicio con solo las salidas a
+ * Dropi espiadas. Asi `computeStock` y `buildVariations` son los del codigo de
+ * produccion y no una copia que se queda mintiendo cuando cambie la regla de
+ * stock o de presentaciones.
+ */
 function makeSync(opts: {
   byId: Record<number, DropiProduct>;
   throwOn?: number[];
@@ -40,27 +58,30 @@ function makeSync(opts: {
     name: string;
     price: number;
     stock?: number;
+    variations?: unknown;
   }>;
 }) {
   const updates: ProductUpdate[] = [];
 
-  const products = {
-    getProductById: jest.fn((id: number) => {
-      if (opts.throwOn?.includes(id)) throw new Error('timeout');
-      return opts.byId[id] ?? null;
-    }),
-    // Si el sync volviera a paginar el catalogo generico, esto se llamaria.
-    fetchCatalog: jest.fn(() => ({
-      isSuccess: true,
-      objects: [{ id: 1, name: 'Otro', warehouse_product: [] }],
-    })),
-    computeStock: jest.fn((p: DropiProduct) =>
-      (p.warehouse_product || []).reduce(
-        (s: number, w: DropiWarehouseStock) => s + (w.stock || 0),
-        0,
-      ),
-    ),
-  };
+  const products = new DropiProductsService(
+    {} as DropiClient,
+    {} as DropiAuthService,
+    {} as PrismaService,
+    {} as CatalogCacheService,
+  );
+  const getProductById = jest
+    .spyOn(products, 'getProductById')
+    .mockImplementation((id: number) => {
+      if (opts.throwOn?.includes(id)) {
+        return Promise.reject(new Error('timeout'));
+      }
+      return Promise.resolve(opts.byId[id] ?? null);
+    });
+  // Si el sync volviera a paginar el catalogo generico, esto se llamaria.
+  const fetchCatalog = jest.spyOn(products, 'fetchCatalog').mockResolvedValue({
+    isSuccess: true,
+    objects: [{ id: 1, name: 'Otro', warehouse_product: [] }],
+  });
 
   const prisma = {
     product: {
@@ -91,12 +112,14 @@ function makeSync(opts: {
 
   return {
     service: new DropiSyncService(
-      products as unknown as DropiProductsService,
+      products,
       prisma,
       tracking,
       cache as unknown as CatalogCacheService,
     ),
     products,
+    getProductById,
+    fetchCatalog,
     updates,
     cache,
   };
@@ -112,7 +135,7 @@ const dropiProduct = (id: number, stock: number, suggested = 0) => ({
 
 describe('DropiSyncService: sincronizacion de stock', () => {
   it('consulta cada producto por su id, no pagina el catalogo generico', async () => {
-    const { service, products } = makeSync({
+    const { service, getProductById, fetchCatalog } = makeSync({
       byId: {
         1734566: dropiProduct(1734566, 100),
         241380: dropiProduct(241380, 1276),
@@ -122,11 +145,11 @@ describe('DropiSyncService: sincronizacion de stock', () => {
 
     await service.syncStock();
 
-    expect(products.getProductById).toHaveBeenCalledTimes(3);
-    expect(products.getProductById).toHaveBeenCalledWith(1734566);
+    expect(getProductById).toHaveBeenCalledTimes(3);
+    expect(getProductById).toHaveBeenCalledWith(1734566);
     // La regresion: `search_type: 'simple'` sin keywords devuelve el catalogo
     // de la propia tienda del dropshipper, no el del proveedor.
-    expect(products.fetchCatalog).not.toHaveBeenCalled();
+    expect(fetchCatalog).not.toHaveBeenCalled();
   });
 
   it('escribe el stock que devuelve Dropi', async () => {
@@ -332,5 +355,97 @@ describe('DropiSyncService: sincronizacion de stock', () => {
 
     expect(cache.invalidate).toHaveBeenCalledWith('products');
     expect(cache.invalidate).toHaveBeenCalledWith('product');
+  });
+
+  it('guarda las presentaciones de un producto VARIABLE', async () => {
+    // El sync es el unico que ve el catalogo cambio a cambio: si no guardara las
+    // variaciones, la ficha no tendria selector y la orden saldria sin
+    // `variation_id`, que es justo lo que Dropi rechaza con "las existencias han
+    // variado".
+    const { service, updates } = makeSync({
+      byId: {
+        1734566: {
+          ...dropiProduct(1734566, 3),
+          type: 'VARIABLE',
+          variations: [
+            { id: 10, stock: 3, attribute_values: [{ value: 'Talla M' }] },
+            { id: 11, stock: 0, attribute_values: [{ value: 'Talla G' }] },
+          ],
+        },
+      },
+      local: [
+        {
+          id: 'p1',
+          dropiProductId: 1734566,
+          name: 'Camiseta',
+          price: 80000,
+          stock: 0,
+        },
+      ],
+    });
+
+    const summary = await service.syncStock([1734566]);
+
+    expect(summary.updated).toBe(1);
+    expect(updates[0].data.stock).toBe(3);
+    expect(updates[0].data.variations).toEqual([
+      { id: 10, name: 'Talla M', stock: 3 },
+      { id: 11, name: 'Talla G', stock: 0 },
+    ]);
+  });
+
+  it('no reescribe cuando ni el stock ni las presentaciones cambiaron', async () => {
+    const { service, updates } = makeSync({
+      byId: {
+        1734566: {
+          ...dropiProduct(1734566, 3),
+          type: 'VARIABLE',
+          variations: [
+            { id: 10, stock: 3, attribute_values: [{ value: 'Talla M' }] },
+          ],
+        },
+      },
+      local: [
+        {
+          id: 'p1',
+          dropiProductId: 1734566,
+          name: 'Camiseta',
+          price: 80000,
+          stock: 3,
+          // Misma forma y orden que `buildVariations`: la comparacion es por
+          // `JSON.stringify`.
+          variations: [{ id: 10, name: 'Talla M', stock: 3 }],
+        },
+      ],
+    });
+
+    const summary = await service.syncStock([1734566]);
+
+    expect(summary.unchanged).toBe(1);
+    expect(summary.updated).toBe(0);
+    expect(updates).toHaveLength(0);
+  });
+
+  it('limpia las presentaciones cuando Dropi deja de tener variantes', async () => {
+    const { service, updates } = makeSync({
+      byId: { 1734566: dropiProduct(1734566, 5) },
+      local: [
+        {
+          id: 'p1',
+          dropiProductId: 1734566,
+          name: 'Camiseta',
+          price: 80000,
+          stock: 3,
+          variations: [{ id: 10, name: 'Talla M', stock: 3 }],
+        },
+      ],
+    });
+
+    const summary = await service.syncStock([1734566]);
+
+    expect(summary.updated).toBe(1);
+    // `DbNull` y no `[]`: el producto volvio a ser simple y la ficha no debe
+    // mostrar un selector vacio.
+    expect(updates[0].data.variations).toBe(Prisma.DbNull);
   });
 });

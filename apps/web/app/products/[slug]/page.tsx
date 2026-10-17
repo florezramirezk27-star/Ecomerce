@@ -13,6 +13,12 @@ import CandleInfographic from "@/components/CandleInfographic";
 import CandleArtisanalInfographic from "@/components/CandleArtisanalInfographic";
 import CountdownTimer from "@/components/CountdownTimer";
 
+interface ProductVariation {
+  id: number;
+  name: string;
+  stock: number;
+}
+
 interface Product {
   id: string;
   name: string;
@@ -24,6 +30,8 @@ interface Product {
   gallery: string[];
   video?: string;
   videos?: string[];
+  /** Presentaciones (talla/color) de un producto VARIABLE de Dropi. */
+  variations?: ProductVariation[];
   category?: {
     id: string;
     name: string;
@@ -65,6 +73,14 @@ export default function ProductPage() {
   } | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  /**
+   * Presentacion elegida (`variation_id` de Dropi). `null` en productos
+   * simples. Se inicializa a la primera con stock para que el boton de compra
+   * quede listo sin un paso extra.
+   */
+  const [selectedVariationId, setSelectedVariationId] = useState<number | null>(
+    null,
+  );
 
   const allImages = product
     ? [product.image, ...(product.gallery || [])].filter(Boolean)
@@ -75,6 +91,12 @@ export default function ProductPage() {
       try {
         const data = await apiFetch(`/products/${slug}`);
         setProduct(data);
+        const variations: ProductVariation[] = Array.isArray(data?.variations)
+          ? data.variations
+          : [];
+        const firstAvailable =
+          variations.find((v) => v.stock > 0) ?? variations[0] ?? null;
+        setSelectedVariationId(firstAvailable ? firstAvailable.id : null);
         setQuantity(1);
         setError(null);
       } catch {
@@ -98,8 +120,17 @@ export default function ProductPage() {
   }, [product]);
 
   const handleAddToCart = async () => {
+    if (!product) return;
+    const selectedVariation =
+      (product.variations ?? []).find((v) => v.id === selectedVariationId) ??
+      null;
+    const variationId = selectedVariation?.id ?? 0;
+    const variationName = selectedVariation?.name ?? null;
+    const contentName = selectedVariation
+      ? `${product.name} - ${selectedVariation.name}`
+      : product.name;
+
     if (!isAuthenticated()) {
-      if (!product) return;
       addToGuestCart({
         productId: product.id,
         name: product.name,
@@ -107,10 +138,12 @@ export default function ProductPage() {
         image: product.image,
         slug: product.slug,
         quantity,
+        variationId,
+        variationName,
       });
       void trackMetaEvent("AddToCart", {
         content_ids: [product.id],
-        content_name: product.name,
+        content_name: contentName,
         content_type: "product",
         value: Number(product.price) * quantity,
         currency: "COP",
@@ -128,16 +161,17 @@ export default function ProductPage() {
       await apiFetch("/cart/add", {
         method: "POST",
         body: JSON.stringify({
-          productId: product?.id,
+          productId: product.id,
           quantity,
+          variationId,
         }),
       });
 
       void trackMetaEvent("AddToCart", {
-        content_ids: [product?.id],
-        content_name: product?.name,
+        content_ids: [product.id],
+        content_name: contentName,
         content_type: "product",
-        value: Number(product?.price ?? 0) * quantity,
+        value: Number(product.price) * quantity,
         currency: "COP",
       });
 
@@ -194,7 +228,16 @@ export default function ProductPage() {
     );
   }
 
-  const inStock = product.stock > 0;
+  const variations = product.variations ?? [];
+  const hasVariations = variations.length > 0;
+  const selectedVariation =
+    variations.find((v) => v.id === selectedVariationId) ?? null;
+  // Con presentacion elegida manda su stock, no el total: el total es la suma de
+  // todas y dejaria comprar una variante agotada.
+  const availableStock = selectedVariation
+    ? selectedVariation.stock
+    : product.stock;
+  const inStock = availableStock > 0;
   // Escala logaritmica, no lineal. Con `stock / 20` cualquier producto con mas
   // de 20 unidades clavaba la barra al 100% y se veia siempre igual, que es lo
   // mismo que no tener barra: aqui los stock van de 1 a 1500, tres ordenes de
@@ -206,7 +249,7 @@ export default function ProductPage() {
     ? Math.min(
         100,
         Math.round(
-          (Math.log10(product.stock + 1) / Math.log10(STOCK_BAR_MAX + 1)) * 100,
+          (Math.log10(availableStock + 1) / Math.log10(STOCK_BAR_MAX + 1)) * 100,
         ),
       )
     : 0;
@@ -501,9 +544,9 @@ const isVideo = selectedMedia?.kind === "video";
                   className={`inline-flex items-center gap-1.5 text-sm font-bold ${
                     !inStock
                       ? "text-red-600"
-                      : product.stock <= 10
+                      : availableStock <= 10
                         ? "text-red-500"
-                        : product.stock <= 20
+                        : availableStock <= 20
                           ? "text-orange-500"
                           : "text-green-600"
                   }`}
@@ -512,18 +555,18 @@ const isVideo = selectedMedia?.kind === "video";
                     className={`w-2 h-2 rounded-full ${
                       !inStock
                         ? "bg-red-500"
-                        : product.stock <= 10
+                        : availableStock <= 10
                           ? "bg-red-500 animate-pulse"
-                          : product.stock <= 20
+                          : availableStock <= 20
                             ? "bg-orange-400"
                             : "bg-green-500"
                     }`}
                   />
                   {!inStock
                     ? "Agotado"
-                    : product.stock <= 10
-                      ? `¡Solo quedan ${product.stock} unidades disponibles!`
-                      : `${product.stock} en stock`}
+                    : availableStock <= 10
+                      ? `¡Solo quedan ${availableStock} unidades disponibles!`
+                      : `${availableStock} en stock`}
                 </span>
               </div>
               {inStock && (
@@ -531,14 +574,54 @@ const isVideo = selectedMedia?.kind === "video";
                   <div className="w-full bg-gray-100 rounded-full h-1.5">
                     <div
                       className={`h-1.5 rounded-full transition-all duration-500 ${
-                        product.stock <= 10
+                        availableStock <= 10
                           ? "bg-red-500"
-                          : product.stock <= 20
+                          : availableStock <= 20
                             ? "bg-orange-400"
                             : "bg-green-500"
                       }`}
                       style={{ width: `${stockPercent}%` }}
                     />
+                  </div>
+                </div>
+              )}
+
+              {hasVariations && (
+                <div className="px-5 py-3.5 border-t border-gray-100">
+                  <span className="text-sm font-semibold text-gray-800">
+                    Presentación
+                  </span>
+                  <p className="text-xs text-gray-500 mt-0.5 mb-2.5">
+                    Elige la opción que quieres
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {variations.map((variation) => {
+                      const isSelected = variation.id === selectedVariationId;
+                      const outOfStock = variation.stock <= 0;
+                      return (
+                        <button
+                          key={variation.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedVariationId(variation.id);
+                            setQuantity(1);
+                          }}
+                          disabled={outOfStock}
+                          aria-pressed={isSelected}
+                          className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition ${
+                            isSelected
+                              ? "border-blue-600 bg-blue-50 text-blue-700"
+                              : "border-gray-300 text-gray-700 hover:border-blue-400"
+                          } ${
+                            outOfStock
+                              ? "opacity-40 cursor-not-allowed line-through"
+                              : ""
+                          }`}
+                        >
+                          {variation.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -571,9 +654,9 @@ const isVideo = selectedMedia?.kind === "video";
                   <button
                     type="button"
                     onClick={() =>
-                      setQuantity((q) => Math.min(product.stock, q + 1))
+                      setQuantity((q) => Math.min(availableStock, q + 1))
                     }
-                    disabled={!inStock || quantity >= product.stock}
+                    disabled={!inStock || quantity >= availableStock}
                     className="w-9 h-9 rounded-lg border border-gray-300 hover:border-blue-500 hover:text-blue-600 disabled:opacity-40 flex items-center justify-center text-lg font-bold text-gray-700 transition"
                     aria-label="Aumentar cantidad"
                   >

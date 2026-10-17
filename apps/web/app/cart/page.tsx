@@ -15,6 +15,9 @@ import { lookupPostalCode } from "@/lib/postal-code";
 interface CartItem {
   id: string;
   quantity: number;
+  /** Presentacion elegida (0 = ninguna). */
+  variationId?: number;
+  variationName?: string | null;
   product: {
     id: string;
     name: string;
@@ -34,6 +37,7 @@ interface OrderItem {
   productId: string;
   quantity: number;
   price: string | number;
+  variationName?: string | null;
   product: {
     name: string;
     image: string;
@@ -56,6 +60,8 @@ function guestToCartItem(item: GuestCartItem, index: number): CartItem {
   return {
     id: `guest-${index}`,
     quantity: item.quantity,
+    variationId: item.variationId ?? 0,
+    variationName: item.variationName ?? null,
     product: {
       id: item.productId,
       name: item.name,
@@ -192,7 +198,12 @@ export default function CartPage() {
     if (!isAuthenticated()) {
       const idx = parseInt(cartItemId.replace("guest-", ""), 10);
       const guestItems = getGuestCart();
-      if (guestItems[idx]) removeFromGuestCart(guestItems[idx].productId);
+      if (guestItems[idx]) {
+        removeFromGuestCart(
+          guestItems[idx].productId,
+          guestItems[idx].variationId ?? 0,
+        );
+      }
       setItems((prev) => prev.filter((item) => item.id !== cartItemId));
       setMessage({ type: "success", text: "Producto removido" });
       setTimeout(() => setMessage(null), 2000);
@@ -219,7 +230,11 @@ export default function CartPage() {
         MAX_QUANTITY,
         Math.max(1, guestItem.quantity + delta),
       );
-      updateGuestCartQuantity(guestItem.productId, next);
+      updateGuestCartQuantity(
+        guestItem.productId,
+        next,
+        guestItem.variationId ?? 0,
+      );
       setItems((prev) =>
         prev.map((item) =>
           item.id === cartItemId ? { ...item, quantity: next } : item,
@@ -260,7 +275,12 @@ export default function CartPage() {
       items.forEach((item) => {
         const idx = parseInt(item.id.replace("guest-", ""), 10);
         const guestItems = getGuestCart();
-        if (guestItems[idx]) removeFromGuestCart(guestItems[idx].productId);
+        if (guestItems[idx]) {
+          removeFromGuestCart(
+            guestItems[idx].productId,
+            guestItems[idx].variationId ?? 0,
+          );
+        }
       });
       setItems([]);
       setMessage({ type: "success", text: "Carrito vaciado" });
@@ -514,6 +534,11 @@ export default function CartPage() {
                       >
                         {item.product.name}
                       </Link>
+                      {item.variationName && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Presentación: {item.variationName}
+                        </p>
+                      )}
                       <p className="text-xs sm:text-sm text-gray-400 mt-0.5">{formatPrice(item.product.price)} c/u</p>
                       <div className="flex items-center gap-2 mt-1.5">
                         <button
@@ -743,7 +768,10 @@ export default function CartPage() {
                               className="object-cover"
                             />
                           </div>
-                          <span className="text-xs text-gray-600 max-w-[120px] truncate font-medium">{item.product.name}</span>
+                          <span className="text-xs text-gray-600 max-w-[120px] truncate font-medium">
+                            {item.product.name}
+                            {item.variationName ? ` · ${item.variationName}` : ""}
+                          </span>
                         </div>
                       ))}
                       {order.items.length > 5 && (

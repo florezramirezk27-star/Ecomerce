@@ -11,6 +11,7 @@ interface OrderItem {
   productId: string;
   quantity: number;
   price: string | number;
+  variationName?: string | null;
   product: {
     name: string;
     image: string;
@@ -333,6 +334,11 @@ export default function OrdersPage() {
                           <p className="font-medium text-gray-900 truncate">
                             {item.product.name}
                           </p>
+                          {item.variationName && (
+                            <p className="text-xs text-gray-500">
+                              Presentación: {item.variationName}
+                            </p>
+                          )}
                           <p className="text-sm text-gray-600">
                             Cantidad: {item.quantity}
                           </p>

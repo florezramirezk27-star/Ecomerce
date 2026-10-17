@@ -12,6 +12,7 @@ import { Prisma, OrderStatus } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
 import { CheckoutDto } from './dto/checkout.dto';
+import { effectiveStock } from '../../common/utils/product-variations';
 
 type ShippingLike = {
   name: string;
@@ -32,6 +33,9 @@ type OrderItemDetail = {
   quantity: number;
   price: number;
   dropiProductId: number | null;
+  /** Presentacion elegida (`variation_id` de Dropi). 0 = producto simple. */
+  variationId?: number | null;
+  variationName?: string | null;
 };
 
 type DropiResult = {
@@ -120,6 +124,8 @@ export class OrdersService {
           dropiProductId: i.product.dropiProductId!,
           quantity: i.quantity,
           name: i.product.name,
+          // Con presentacion elegida, el stock a chequear es el de esa variante.
+          variationId: i.variationId > 0 ? i.variationId : null,
         })),
       );
 
@@ -155,7 +161,9 @@ export class OrdersService {
             );
           }
 
-          if (item.quantity > product.stock) {
+          // Con presentacion elegida se valida contra su stock, no contra el
+          // total (que es la suma de todas las variantes).
+          if (item.quantity > effectiveStock(product, item.variationId)) {
             throw new BadRequestException(
               `No hay suficiente stock para ${item.product.name}`,
             );
@@ -185,6 +193,10 @@ export class OrdersService {
                 productId: item.productId,
                 quantity: item.quantity,
                 price: item.product.price,
+                // Presentacion enviada a Dropi: queda registrada en el pedido
+                // (0 = producto simple, para no arrastrar variante inventada).
+                variationId: item.variationId || 0,
+                variationName: item.variationName,
               })),
             },
           },
@@ -250,6 +262,9 @@ export class OrdersService {
               quantity: i.quantity,
               price: Number(i.product.price),
               name: i.product.name,
+              // Solo se manda la presentacion elegida; si no hay (producto
+              // simple) se omite y Dropi resuelve el producto normal.
+              variationId: i.variationId > 0 ? i.variationId : undefined,
             })),
             shipping: {
               name: dto.shippingName,
@@ -351,6 +366,7 @@ export class OrdersService {
           name: item.product.name,
           quantity: item.quantity,
           price: Number(item.product.price),
+          variationName: item.variationName,
         })),
         Number(order.total),
         {
@@ -410,6 +426,7 @@ export class OrdersService {
           name: item.product.name,
           quantity: item.quantity,
           price: Number(item.product.price),
+          variationName: item.variationName,
         })),
         Number(order.total),
         {
@@ -572,6 +589,8 @@ export class OrdersService {
         productId: string;
         quantity: number;
         price: Prisma.Decimal;
+        variationId?: number | null;
+        variationName?: string | null;
       }[];
     },
     user: { id: string; name: string; email: string } | null,
@@ -590,6 +609,9 @@ export class OrdersService {
       quantity: it.quantity,
       price: Number(it.price),
       dropiProductId: productMap.get(it.productId)?.dropiProductId ?? null,
+      // Presentacion que se le envio a Dropi la primera vez.
+      variationId: it.variationId ?? null,
+      variationName: it.variationName ?? null,
     }));
 
     const customerEmail = order.shippingEmail || user?.email || null;
@@ -643,6 +665,8 @@ export class OrdersService {
               quantity: i.quantity,
               price: i.price,
               name: i.name,
+              variationId:
+                i.variationId && i.variationId > 0 ? i.variationId : undefined,
             })),
             shipping: {
               name: shipping.name,
@@ -723,6 +747,7 @@ export class OrdersService {
       name: i.name,
       quantity: i.quantity,
       price: i.price,
+      variationName: i.variationName,
     }));
 
     const adminEmail =

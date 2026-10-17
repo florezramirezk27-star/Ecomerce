@@ -135,6 +135,11 @@ export interface DropiStockItem {
   dropiProductId: number;
   quantity: number;
   name: string;
+  /**
+   * Presentacion elegida (`variation_id` de Dropi). Cuando la tienda la conoce,
+   * el stock a chequear es el de esa variante y no el total del producto.
+   */
+  variationId?: number | null;
 }
 
 export interface DropiStockResult {

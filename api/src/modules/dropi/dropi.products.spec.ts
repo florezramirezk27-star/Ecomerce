@@ -13,7 +13,13 @@ function makeService(): DropiProductsService {
   );
 }
 
-function variableProduct(variations: { stock?: number }[]): DropiProduct {
+function variableProduct(
+  variations: Array<{
+    id?: number;
+    stock?: number;
+    attribute_values?: Array<{ value?: string }>;
+  }>,
+): DropiProduct {
   return {
     name: 'Camiseta',
     type: 'VARIABLE',
@@ -63,6 +69,90 @@ describe('DropiProductsService.computeStock', () => {
     const service = makeService();
 
     expect(service.computeStock({ name: 'X' })).toBe(0);
+  });
+});
+
+describe('DropiProductsService.buildVariations', () => {
+  it('arma el nombre con los valores de los atributos', () => {
+    const service = makeService();
+
+    const result = service.buildVariations(
+      variableProduct([
+        {
+          id: 10,
+          stock: 3,
+          attribute_values: [{ value: 'Talla M' }, { value: 'Rojo' }],
+        },
+      ]),
+    );
+
+    expect(result).toEqual([{ id: 10, name: 'Talla M / Rojo', stock: 3 }]);
+  });
+
+  it('usa un nombre de respaldo cuando la variante no trae atributos', () => {
+    const service = makeService();
+
+    const result = service.buildVariations(
+      variableProduct([{ id: 11, stock: 0 }]),
+    );
+
+    expect(result).toEqual([{ id: 11, name: 'Presentación 11', stock: 0 }]);
+  });
+
+  it('descarta variantes sin id valido', () => {
+    const service = makeService();
+
+    const result = service.buildVariations(
+      variableProduct([
+        { id: 0, stock: 5 },
+        { stock: 5 },
+        { id: 12, stock: 2 },
+      ]),
+    );
+
+    expect(result).toEqual([{ id: 12, name: 'Presentación 12', stock: 2 }]);
+  });
+
+  it('devuelve lista vacia para un producto SIMPLE', () => {
+    const service = makeService();
+
+    const result = service.buildVariations({
+      name: 'Reloj',
+      type: 'SIMPLE',
+      warehouse_product: [{ warehouse_id: 1, stock: 5 }],
+    });
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe('DropiProductsService.computeAvailable', () => {
+  const product = variableProduct([
+    { id: 10, stock: 3 },
+    { id: 11, stock: 0 },
+  ]);
+
+  it('devuelve el stock de la presentacion elegida, no el total', () => {
+    const service = makeService();
+
+    // El total es 3 + 0 = 3, pero la variante agotada (11) debe dar 0.
+    expect(service.computeAvailable(product, 11)).toBe(0);
+    expect(service.computeAvailable(product, 10)).toBe(3);
+  });
+
+  it('cae al total cuando no se especifica presentacion', () => {
+    const service = makeService();
+
+    expect(service.computeAvailable(product, null)).toBe(3);
+    expect(service.computeAvailable(product)).toBe(3);
+  });
+
+  it('cae al total cuando la presentacion ya no existe en Dropi', () => {
+    const service = makeService();
+
+    // No se bloquea la venta por una variante que Dropi dejo de listar: Dropi
+    // decidira al crear la orden.
+    expect(service.computeAvailable(product, 999)).toBe(3);
   });
 });
 

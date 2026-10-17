@@ -100,6 +100,15 @@ model Product {
   videos      String[]
   active      Boolean   @default(true)
 
+  /**
+   * Presentaciones (variaciones) de un producto de Dropi con type VARIABLE.
+   * Se guarda como JSON para no modelar una tabla entera cuando la tienda solo
+   * necesita listar/validar: `[{ id, name, stock }]`, donde `id` es el
+   * `variation_id` que exige Dropi al crear la orden. `null`/vacio = producto
+   * simple.
+   */
+  variations  Json?
+
   categoryId  String
   category    Category  @relation(fields: [categoryId], references: [id])
 
@@ -169,7 +178,16 @@ model CartItem {
 
   quantity  Int      @default(1)
 
-  @@unique([cartId, productId])
+  /**
+   * Presentacion elegida (0 = ninguna). El `id` es el `variation_id` de Dropi.
+   * `variationName` se guarda para poder mostrarlo aunque la variacion desaparezca
+   * del catalogo. Entra en el indice unico para poder tener el mismo producto en
+   * dos presentaciones distintas dentro del carrito.
+   */
+  variationId   Int     @default(0)
+  variationName String?
+
+  @@unique([cartId, productId, variationId])
 }
 
 model Order {
@@ -217,6 +235,10 @@ model OrderItem {
 
   quantity  Int
   price     Decimal  @db.Decimal(10,2)
+
+  /** Presentacion enviada a Dropi (0 = producto simple). */
+  variationId   Int     @default(0)
+  variationName String?
 
   @@index([orderId])
 }

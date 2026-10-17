@@ -44,6 +44,8 @@ export interface OrderItem {
   product?: Product;
   quantity: number;
   price: string | number;
+  /** Presentacion elegida (talla/color). Ausente en productos simples. */
+  variationName?: string | null;
 }
 
 export interface OrderTrackingInfo {

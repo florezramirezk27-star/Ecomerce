@@ -336,6 +336,11 @@ export default function AdminOrdersPage() {
                               <p className="truncate text-sm font-medium text-slate-900">
                                 {item.product?.name}
                               </p>
+                              {item.variationName && (
+                                <p className="text-xs text-slate-500">
+                                  Presentación: {item.variationName}
+                                </p>
+                              )}
                               <p className="text-xs text-slate-500">
                                 Cantidad: {item.quantity}
                               </p>

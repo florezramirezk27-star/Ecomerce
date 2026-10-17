@@ -5,6 +5,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 import { DropiProduct, DropiProductsService } from './dropi.products';
 import { DropiTrackingService } from './dropi.tracking';
@@ -145,6 +146,7 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
         name: true,
         price: true,
         stock: true,
+        variations: true,
       },
     });
 
@@ -229,6 +231,16 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
       }
 
       const stock = this.products.computeStock(dropiProduct);
+      // Presentaciones del producto. Se guardan en `Product.variations` para
+      // que la ficha deje elegir la variante y para mandar su `variation_id`
+      // a Dropi. Tambien actualiza las que ya existian (los productos
+      // importados antes de modelar variaciones quedarian con `null` y sin
+      // selector en la ficha hasta que el sync los pase por aqui).
+      const dropiVariations = this.products.buildVariations(dropiProduct);
+      const localVariations = local.variations ?? null;
+      const variationsChanged =
+        JSON.stringify(localVariations) !==
+        JSON.stringify(dropiVariations.length > 0 ? dropiVariations : null);
       const suggested = Number(dropiProduct.suggested_price) || 0;
 
       // Aviso, no correccion: si el precio quedo por debajo del minimo de
@@ -247,10 +259,11 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
         );
       }
 
-      // Solo se escribe si el stock cambio. Antes se actualizaba (y se contaba
-      // como "actualizado") aunque Dropi devolviera el mismo numero, lo que
-      // ensuciaba el conteo del panel y golpeaba la base sin motivo.
-      if (stock === local.stock) {
+      // Solo se escribe si el stock O las presentaciones cambiaron. Antes se
+      // actualizaba (y se contaba como "actualizado") aunque Dropi devolviera el
+      // mismo numero, lo que ensuciaba el conteo del panel y golpeaba la base
+      // sin motivo.
+      if (stock === local.stock && !variationsChanged) {
         summary.unchanged++;
         summary.details.push({
           id: dropiId,
@@ -262,12 +275,23 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
       }
 
       try {
-        // Solo el stock. El sync antes tambien sobrescribia `price` y
-        // `oldPrice` con el precio sugerido de Dropi, lo que deshacia a mano
-        // cualquier ajuste de precio. No se toca el precio.
+        // Solo el stock (y las presentaciones, si cambiaron). El sync antes
+        // tambien sobrescribia `price` y `oldPrice` con el precio sugerido de
+        // Dropi, lo que deshacia a mano cualquier ajuste de precio. No se toca
+        // el precio.
         await this.prisma.product.update({
           where: { id: local.id },
-          data: { stock },
+          data: {
+            stock,
+            ...(variationsChanged
+              ? {
+                  variations:
+                    dropiVariations.length > 0
+                      ? (dropiVariations as unknown as Prisma.InputJsonValue)
+                      : Prisma.DbNull,
+                }
+              : {}),
+          },
         });
         summary.updated++;
         summary.details.push({

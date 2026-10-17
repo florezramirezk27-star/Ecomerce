@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 import { DropiClient } from './dropi.client';
@@ -12,6 +13,7 @@ import {
   DROPI_API_HOST,
   isDropiSuccess,
 } from './dropi.types';
+import type { ProductVariation } from '../../common/utils/product-variations';
 
 interface DropiCatalogEnvelope {
   is_succesfull?: boolean;
@@ -341,6 +343,41 @@ export class DropiProductsService {
     return Number.isFinite(id) && id > 0 ? id : null;
   }
 
+  /**
+   * Convierte las `variations` de un producto VARIABLE en el JSON que guarda la
+   * tienda en `Product.variations`. Se comparte con el sync de stock para que
+   * la lista y los stock por presentacion no se queden congelados.
+   *
+   * Cada variante trae su propio stock, asi que la tienda puede mostrar (y
+   * validar) disponibilidad por presentacion en vez de una sola suma que dejaba
+   * vender una variante ya agotada.
+   */
+  buildVariations(product: DropiProduct): ProductVariation[] {
+    if (String(product.type).toUpperCase() !== 'VARIABLE') return [];
+    const list = Array.isArray(product.variations) ? product.variations : [];
+
+    const out: ProductVariation[] = [];
+    for (const variation of list) {
+      const id = Number(variation?.id);
+      if (!Number.isInteger(id) || id <= 0) continue;
+
+      // "Talla M / Rojo": Dropi describe cada variante con la lista de valores
+      // de sus atributos. Sin ellos se usa un nombre de respaldo para no dejar
+      // un chip vacio en la ficha.
+      const attributes = Array.isArray(variation?.attribute_values)
+        ? variation.attribute_values
+        : [];
+      const name =
+        attributes
+          .map((attribute) => String(attribute?.value ?? '').trim())
+          .filter(Boolean)
+          .join(' / ') || `Presentación ${id}`;
+
+      out.push({ id, name, stock: Number(variation?.stock) || 0 });
+    }
+    return out;
+  }
+
   async getProductById(dropiProductId: number): Promise<DropiProduct | null> {
     const result = await this.fetchCatalog({
       pageSize: 1,
@@ -418,6 +455,25 @@ export class DropiProductsService {
     return 0;
   }
 
+  /**
+   * Stock real de una variante concreta, o el total si no se especifico.
+   *
+   * El stock total de un VARIABLE es la suma de todas las presentaciones; si el
+   * cliente eligio una en concreto, ese es el que hay que chequear. Si no se
+   * encuentra la variante (Dropi dejo de tenerla) se cae al total para no
+   * bloquear una venta que igual Dropi decidira al crear la orden.
+   */
+  computeAvailable(product: DropiProduct, variationId?: number | null): number {
+    if (!variationId) return this.computeStock(product);
+
+    const variations = Array.isArray(product.variations)
+      ? product.variations
+      : [];
+    const match = variations.find((v) => Number(v.id) === variationId);
+
+    return match ? Number(match.stock) || 0 : this.computeStock(product);
+  }
+
   async validateStock(items: DropiStockItem[]): Promise<DropiStockValidation> {
     const insufficient: {
       name: string;
@@ -452,7 +508,7 @@ export class DropiProductsService {
         continue;
       }
 
-      const available = this.computeStock(product);
+      const available = this.computeAvailable(product, item.variationId);
       if (available < item.quantity) {
         insufficient.push({
           name: item.name,
@@ -611,6 +667,9 @@ export class DropiProductsService {
     }
 
     const stock = this.computeStock(dropiProduct);
+    // Presentaciones (solo para productos VARIABLE). Se guardan para que la
+    // ficha deje elegir la variante y para mandar su `variation_id` a Dropi.
+    const variations = this.buildVariations(dropiProduct);
 
     const mainGallery =
       dropiProduct.gallery?.find((g: DropiGalleryItem) => g.main) ||
@@ -648,6 +707,14 @@ export class DropiProductsService {
           image: image || undefined,
           gallery,
           description: dropiProduct.description || undefined,
+          // Sin presentaciones queda en `undefined` para que el JSON no se
+          // llene de listas vacias que no significan nada. El cast es porque
+          // `ProductVariation[]` no declara indice de cadena y Prisma no lo
+          // acepta como `InputJsonValue` aunque si sea JSON valido.
+          variations:
+            variations.length > 0
+              ? (variations as unknown as Prisma.InputJsonValue)
+              : undefined,
           categoryId: category.id,
         },
         include: { category: true },

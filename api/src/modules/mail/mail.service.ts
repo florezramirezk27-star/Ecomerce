@@ -7,6 +7,15 @@ interface OrderItemInfo {
   name: string;
   quantity: number;
   price: number;
+  /** Presentacion elegida (talla/color). Ausente en productos simples. */
+  variationName?: string | null;
+}
+
+/** Nombre del producto + presentacion, para mostrar en las facturas. */
+function itemLabel(item: OrderItemInfo): string {
+  return item.variationName
+    ? `${item.name} (${item.variationName})`
+    : item.name;
 }
 
 interface ShippingInfo {
@@ -323,7 +332,7 @@ export class MailService implements OnModuleInit {
       .map(
         (i) =>
           `<tr>
-            <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px">${i.name}</td>
+            <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px">${itemLabel(i)}</td>
             <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px;text-align:center">${i.quantity}</td>
             <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px;text-align:right">$${i.price.toLocaleString('es-CO')}</td>
             <td style="padding:10px 16px;border-bottom:1px solid #e4e4e7;color:#333;font-size:14px;text-align:right;font-weight:bold">$${(i.price * i.quantity).toLocaleString('es-CO')}</td>
@@ -683,7 +692,7 @@ export class MailService implements OnModuleInit {
       .map(
         (i, idx) =>
           `<tr style="${idx % 2 === 1 ? 'background:#f8fafc' : ''}">
-            <td style="padding:12px 16px;border-bottom:1px solid #eef0f3;color:#18181b;font-size:14px;line-height:1.45">${i.name}</td>
+            <td style="padding:12px 16px;border-bottom:1px solid #eef0f3;color:#18181b;font-size:14px;line-height:1.45">${itemLabel(i)}</td>
             <td style="padding:12px 16px;border-bottom:1px solid #eef0f3;color:#52525b;font-size:14px;text-align:center">${i.quantity}</td>
             <td style="padding:12px 16px;border-bottom:1px solid #eef0f3;color:#52525b;font-size:14px;text-align:right">${currency(i.price)}</td>
             <td style="padding:12px 16px;border-bottom:1px solid #eef0f3;color:#18181b;font-size:14px;text-align:right;font-weight:600">${currency(i.price * i.quantity)}</td>
@@ -863,7 +872,7 @@ export class MailService implements OnModuleInit {
       .map(
         (i) =>
           `<tr style="background:#fafafa">
-            <td style="padding:10px 16px;color:#18181b;font-size:14px">${i.name}</td>
+            <td style="padding:10px 16px;color:#18181b;font-size:14px">${itemLabel(i)}</td>
             <td style="padding:10px 16px;color:#52525b;font-size:14px;text-align:center">${i.quantity}</td>
             <td style="padding:10px 16px;color:#52525b;font-size:14px;text-align:right">$${(i.price * i.quantity).toLocaleString('es-CO')}</td>
           </tr>`,
