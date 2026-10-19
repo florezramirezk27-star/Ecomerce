@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Image as ImageIcon, Loader2, Pencil, Trash2 } from 'lucide-react';
-import { API_BASE, getAuthHeader } from '@/lib/admin';
+import { apiFetch } from '@/lib/admin';
 import ImageEditor from '@/components/ImageEditor';
 import {
   Alert,
@@ -23,9 +23,8 @@ export default function AdminLogoPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/settings/logo`)
-      .then((r) => r.json())
-      .then((data) => setLogo(data.logo))
+    apiFetch('/settings/logo')
+      .then((data: { logo: string | null }) => setLogo(data.logo))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -65,18 +64,11 @@ export default function AdminLogoPage() {
       });
       formData.append('file', croppedFile);
 
-      const res = await fetch(`${API_BASE}/uploads`, {
+      const data = await apiFetch('/uploads', {
         method: 'POST',
-        headers: getAuthHeader(formData),
         body: formData,
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || 'Error al subir imagen');
-      }
-
-      const data = await res.json();
       await saveLogoUrl(data.url);
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Error al subir imagen' });
@@ -89,15 +81,10 @@ export default function AdminLogoPage() {
 
   const saveLogoUrl = async (url: string) => {
     try {
-      const res = await fetch(`${API_BASE}/settings/logo`, {
+      await apiFetch('/settings/logo', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeader(),
-        },
         body: JSON.stringify({ logo: url }),
       });
-      if (!res.ok) throw new Error();
       window.dispatchEvent(new Event('logo-change'));
       setLogo(url);
       setMessage({ type: 'success', text: 'Logo actualizado correctamente' });
@@ -108,11 +95,9 @@ export default function AdminLogoPage() {
 
   const handleRemove = async () => {
     try {
-      const res = await fetch(`${API_BASE}/settings/logo/remove`, {
+      await apiFetch('/settings/logo/remove', {
         method: 'POST',
-        headers: getAuthHeader(),
       });
-      if (!res.ok) throw new Error();
       window.dispatchEvent(new Event('logo-change'));
       setLogo(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
