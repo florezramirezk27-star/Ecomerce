@@ -60,6 +60,17 @@ const VIDEO_FRAME_SRC = [
   "https://player.vimeo.com",
 ];
 
+/**
+ * Nota sobre `frame-src` e iframes propios:
+ *
+ * `frame-src` no lleva `'self'` a proposito en el resto del sitio: la tienda no
+ * incrusta paginas de si misma, y sin `'self'` un atacante no puede meter el
+ * login en un iframe para robar clics. Las dos rutas que si necesitan
+ * incrustarse a si mismas son la ficha (`/products/...`) y la vista previa del
+ * panel (`/admin/products/edit/...`); alli el `frame-src` se reemplaza por el de
+ * `withSelfFraming()`, mas abajo en `headers()`.
+ */
+
 // El mapa de la direccion de envio vive en un iframe de Google. Sin estos
 // origenes en frame-src, default-src 'self' lo bloquea y el cliente ve la
 // caja gris en blanco.
@@ -74,6 +85,28 @@ const GEOCODE_ORIGINS = [
 
 function dedupe(values: string[]) {
   return values.filter((v, i, a) => a.indexOf(v) === i).join(" ");
+}
+
+/**
+ * Devuelve la CSP estricta de la tienda con `'self'` agregado al `frame-src`.
+ *
+ * Solo se usa en las rutas donde la tienda incrusta su propia landing. Next
+ * aplica la ultima cabecera que coincide para una misma clave, asi que las
+ * entradas que usan esto van despues del comodin y reemplazan la CSP estricta
+ * solo en esas rutas.
+ */
+function withSelfFraming() {
+  const frameSrc = dedupe([
+    "'self'",
+    ...VIDEO_FRAME_SRC,
+    ...MAPS_FRAME_SRC,
+    VERCEL_LIVE_FRAME,
+  ]);
+  return csp
+    .map((directive) =>
+      directive.startsWith("frame-src ") ? `frame-src ${frameSrc}` : directive,
+    )
+    .join("; ");
 }
 
 const connectSrc = dedupe([
@@ -171,6 +204,19 @@ const nextConfig: NextConfig = {
           // permite el mismo origen porque el iframe de la ficha lo incrusta.
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
         ],
+      },
+      {
+        // La ficha del producto incrusta la landing del propio sitio, asi que
+        // aqui el `frame-src` estricto necesita `'self'`. Se conserva el resto
+        // de la CSP intacta (incluido `frame-ancestors 'none'`, que impide que
+        // otro sitio incruste la ficha).
+        source: "/products/:path*",
+        headers: [{ key: "Content-Security-Policy", value: withSelfFraming() }],
+      },
+      {
+        // Misma razon en la vista previa del admin, que tambien usa el iframe.
+        source: "/admin/products/edit/:path*",
+        headers: [{ key: "Content-Security-Policy", value: withSelfFraming() }],
       },
       {
         source: "/admin/:path*",
