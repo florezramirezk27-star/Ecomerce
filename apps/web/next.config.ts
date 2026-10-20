@@ -38,6 +38,22 @@ const META_ORIGINS = [
   "https://www.facebook.com",
 ].join(" ");
 
+// Vercel inyecta su toolbar de feedback/comentarios (vercel.live) en los
+// despliegues de preview y, segun la configuracion del proyecto, tambien en
+// produccion. Sin estos origenes en la CSP el script se bloquea y la consola
+// escupe un error en cada carga. Pusher es el transporte de esos comentarios en
+// vivo. Permitirlos no abre la puerta a nada ajeno: es codigo first-party de
+// Vercel.
+const VERCEL_LIVE_SCRIPT = "https://vercel.live";
+const VERCEL_LIVE_CONNECT = [
+  "https://vercel.live",
+  "https://*.pusher.com",
+  "wss://*.pusher.com",
+  "https://*.pusherapp.com",
+  "wss://*.pusherapp.com",
+];
+const VERCEL_LIVE_FRAME = "https://vercel.live";
+
 const VIDEO_FRAME_SRC = [
   "https://www.youtube.com",
   "https://www.youtube-nocookie.com",
@@ -67,16 +83,19 @@ const connectSrc = dedupe([
   `wss://${wsHost}`,
   META_ORIGINS,
   ...GEOCODE_ORIGINS,
+  ...VERCEL_LIVE_CONNECT,
 ]);
+
+const imgSrc = dedupe(["'self'", "data:", "blob:", "https:"]);
 
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' https://connect.facebook.net${isProd ? "" : " 'unsafe-eval'"}`,
+  `script-src 'self' 'unsafe-inline' ${VERCEL_LIVE_SCRIPT} https://connect.facebook.net${isProd ? "" : " 'unsafe-eval'"}`,
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
-  "img-src 'self' data: blob: https:",
+  `img-src ${imgSrc}`,
   `connect-src ${connectSrc}`,
-  `frame-src ${dedupe([...VIDEO_FRAME_SRC, ...MAPS_FRAME_SRC])}`,
+  `frame-src ${dedupe([...VIDEO_FRAME_SRC, ...MAPS_FRAME_SRC, VERCEL_LIVE_FRAME])}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

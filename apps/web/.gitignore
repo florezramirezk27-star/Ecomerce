@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Lo regenera `next dev` en cada arranque para avisar a los agentes de IA de los
+# cambios de esta version de Next. No es codigo del proyecto.
+AGENTS.md

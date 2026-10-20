@@ -211,7 +211,7 @@ export default function Navbar() {
                     height={48}
                     priority
                     sizes="180px"
-                    className="h-12 w-auto max-w-[180px] object-contain mix-blend-multiply"
+                    className="h-auto w-auto max-h-12 max-w-[180px] object-contain mix-blend-multiply"
                   />
         ) : (
           <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-yellow-400 via-blue-500 to-red-500 flex items-center justify-center text-white text-sm font-bold shadow-sm">

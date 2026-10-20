@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { useMounted } from "@/lib/useMounted";
 import ProductCarousel from "../ProductCarousel";
 
 /**
@@ -80,7 +81,13 @@ interface ChatHistoryResponse {
 
 export default function StoreChat() {
   const pathname = usePathname();
-  const hidden = isChatHidden(pathname);
+  // `usePathname()` durante el prerenderizado estatico no es fiable (en Vercel
+  // devuelve `null`), asi que el servidor renderiza el boton tambien en rutas
+  // donde debe ocultarse y el cliente lo quita, rompiendo la hidratacion. Se
+  // monta solo despues de hidratar para que el primer render del cliente
+  // coincida con el del servidor.
+  const mounted = useMounted();
+  const hidden = !mounted || isChatHidden(pathname);
   // En vez de un booleano mas un efecto que lo cierre al navegar, se guarda
   // en QUE ruta se abrio. El panel esta abierto solo si esa ruta sigue siendo
   // la actual, asi que cambiar de pagina lo cierra por comparacion, sin

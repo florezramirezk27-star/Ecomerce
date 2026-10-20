@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useMounted } from "@/lib/useMounted";
 
 function Flag() {
   return (
@@ -35,6 +36,15 @@ const content = (
 export default function Banner() {
   const pathname = usePathname();
 
+  // `usePathname()` no es fiable durante el prerenderizado estatico: en el
+  // build de Vercel devuelve `null`, asi que el servidor renderiza el banner
+  // como si estuviera en una ruta que no lo lleva. En el cliente devuelve "/" y
+  // si lo pinta, React encuentra un arbol distinto al del servidor y lanza el
+  // error de hidratacion (#418). Montamos el banner solo tras la hidratacion:
+  // asi el primer render del cliente coincide con el del servidor (nada) y luego
+  // aparece donde toca.
+  const mounted = useMounted();
+  if (!mounted) return null;
   if (pathname !== "/" && pathname !== "/products" && !pathname.startsWith("/products/")) return null;
 
   return (
