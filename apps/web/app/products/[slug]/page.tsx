@@ -11,6 +11,7 @@ import { addToGuestCart } from "@/lib/guest-cart";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
 import CandleInfographic from "@/components/CandleInfographic";
 import CandleArtisanalInfographic from "@/components/CandleArtisanalInfographic";
+import VitaminB12Landing from "@/components/VitaminB12Landing";
 import CountdownTimer from "@/components/CountdownTimer";
 
 interface ProductVariation {
@@ -808,6 +809,17 @@ const isVideo = selectedMedia?.kind === "video";
 
       {product.name === "Set de Velas Aromáticas" && <CandleInfographic />}
       {product.name === "Set de Velas Aromáticas" && <CandleArtisanalInfographic />}
+
+      {/* Landing larga solo para este producto. Va al final, debajo de la ficha
+          generica, como las infografias de velas de arriba. */}
+      {product.name === "VITAMIN B12 B6 B1 LIQUID FORMULA" && (
+        <VitaminB12Landing
+          productId={product.id}
+          productName={product.name}
+          productSlug={product.slug}
+          productImage={product.image}
+        />
+      )}
 
     </main>
   );
