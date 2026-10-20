@@ -14,6 +14,12 @@ export default function VideoHero() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [video, setVideo] = useState(DEFAULT_VIDEO);
+  // `resolved` evita el parpadeo: hasta que no se sabe si hay un video
+  // configurado, no se pinta ninguno. Sin esto el navegador empieza a
+  // descargar y reproducir el video por defecto (Pexels) nada mas montar, y al
+  // llegar la respuesta se cambiaba al configurado. En cada recarga se veia el
+  // video viejo un instante.
+  const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
     function fetchVideo() {
@@ -22,7 +28,8 @@ export default function VideoHero() {
         .then((data: { video: string | null }) => {
           if (data.video) setVideo(data.video);
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => setResolved(true));
     }
 
     fetchVideo();
@@ -33,20 +40,25 @@ export default function VideoHero() {
 
   return (
     <section className="relative w-full h-[80vh] md:h-[90vh] overflow-hidden bg-gray-900">
-      <video
-        ref={videoRef}
-        key={video}
-        autoPlay
-        muted
-        loop
-        playsInline
-        onCanPlay={() => setLoaded(true)}
-        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
-          loaded ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        <source src={video} type={video.endsWith(".webm") ? "video/webm" : "video/mp4"} />
-      </video>
+      {resolved && (
+        <video
+          ref={videoRef}
+          key={video}
+          autoPlay
+          muted
+          loop
+          playsInline
+          onCanPlay={() => setLoaded(true)}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+            loaded ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <source
+            src={video}
+            type={video.endsWith(".webm") ? "video/webm" : "video/mp4"}
+          />
+        </video>
+      )}
 
       <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 via-gray-900/40 to-transparent" />
       <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 via-transparent to-transparent" />
