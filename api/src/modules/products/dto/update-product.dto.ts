@@ -50,6 +50,11 @@ export class UpdateProductDto {
   @IsString()
   customCode?: string;
 
+  /** Landing larga (HTML/CSS/JS). Se renderiza en un iframe con sandbox. */
+  @IsOptional()
+  @IsString()
+  landingCode?: string;
+
   @IsOptional()
   @IsString()
   categoryId?: string;

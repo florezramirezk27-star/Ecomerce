@@ -11,5 +11,6 @@ export const createProductSchema = z.object({
   gallery: z.array(z.string()).optional(),
   video: z.string().optional(),
   customCode: z.string().optional(),
+  landingCode: z.string().max(500_000).optional(),
   categoryId: z.string().min(1, 'La categor\u00eda es requerida'),
 });

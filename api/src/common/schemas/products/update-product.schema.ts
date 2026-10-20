@@ -12,6 +12,7 @@ export const updateProductSchema = z.object({
   gallery: z.array(z.string()).optional(),
   video: z.string().optional(),
   customCode: z.string().optional(),
+  landingCode: z.string().max(500_000).optional(),
   categoryId: z.string().optional(),
   active: z.boolean().optional(),
 });

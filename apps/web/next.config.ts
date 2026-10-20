@@ -154,6 +154,25 @@ const nextConfig: NextConfig = {
         headers: securityHeaders,
       },
       {
+        // La landing de un producto se sirve como documento aparte (ver
+        // `app/landing/[slug]/route.ts`) y trae su PROPIA CSP permisiva, porque
+        // el codigo que pega el admin puede cargar cualquier CDN. Next aplica
+        // la ultima cabecera que coincide para una misma clave, asi que esta
+        // entrada, al ir despues del comodin, reemplaza la CSP estricta solo en
+        // esta ruta. El aislamiento real lo da el `sandbox` del iframe.
+        source: "/landing/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value:
+              "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; img-src * data: blob:; media-src * data: blob:; frame-ancestors 'self'",
+          },
+          // El resto de la tienda sigue con X-Frame-Options DENY; aqui se
+          // permite el mismo origen porque el iframe de la ficha lo incrusta.
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+        ],
+      },
+      {
         source: "/admin/:path*",
         headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
       },

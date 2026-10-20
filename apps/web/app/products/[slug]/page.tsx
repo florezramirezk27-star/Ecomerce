@@ -12,6 +12,7 @@ import { trackMetaEvent } from "@/lib/facebook-pixel";
 import CandleInfographic from "@/components/CandleInfographic";
 import CandleArtisanalInfographic from "@/components/CandleArtisanalInfographic";
 import VitaminB12Landing from "@/components/VitaminB12Landing";
+import LandingFrame from "@/components/LandingFrame";
 import CountdownTimer from "@/components/CountdownTimer";
 
 interface ProductVariation {
@@ -33,6 +34,12 @@ interface Product {
   videos?: string[];
   /** Presentaciones (talla/color) de un producto VARIABLE de Dropi. */
   variations?: ProductVariation[];
+  /**
+   * Landing larga pegada desde el admin (HTML/CSS/JS). Cuando viene con
+   * contenido, se muestra debajo de la ficha del producto. `null`/vacio = la
+   * ficha se ve normal.
+   */
+  landingCode?: string | null;
   category?: {
     id: string;
     name: string;
@@ -810,15 +817,26 @@ const isVideo = selectedMedia?.kind === "video";
       {product.name === "Set de Velas Aromáticas" && <CandleInfographic />}
       {product.name === "Set de Velas Aromáticas" && <CandleArtisanalInfographic />}
 
-      {/* Landing larga solo para este producto. Va al final, debajo de la ficha
-          generica, como las infografias de velas de arriba. */}
-      {product.name === "VITAMIN B12 B6 B1 LIQUID FORMULA" && (
-        <VitaminB12Landing
-          productId={product.id}
-          productName={product.name}
-          productSlug={product.slug}
-          productImage={product.image}
+      {/* Landing con codigo pegada desde el admin. Va al final, debajo de la
+          ficha generica. Se aisla en un iframe (`LandingFrame`) porque el
+          codigo puede traer CSS global y scripts que romperian la tienda. */}
+      {product.landingCode?.trim() ? (
+        <LandingFrame
+          src={`/landing/${product.slug}`}
+          title={`Landing de ${product.name}`}
+          initialHeight={1400}
+          className="w-full border-0"
         />
+      ) : (
+        /* Si no hay landing pegada, el B12 conserva la suya diseñada. */
+        product.name === "VITAMIN B12 B6 B1 LIQUID FORMULA" && (
+          <VitaminB12Landing
+            productId={product.id}
+            productName={product.name}
+            productSlug={product.slug}
+            productImage={product.image}
+          />
+        )
       )}
 
     </main>

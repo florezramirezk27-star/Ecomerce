@@ -91,6 +91,16 @@ model Product {
   price       Decimal   @db.Decimal(10,2)
   oldPrice    Decimal?  @db.Decimal(10,2)
   customCode          String?
+  /**
+   * Landing larga del producto, como HTML/CSS/JS pegado por el admin.
+   *
+   * Se guarda como texto y se renderiza en un iframe con sandbox en la ficha,
+   * para que el CSS y los scripts del codigo no toquen la tienda. `null` o
+   * vacio = la ficha se ve normal, sin landing.
+   *
+   * No se reutiliza `customCode`: ese guarda el SKU del producto.
+   */
+  landingCode         String?  @db.Text
   dropiProductId      Int?   @unique
   stock               Int
   lowStockThreshold   Int       @default(5)
