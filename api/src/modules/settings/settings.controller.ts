@@ -17,8 +17,8 @@ export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
   @Get('logo')
-  getLogo() {
-    const logo = this.settingsService.getLogo();
+  async getLogo() {
+    const logo = await this.settingsService.getLogo();
     return { logo };
   }
 
@@ -26,13 +26,13 @@ export class SettingsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  setLogo(
+  async setLogo(
     @Body(new ZodValidationPipe(settingsLogoSchema))
     body: {
       logo: string;
     },
   ) {
-    this.settingsService.setLogo(body.logo);
+    await this.settingsService.setLogo(body.logo);
     return { logo: body.logo };
   }
 
@@ -40,14 +40,14 @@ export class SettingsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  removeLogo() {
-    this.settingsService.removeLogo();
+  async removeLogo() {
+    await this.settingsService.removeLogo();
     return { logo: null };
   }
 
   @Get('hero-video')
-  getHeroVideo() {
-    const video = this.settingsService.getHeroVideo();
+  async getHeroVideo() {
+    const video = await this.settingsService.getHeroVideo();
     return { video };
   }
 
@@ -55,13 +55,13 @@ export class SettingsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  setHeroVideo(
+  async setHeroVideo(
     @Body(new ZodValidationPipe(settingsHeroVideoSchema))
     body: {
       video: string;
     },
   ) {
-    this.settingsService.setHeroVideo(body.video);
+    await this.settingsService.setHeroVideo(body.video);
     return { video: body.video };
   }
 
@@ -69,8 +69,8 @@ export class SettingsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  removeHeroVideo() {
-    this.settingsService.removeHeroVideo();
+  async removeHeroVideo() {
+    await this.settingsService.removeHeroVideo();
     return { video: null };
   }
 }

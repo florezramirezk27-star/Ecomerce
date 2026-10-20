@@ -292,3 +292,13 @@ model ChatMessage {
 
   @@index([sessionId, createdAt])
 }
+
+/// Ajustes de la tienda que antes vivian en un `settings.json` en disco (logo y
+/// video del banner). En un servicio sin disco persistente ese archivo se
+/// perdia en cada deploy, asi que el valor tiene que vivir en la base de datos.
+/// Clave-valor para no tocar el esquema cada vez que aparece un ajuste nuevo.
+model AppSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}

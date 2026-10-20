@@ -20,3 +20,8 @@ opencode.json
 # Render restaurara el valor viejo del repo y pisara lo que el admin hubiera
 # subido.
 api/settings.json
+
+# Scripts de diagnostico local. No son parte de la app ni del deploy y llegaron
+# a llevar el JWT_SECRET de produccion en texto plano y volcados con datos de
+# clientes reales.
+api/scripts/

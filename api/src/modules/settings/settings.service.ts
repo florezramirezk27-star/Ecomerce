@@ -1,107 +1,73 @@
 import { Injectable } from '@nestjs/common';
-import * as fs from 'fs';
-import * as path from 'path';
 
-interface Settings {
-  logo: string | null;
-  heroVideo: string | null;
-}
+import { PrismaService } from '../../prisma/prisma.service';
+
+/**
+ * Ajustes de la tienda: logo y video del banner del inicio.
+ *
+ * Viven en la tabla `AppSetting` (clave-valor) y no en un archivo en disco
+ * porque en un servicio sin disco persistente ese archivo se regeneraba en cada
+ * deploy y se perdia lo que el admin hubiera subido.
+ *
+ * Las lecturas se sirven de una cache en memoria: el navbar y el hero piden el
+ * logo y el video en cada carga de pagina, y golpear la base de datos cada vez
+ * seria trabajo gratis. La cache se invalida al escribir desde el propio
+ * proceso, que es donde se origina cualquier cambio.
+ */
+const LOGO_KEY = 'logo';
+const HERO_VIDEO_KEY = 'heroVideo';
 
 @Injectable()
 export class SettingsService {
-  private readonly filePath: string;
+  private readonly cache = new Map<string, string | null>();
 
-  constructor() {
-    this.filePath = path.resolve(__dirname, '../../../settings.json');
-    this.ensureFile();
+  constructor(private readonly prisma: PrismaService) {}
+
+  private async read(key: string): Promise<string | null> {
+    if (this.cache.has(key)) return this.cache.get(key) ?? null;
+
+    const row = await this.prisma.appSetting.findUnique({ where: { key } });
+    const value = row?.value ?? null;
+    this.cache.set(key, value);
+    return value;
   }
 
-  private ensureFile() {
-    if (!fs.existsSync(this.filePath)) {
-      fs.writeFileSync(
-        this.filePath,
-        JSON.stringify({ logo: null, heroVideo: null }),
-        'utf-8',
-      );
+  private async write(key: string, value: string | null): Promise<void> {
+    if (value === null) {
+      // `deleteMany` y no `delete`: borrar una clave que ya no existe no debe
+      // reventar con P2025.
+      await this.prisma.appSetting.deleteMany({ where: { key } });
+    } else {
+      await this.prisma.appSetting.upsert({
+        where: { key },
+        create: { key, value },
+        update: { value },
+      });
     }
+    this.cache.set(key, value);
   }
 
-  private read(): Settings {
-    try {
-      const parsed = JSON.parse(
-        fs.readFileSync(this.filePath, 'utf-8'),
-      ) as Partial<Settings> | null;
-      // El archivo pudo escribirse antes de que existiera `heroVideo`; sin este
-      // relleno, `read().heroVideo` seria `undefined` y `getHeroVideo()`
-      // devolveria `undefined` en vez de `null`.
-      return {
-        logo: parsed?.logo ?? null,
-        heroVideo: parsed?.heroVideo ?? null,
-      };
-    } catch {
-      return { logo: null, heroVideo: null };
-    }
+  getLogo(): Promise<string | null> {
+    return this.read(LOGO_KEY);
   }
 
-  /**
-   * Escribe de forma atomica: primero un temporal y despues un `rename`.
-   *
-   * `writeFileSync` trunca el destino antes de escribir, asi que si el proceso
-   * muere a mitad (OOM, un rolling update) queda un `settings.json` truncado.
-   * El `rename` es atomico en el mismo sistema de ficheros, asi que un lector
-   * concurrente ve el archivo viejo completo o el nuevo completo, nunca un
-   * estado intermedio.
-   *
-   * No cambia la ruta: el temporal vive en el mismo directorio que el destino,
-   * que es lo que hace el `rename` atomico (otro disco o sistema de ficheros no
-   * lo garantiza).
-   */
-  private write(data: Settings) {
-    const tmpPath = `${this.filePath}.${process.pid}.tmp`;
-
-    try {
-      fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
-      fs.renameSync(tmpPath, this.filePath);
-    } catch (error) {
-      // Sin esta limpieza, un fallo deja temporales por cada intento fallido.
-      try {
-        fs.unlinkSync(tmpPath);
-      } catch {
-        // El temporal no llego a crearse: no hay nada que borrar.
-      }
-      throw error;
-    }
+  async setLogo(url: string): Promise<void> {
+    await this.write(LOGO_KEY, url);
   }
 
-  getLogo(): string | null {
-    return this.read().logo;
+  async removeLogo(): Promise<void> {
+    await this.write(LOGO_KEY, null);
   }
 
-  setLogo(url: string) {
-    const data = this.read();
-    data.logo = url;
-    this.write(data);
+  getHeroVideo(): Promise<string | null> {
+    return this.read(HERO_VIDEO_KEY);
   }
 
-  removeLogo() {
-    const data = this.read();
-    data.logo = null;
-    this.write(data);
+  async setHeroVideo(url: string): Promise<void> {
+    await this.write(HERO_VIDEO_KEY, url);
   }
 
-  getHeroVideo(): string | null {
-    return this.read().heroVideo;
-  }
-
-  setHeroVideo(url: string) {
-    const data = this.read();
-    data.heroVideo = url;
-    this.write(data);
-  }
-
-  removeHeroVideo() {
-    const data = this.read();
-    data.heroVideo = null;
-    this.write(data);
+  async removeHeroVideo(): Promise<void> {
+    await this.write(HERO_VIDEO_KEY, null);
   }
 }
