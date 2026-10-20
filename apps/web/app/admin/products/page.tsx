@@ -2,7 +2,14 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Package, PackageSearch, Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  Package,
+  PackageSearch,
+  Pencil,
+  RefreshCw,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { apiFetch, Product, formatPrice } from '@/lib/admin';
 import {
   Alert,
@@ -42,6 +49,7 @@ export default function AdminProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,12 +116,42 @@ export default function AdminProductsPage() {
     }
   };
 
+  const handleRefreshMedia = async (product: Product) => {
+    try {
+      setRefreshingId(product.id);
+      setError('');
+      setSuccess('');
+      const result: { gallery?: string[]; videos?: string[] } = await apiFetch(
+        `/dropi/products/${product.id}/refresh-media`,
+        { method: 'POST' },
+      );
+      const imagenes = result?.gallery?.length ?? 0;
+      const videos = result?.videos?.length ?? 0;
+      setSuccess(
+        `"${product.name}": imágenes actualizadas (${imagenes} foto${imagenes === 1 ? '' : 's'}${videos > 0 ? `, ${videos} video${videos === 1 ? '' : 's'}` : ''}).`,
+      );
+      // La URL de la foto cambio: recargar la pagina evita que la tabla siga
+      // mostrando la imagen rota que ya no esta en la base de datos.
+      const data: ProductsResponse = await apiFetch(
+        `/products?page=${page}&limit=${PAGE_SIZE}`,
+      );
+      setProducts(data.items ?? []);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Error al re-sincronizar las imágenes',
+      );
+    } finally {
+      setRefreshingId(null);
+    }
+  };
+
   const filteredProducts = products.filter(
     (p) =>
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.slug.toLowerCase().includes(searchTerm.toLowerCase()),
   );
-
   const deleteProduct = deleteConfirm
     ? products.find((p) => p.id === deleteConfirm)
     : null;
@@ -233,6 +271,17 @@ export default function AdminProductsPage() {
                             Editar
                           </Link>
                           <button
+                            onClick={() => handleRefreshMedia(product)}
+                            disabled={refreshingId === product.id}
+                            title="Vuelve a leer de Dropi la imagen, la galería y los videos (arregla fotos rotas)"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <RefreshCw
+                              className={`h-3.5 w-3.5 ${refreshingId === product.id ? 'animate-spin' : ''}`}
+                            />
+                            Re-sincronizar
+                          </button>
+                          <button
                             onClick={() => setDeleteConfirm(product.id)}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
                           >
@@ -304,6 +353,15 @@ export default function AdminProductsPage() {
                     >
                       Editar
                     </Link>
+                    <button
+                      onClick={() => handleRefreshMedia(product)}
+                      disabled={refreshingId === product.id}
+                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-center text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {refreshingId === product.id
+                        ? 'Sincronizando...'
+                        : 'Re-sincronizar'}
+                    </button>
                     <button
                       onClick={() => setDeleteConfirm(product.id)}
                       className="flex-1 rounded-xl border border-red-200 px-3 py-2 text-center text-sm font-medium text-red-600 transition hover:bg-red-50"

@@ -97,6 +97,10 @@ export class DropiService {
     return this.products.validateStock(items);
   }
 
+  async refreshProductMedia(productId: string) {
+    return this.products.refreshProductMedia(productId);
+  }
+
   async createFinalOrder(
     payload: Record<string, any>,
   ): Promise<DropiFinalOrderResult> {

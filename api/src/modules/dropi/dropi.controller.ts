@@ -125,6 +125,28 @@ export class DropiController {
     return this.dropiService.syncStock(Array.isArray(ids) ? ids : undefined);
   }
 
+  /**
+   * Re-lee de Dropi la imagen principal, la galeria y los videos de un producto
+   * ya importado y los reemplaza.
+   *
+   * Dropi cambia las URLs de su CDN con el tiempo y las fotos guardadas en la
+   * importacion terminan dando 403 (que Next muestra como 502). Esto las
+   * arregla sin tener que borrar y volver a importar el producto.
+   */
+  @Post('products/:id/refresh-media')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async refreshProductMedia(@Param('id') id: string) {
+    try {
+      return await this.dropiService.refreshProductMedia(id);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) throw error;
+      const message =
+        error instanceof Error ? error.message : 'Error al re-sincronizar';
+      throw new HttpException(message, 500);
+    }
+  }
+
   @Post('orders')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')

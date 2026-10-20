@@ -324,3 +324,169 @@ describe('DropiProductsService.validateStock', () => {
     expect(result.ok).toBe(true);
   });
 });
+
+describe('DropiProductsService.refreshProductMedia', () => {
+  /**
+   * Arma un servicio con Prisma, auth y cache mockeados para probar el
+   * reemplazo de la media sin tocar Dropi ni la base de datos.
+   */
+  function makeRefreshService(options: {
+    product?: {
+      id: string;
+      dropiProductId: number | null;
+      image: string | null;
+    } | null;
+    hasToken?: boolean;
+    images?: string[];
+    videos?: string[];
+    fullMediaError?: Error;
+  }) {
+    const product =
+      options.product === undefined
+        ? {
+            id: 'p1',
+            dropiProductId: 241380,
+            image: 'https://d39ru7awumhhs2.cloudfront.net/vieja.png',
+          }
+        : options.product;
+
+    const prisma = {
+      product: {
+        findUnique: jest.fn().mockResolvedValue(product),
+        update: jest.fn().mockImplementation(
+          ({
+            data,
+          }: {
+            data: {
+              image?: string;
+              gallery?: string[];
+              videos?: string[];
+            };
+          }) => ({
+            id: 'p1',
+            image: data.image ?? null,
+            gallery: data.gallery ?? [],
+            videos: data.videos ?? [],
+          }),
+        ),
+      },
+    };
+
+    const auth = {
+      getOfficialToken: jest
+        .fn()
+        .mockReturnValue(options.hasToken === false ? null : 'atkn_test'),
+    };
+
+    const cache = { invalidate: jest.fn().mockResolvedValue(undefined) };
+
+    const service = new DropiProductsService(
+      {} as DropiClient,
+      auth as unknown as DropiAuthService,
+      prisma as unknown as PrismaService,
+      cache as unknown as CatalogCacheService,
+    );
+
+    jest.spyOn(service, 'fetchFullProductMedia').mockImplementation(() => {
+      if (options.fullMediaError) return Promise.reject(options.fullMediaError);
+      return Promise.resolve(options.images ?? []);
+    });
+    jest
+      .spyOn(service, 'fetchProductVideos')
+      .mockResolvedValue(options.videos ?? []);
+
+    return { service, prisma, cache };
+  }
+
+  it('reemplaza la imagen y la galeria con las URLs actuales de Dropi', async () => {
+    const { service, prisma } = makeRefreshService({
+      images: [
+        'https://d39ru7awumhhs2.cloudfront.net/colombia/products/241380/nueva.png',
+        'https://d39ru7awumhhs2.cloudfront.net/colombia/products/241380/extra.jpg',
+      ],
+      videos: [],
+    });
+
+    const result = await service.refreshProductMedia('p1');
+
+    expect(result.image).toBe(
+      'https://d39ru7awumhhs2.cloudfront.net/colombia/products/241380/nueva.png',
+    );
+    expect(result.gallery).toEqual([
+      'https://d39ru7awumhhs2.cloudfront.net/colombia/products/241380/nueva.png',
+      'https://d39ru7awumhhs2.cloudfront.net/colombia/products/241380/extra.jpg',
+    ]);
+    expect(prisma.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'p1' } }),
+    );
+  });
+
+  it('deduplica las imagenes repetidas que devuelve Dropi', async () => {
+    const { service } = makeRefreshService({
+      images: ['https://cdn/x.png', 'https://cdn/x.png', 'https://cdn/y.png'],
+    });
+
+    const result = await service.refreshProductMedia('p1');
+
+    expect(result.gallery).toEqual(['https://cdn/x.png', 'https://cdn/y.png']);
+  });
+
+  it('falla con 404 si el producto no existe', async () => {
+    const { service } = makeRefreshService({ product: null });
+
+    await expect(service.refreshProductMedia('nope')).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('falla con 400 si el producto no viene de Dropi', async () => {
+    const { service } = makeRefreshService({
+      product: { id: 'p1', dropiProductId: null, image: 'https://x/y.png' },
+    });
+
+    await expect(service.refreshProductMedia('p1')).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+
+  it('falla con 503 si no hay DROPI_API_TOKEN en el servidor', async () => {
+    const { service } = makeRefreshService({ hasToken: false });
+
+    await expect(service.refreshProductMedia('p1')).rejects.toMatchObject({
+      status: 503,
+    });
+  });
+
+  it('falla con 502 si Dropi no devuelve imagenes ni videos', async () => {
+    const { service } = makeRefreshService({ images: [], videos: [] });
+
+    await expect(service.refreshProductMedia('p1')).rejects.toMatchObject({
+      status: 502,
+    });
+  });
+
+  it('conserva la imagen actual si Dropi solo devuelve videos', async () => {
+    const { service } = makeRefreshService({
+      images: [],
+      videos: ['https://cdn/v.mp4'],
+    });
+
+    const result = await service.refreshProductMedia('p1');
+
+    expect(result.image).toBe(
+      'https://d39ru7awumhhs2.cloudfront.net/vieja.png',
+    );
+    expect(result.videos).toEqual(['https://cdn/v.mp4']);
+  });
+
+  it('invalida la cache del catalogo tras actualizar', async () => {
+    const { service, cache } = makeRefreshService({
+      images: ['https://cdn/x.png'],
+    });
+
+    await service.refreshProductMedia('p1');
+
+    expect(cache.invalidate).toHaveBeenCalledWith('products');
+    expect(cache.invalidate).toHaveBeenCalledWith('product');
+  });
+});

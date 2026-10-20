@@ -21,7 +21,9 @@ function createPrismaMock() {
     appSetting: {
       findUnique: ({ where }: { where: { key: string } }) => {
         const value = store.get(where.key);
-        return Promise.resolve(value === undefined ? null : { key: where.key, value });
+        return Promise.resolve(
+          value === undefined ? null : { key: where.key, value },
+        );
       },
       upsert: ({
         where,

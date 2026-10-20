@@ -796,6 +796,90 @@ export class DropiProductsService {
   }
 
   /**
+   * Vuelve a leer la imagen principal, la galeria y los videos de un producto
+   * que YA esta en la tienda y los actualiza.
+   *
+   * Existe porque Dropi rota las URLs de su CDN: la carpeta vieja
+   * (`uploads/images/products/...`) desaparece y las imagenes guardadas en la
+   * importacion empiezan a devolver 403. El optimizador de Next lo traduce a un
+   * 502 en `/_next/image` y la ficha se queda sin foto. Como la media
+   * actualizada solo la entrega Dropi con su token (que vive en el backend),
+   * esto tiene que correr aqui y no en el navegador.
+   *
+   * Se reescribe la galeria completa, no se fusiona: lo que se busca es dejar
+   * solo URLs que hoy funcionen, y las viejas rotas son justo lo que sobra.
+   */
+  async refreshProductMedia(productId: string): Promise<{
+    id: string;
+    image: string | null;
+    gallery: string[];
+    videos: string[];
+  }> {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true, dropiProductId: true, image: true },
+    });
+
+    if (!product) {
+      throw new HttpException('Producto no encontrado', 404);
+    }
+
+    const dropiProductId = product.dropiProductId;
+    if (!dropiProductId) {
+      throw new HttpException(
+        'El producto no viene de Dropi: no hay nada que re-sincronizar',
+        400,
+      );
+    }
+
+    const token = this.auth.getOfficialToken();
+    if (!token) {
+      throw new HttpException(
+        'Falta DROPI_API_TOKEN en el servidor: no se puede leer la media actualizada de Dropi',
+        503,
+      );
+    }
+
+    const [fullImages, videoUrls] = await Promise.all([
+      this.fetchFullProductMedia(dropiProductId),
+      this.fetchProductVideos(dropiProductId),
+    ]);
+
+    const gallery = [...new Set(fullImages.filter(Boolean))];
+    const videos = [...new Set(videoUrls.filter(Boolean))];
+
+    if (gallery.length === 0 && videos.length === 0) {
+      throw new HttpException(
+        'Dropi no devolvio imagenes ni videos para este producto',
+        502,
+      );
+    }
+
+    // La primera de la galeria que Dropi devuelve hoy es la principal. Si solo
+    // llegaron videos, se respeta la imagen actual para no dejarla vacia.
+    const image = gallery[0] ?? product.image ?? null;
+
+    const updated = await this.prisma.product.update({
+      where: { id: productId },
+      data: {
+        image: image ?? undefined,
+        gallery,
+        videos,
+        video: videos[0] ?? undefined,
+      },
+      select: { id: true, image: true, gallery: true, videos: true },
+    });
+
+    await this.invalidateCatalogCache();
+
+    this.logger.log(
+      `Dropi media refresh ${dropiProductId}: ${gallery.length} imagenes, ${videos.length} videos`,
+    );
+
+    return updated;
+  }
+
+  /**
    * Invalida la cache del catalogo.
    *
    * Este servicio escribe productos con Prisma directamente, saltandose
