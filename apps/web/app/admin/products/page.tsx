@@ -39,6 +39,22 @@ interface ProductsResponse {
 
 const PAGE_SIZE = 20;
 
+/**
+ * Filtro de estado del panel.
+ *
+ * Por defecto el admin solo ve los productos activos. Sin esto, un producto que
+ * se "elimino" pero quedo archivado (`active: false`, porque tiene pedidos
+ * asociados) seguia apareciendo en la lista y parecia que el borrado no
+ * funcionaba.
+ */
+type StatusFilter = 'active' | 'inactive' | 'all';
+
+const STATUS_TABS: { value: StatusFilter; label: string }[] = [
+  { value: 'active', label: 'Activos' },
+  { value: 'inactive', label: 'Inactivos' },
+  { value: 'all', label: 'Todos' },
+];
+
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -47,6 +63,7 @@ export default function AdminProductsPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
@@ -58,7 +75,7 @@ export default function AdminProductsPage() {
       try {
         setLoading(true);
         const data: ProductsResponse = await apiFetch(
-          `/products?page=${page}&limit=${PAGE_SIZE}`,
+          `/products?page=${page}&limit=${PAGE_SIZE}&status=${statusFilter}`,
         );
         if (cancelled) return;
 
@@ -82,7 +99,15 @@ export default function AdminProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, [page]);
+  }, [page, statusFilter]);
+
+  /** Cambiar de filtro vuelve a la pagina 1: la pagina actual puede no existir. */
+  const handleStatusChange = (next: StatusFilter) => {
+    setStatusFilter(next);
+    setPage(1);
+    setSuccess('');
+    setError('');
+  };
 
   const handleDelete = async (id: string) => {
     try {
@@ -97,7 +122,7 @@ export default function AdminProductsPage() {
       setDeleteConfirm(null);
       setSuccess(
         result?.archived
-          ? `"${result.name || 'Producto'}" tiene pedidos asociados, por eso no se puede borrar su historial. Fue desactivado y ya no aparece en la tienda.`
+          ? `"${result.name || 'Producto'}" tiene pedidos asociados, por eso no se puede borrar su historial. Quedó desactivado (lo encuentras en la pestaña "Inactivos") y ya no aparece en la tienda.`
           : 'Producto eliminado correctamente.',
       );
 
@@ -133,7 +158,7 @@ export default function AdminProductsPage() {
       // La URL de la foto cambio: recargar la pagina evita que la tabla siga
       // mostrando la imagen rota que ya no esta en la base de datos.
       const data: ProductsResponse = await apiFetch(
-        `/products?page=${page}&limit=${PAGE_SIZE}`,
+        `/products?page=${page}&limit=${PAGE_SIZE}&status=${statusFilter}`,
       );
       setProducts(data.items ?? []);
     } catch (err) {
@@ -180,12 +205,35 @@ export default function AdminProductsPage() {
       {success && <Alert type="success">{success}</Alert>}
 
       <Card className="p-4">
-        <SearchInput
-          value={searchTerm}
-          onChange={setSearchTerm}
-          placeholder="Buscar por nombre o slug..."
-          className="max-w-md"
-        />
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <SearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Buscar por nombre o slug..."
+            className="max-w-md"
+          />
+          <div
+            role="tablist"
+            aria-label="Filtrar por estado"
+            className="inline-flex shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-1"
+          >
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                role="tab"
+                aria-selected={statusFilter === tab.value}
+                onClick={() => handleStatusChange(tab.value)}
+                className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
+                  statusFilter === tab.value
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </Card>
 
       <Card className="overflow-hidden">
@@ -194,16 +242,30 @@ export default function AdminProductsPage() {
         ) : filteredProducts.length === 0 ? (
           <EmptyState
             icon={PackageSearch}
-            title="No hay productos"
-            description="Crea tu primer producto para empezar a vender en Kronio Market."
+            title={
+              searchTerm
+                ? 'Sin resultados'
+                : statusFilter === 'inactive'
+                  ? 'No hay productos inactivos'
+                  : 'No hay productos'
+            }
+            description={
+              searchTerm
+                ? 'Ningún producto coincide con la búsqueda.'
+                : statusFilter === 'inactive'
+                  ? 'Los productos que elimines y tengan pedidos asociados aparecerán aquí.'
+                  : 'Crea tu primer producto para empezar a vender en Kronio Market.'
+            }
             action={
-              <Link
-                href="/admin/products/new"
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700"
-              >
-                <Plus className="h-4 w-4" />
-                Crear el primer producto
-              </Link>
+              searchTerm || statusFilter === 'inactive' ? undefined : (
+                <Link
+                  href="/admin/products/new"
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  Crear el primer producto
+                </Link>
+              )
             }
           />
         ) : (

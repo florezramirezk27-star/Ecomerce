@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 
-import { ProductsService } from './products.service';
+import { ProductsService, parseProductStatus } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { parsePagination } from '../../common/pipes/parse-pagination';
@@ -42,6 +42,7 @@ export class ProductsController {
     @Query('page') pageParam?: string,
     @Query('limit') limitParam?: string,
     @Query('onSale') onSale?: string,
+    @Query('status') status?: string,
   ) {
     const isAdmin = req.user?.role === 'ADMIN';
     const { page, limit } = parsePagination(pageParam, limitParam);
@@ -55,6 +56,9 @@ export class ProductsController {
       limit,
       onSaleBool,
       isAdmin,
+      // Solo el admin puede pedir inactivos; para anonimos el servicio fuerza
+      // `active: true` de todos modos.
+      isAdmin ? parseProductStatus(status) : undefined,
     );
   }
 

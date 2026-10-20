@@ -10,6 +10,28 @@ import { UpdateProductDto } from './dto/update-product.dto';
 export const DEFAULT_PAGE_SIZE = 20;
 
 /**
+ * Filtro de estado del listado.
+ *
+ * - `active`: solo productos visibles en la tienda.
+ * - `inactive`: solo archivados (los "eliminados" con pedidos asociados).
+ * - `all`: ambos.
+ */
+export type ProductStatus = 'active' | 'inactive' | 'all';
+
+const PRODUCT_STATUSES: readonly ProductStatus[] = [
+  'active',
+  'inactive',
+  'all',
+];
+
+/** Normaliza el `status` de la query. Un valor desconocido se ignora. */
+export function parseProductStatus(value?: string): ProductStatus | undefined {
+  return PRODUCT_STATUSES.includes(value as ProductStatus)
+    ? (value as ProductStatus)
+    : undefined;
+}
+
+/**
  * Columnas del listado. Excluye `description`, `gallery`, `videos` y `customCode`,
  * que son las columnas pesadas y que el listado no usa: sin `select` explicito
  * cada fila arrastra la imagen completa del catalogo por la red.
@@ -44,10 +66,20 @@ export class ProductsService {
     limit?: number,
     onSale?: boolean,
     includeInactive = false,
+    status?: ProductStatus,
   ) {
     const where: Prisma.ProductWhereInput = {};
 
-    if (!includeInactive) {
+    // `status` es el filtro explicito del panel. Cuando no viene, se mantiene el
+    // comportamiento historico: los anonimos solo ven activos y el admin ve todo
+    // (`includeInactive`). El admin manda `status` porque necesita separar
+    // activos de archivados: un producto "eliminado" con pedidos queda inactivo
+    // y, sin filtro, seguia apareciendo y parecia que el borrado no funciono.
+    if (status === 'active') {
+      where.active = true;
+    } else if (status === 'inactive') {
+      where.active = false;
+    } else if (!includeInactive) {
       where.active = true;
     }
 
@@ -93,7 +125,16 @@ export class ProductsService {
 
     return this.cache.remember(
       'products',
-      [search, categoryId, sort, onSale, includeInactive, currentPage, take],
+      [
+        search,
+        categoryId,
+        sort,
+        onSale,
+        includeInactive,
+        status,
+        currentPage,
+        take,
+      ],
       async () => {
         const [total, items] = await Promise.all([
           this.prisma.product.count({ where }),
