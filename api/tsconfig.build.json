@@ -1,4 +1,14 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Sin `rootDir` explicito, TypeScript deduce la raiz comun de todos los
+    // archivos que entran al build. Mientras existieron archivos sueltos fuera
+    // de `src` (por ejemplo `scripts/`), esa raiz era `api/` y la salida caia en
+    // `dist/src/main.js`. Al borrarlos, la raiz paso a ser `api/src` y la salida
+    // se movio a `dist/main.js`, rompiendo el arranque en produccion.
+    // Fijarlo hace que la ruta de salida no dependa de que archivos haya sueltos.
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }
