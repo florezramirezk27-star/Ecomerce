@@ -1,16 +1,41 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { API_URL } from "@/lib/api";
+
+/**
+ * Video por defecto cuando el admin no ha subido uno propio. El admin puede
+ * reemplazarlo desde el panel (Logo -> Video del banner).
+ */
+const DEFAULT_VIDEO = "https://www.pexels.com/download/video/8306452/";
 
 export default function VideoHero() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loaded, setLoaded] = useState(false);
+  const [video, setVideo] = useState(DEFAULT_VIDEO);
+
+  useEffect(() => {
+    function fetchVideo() {
+      fetch(`${API_URL}/settings/hero-video`)
+        .then((r) => r.json())
+        .then((data: { video: string | null }) => {
+          if (data.video) setVideo(data.video);
+        })
+        .catch(() => {});
+    }
+
+    fetchVideo();
+
+    window.addEventListener("hero-video-change", fetchVideo);
+    return () => window.removeEventListener("hero-video-change", fetchVideo);
+  }, []);
 
   return (
     <section className="relative w-full h-[80vh] md:h-[90vh] overflow-hidden bg-gray-900">
       <video
         ref={videoRef}
+        key={video}
         autoPlay
         muted
         loop
@@ -20,10 +45,7 @@ export default function VideoHero() {
           loaded ? "opacity-100" : "opacity-0"
         }`}
       >
-        <source
-          src="https://www.pexels.com/download/video/8306452/"
-          type="video/mp4"
-        />
+        <source src={video} type={video.endsWith(".webm") ? "video/webm" : "video/mp4"} />
       </video>
 
       <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 via-gray-900/40 to-transparent" />

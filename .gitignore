@@ -14,3 +14,9 @@ coverage/
 
 /generated/prisma
 opencode.json
+
+# Estado de runtime del API (logo y video del banner). No es codigo: se
+# sobrescribe desde el panel de admin. Trackearlo hacia que cada deploy de
+# Render restaurara el valor viejo del repo y pisara lo que el admin hubiera
+# subido.
+api/settings.json

@@ -14,6 +14,9 @@ export interface UploadedImageFile {
   originalname: string;
 }
 
+/** Recurso que Cloudinary debe tratar (afecta la transformacion y la URL). */
+export type UploadResourceType = 'image' | 'video';
+
 @Injectable()
 export class UploadService {
   private readonly useCloudinary: boolean;
@@ -65,13 +68,16 @@ export class UploadService {
     }
   }
 
-  async uploadFile(file: UploadedImageFile) {
+  async uploadFile(
+    file: UploadedImageFile,
+    resourceType: UploadResourceType = 'image',
+  ) {
     if (!file) {
       throw new BadRequestException('No se recibió ningún archivo.');
     }
 
     if (this.useCloudinary) {
-      return this.uploadToCloudinary(file);
+      return this.uploadToCloudinary(file, resourceType);
     }
 
     if (this.useS3) {
@@ -83,18 +89,21 @@ export class UploadService {
     );
   }
 
-  private uploadToCloudinary(file: UploadedImageFile): Promise<string> {
+  private uploadToCloudinary(
+    file: UploadedImageFile,
+    resourceType: UploadResourceType,
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: 'ecommerce/products',
-          resource_type: 'image',
+          resource_type: resourceType,
         },
         (error, result) => {
           if (error) {
             return reject(
               new InternalServerErrorException(
-                'Error al subir la imagen a Cloudinary.',
+                `Error al subir el ${resourceType === 'video' ? 'video' : 'archivo'} a Cloudinary.`,
               ),
             );
           }

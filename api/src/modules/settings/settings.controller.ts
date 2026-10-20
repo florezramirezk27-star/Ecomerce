@@ -3,7 +3,10 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { SettingsService } from './settings.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { settingsLogoSchema } from '../../common/schemas';
+import {
+  settingsLogoSchema,
+  settingsHeroVideoSchema,
+} from '../../common/schemas';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -40,5 +43,34 @@ export class SettingsController {
   removeLogo() {
     this.settingsService.removeLogo();
     return { logo: null };
+  }
+
+  @Get('hero-video')
+  getHeroVideo() {
+    const video = this.settingsService.getHeroVideo();
+    return { video };
+  }
+
+  @Post('hero-video')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  setHeroVideo(
+    @Body(new ZodValidationPipe(settingsHeroVideoSchema))
+    body: {
+      video: string;
+    },
+  ) {
+    this.settingsService.setHeroVideo(body.video);
+    return { video: body.video };
+  }
+
+  @Post('hero-video/remove')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  removeHeroVideo() {
+    this.settingsService.removeHeroVideo();
+    return { video: null };
   }
 }

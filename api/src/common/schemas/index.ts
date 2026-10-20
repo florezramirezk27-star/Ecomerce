@@ -18,4 +18,7 @@ export { updateCartItemSchema } from './cart/update-cart-item.schema';
 
 export { updateUserSchema } from './users/update-user.schema';
 
-export { settingsLogoSchema } from './settings/settings.schema';
+export {
+  settingsLogoSchema,
+  settingsHeroVideoSchema,
+} from './settings/settings.schema';

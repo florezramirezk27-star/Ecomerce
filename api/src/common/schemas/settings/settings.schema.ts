@@ -32,3 +32,24 @@ export const settingsLogoSchema = z.object({
       'La URL del logo debe empezar por http:// o https://',
     ),
 });
+
+/**
+ * URL del video de fondo del inicio (el hero). Se valida antes de persistirla
+ * porque acaba en el atributo `src` de un `<video>` de la home. Solo `http`/
+ * `https`, igual que el logo: no hay motivo para guardar `javascript:`,
+ * `data:` o `file:`.
+ */
+export const settingsHeroVideoSchema = z.object({
+  video: z
+    .string()
+    .trim()
+    .max(
+      MAX_LOGO_URL_LENGTH,
+      `La URL no puede pasar de ${MAX_LOGO_URL_LENGTH} caracteres`,
+    )
+    .url('La URL del video no es valida')
+    .refine(
+      (value) => /^https?:\/\//i.test(value),
+      'La URL del video debe empezar por http:// o https://',
+    ),
+});

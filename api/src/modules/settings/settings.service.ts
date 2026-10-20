@@ -4,6 +4,7 @@ import * as path from 'path';
 
 interface Settings {
   logo: string | null;
+  heroVideo: string | null;
 }
 
 @Injectable()
@@ -17,15 +18,28 @@ export class SettingsService {
 
   private ensureFile() {
     if (!fs.existsSync(this.filePath)) {
-      fs.writeFileSync(this.filePath, JSON.stringify({ logo: null }), 'utf-8');
+      fs.writeFileSync(
+        this.filePath,
+        JSON.stringify({ logo: null, heroVideo: null }),
+        'utf-8',
+      );
     }
   }
 
   private read(): Settings {
     try {
-      return JSON.parse(fs.readFileSync(this.filePath, 'utf-8')) as Settings;
+      const parsed = JSON.parse(
+        fs.readFileSync(this.filePath, 'utf-8'),
+      ) as Partial<Settings> | null;
+      // El archivo pudo escribirse antes de que existiera `heroVideo`; sin este
+      // relleno, `read().heroVideo` seria `undefined` y `getHeroVideo()`
+      // devolveria `undefined` en vez de `null`.
+      return {
+        logo: parsed?.logo ?? null,
+        heroVideo: parsed?.heroVideo ?? null,
+      };
     } catch {
-      return { logo: null };
+      return { logo: null, heroVideo: null };
     }
   }
 
@@ -72,6 +86,22 @@ export class SettingsService {
   removeLogo() {
     const data = this.read();
     data.logo = null;
+    this.write(data);
+  }
+
+  getHeroVideo(): string | null {
+    return this.read().heroVideo;
+  }
+
+  setHeroVideo(url: string) {
+    const data = this.read();
+    data.heroVideo = url;
+    this.write(data);
+  }
+
+  removeHeroVideo() {
+    const data = this.read();
+    data.heroVideo = null;
     this.write(data);
   }
 }

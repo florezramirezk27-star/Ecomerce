@@ -5,7 +5,10 @@ import * as path from 'path';
 
 import { SettingsService } from './settings.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { settingsLogoSchema } from '../../common/schemas';
+import {
+  settingsLogoSchema,
+  settingsHeroVideoSchema,
+} from '../../common/schemas';
 
 /** Lo que el mock de `fs` registra para que el test pueda inspeccionarlo. */
 interface EstadoDisco {
@@ -160,6 +163,41 @@ describe('SettingsService', () => {
     });
   });
 
+  describe('video del banner', () => {
+    it('empieza sin video', () => {
+      expect(service.getHeroVideo()).toBeNull();
+    });
+
+    it('guarda y devuelve el video', () => {
+      service.setHeroVideo('https://cdn.example.com/banner.mp4');
+      expect(service.getHeroVideo()).toBe('https://cdn.example.com/banner.mp4');
+    });
+
+    it('elimina el video', () => {
+      service.setHeroVideo('https://cdn.example.com/banner.mp4');
+      service.removeHeroVideo();
+      expect(service.getHeroVideo()).toBeNull();
+    });
+
+    it('no pisa el logo al guardar el video', () => {
+      service.setLogo('https://cdn.example.com/logo.png');
+      service.setHeroVideo('https://cdn.example.com/banner.mp4');
+      expect(service.getLogo()).toBe('https://cdn.example.com/logo.png');
+      expect(service.getHeroVideo()).toBe('https://cdn.example.com/banner.mp4');
+    });
+
+    it('lee un archivo viejo sin `heroVideo` como null', () => {
+      // Un `settings.json` escrito antes de que existiera el video.
+      disco.writeFileSync(
+        filePath,
+        JSON.stringify({ logo: 'https://cdn.example.com/logo.png' }),
+        'utf-8',
+      );
+      expect(service.getHeroVideo()).toBeNull();
+      expect(service.getLogo()).toBe('https://cdn.example.com/logo.png');
+    });
+  });
+
   describe('escritura atomica', () => {
     it('escribe primero en un temporal y luego lo renombra al destino', () => {
       service.setLogo('https://cdn.example.com/logo.png');
@@ -274,6 +312,35 @@ describe('settingsLogoSchema', () => {
   });
 
   it('rechaza un logo vacio', () => {
+    expect(() => run('')).toThrow(BadRequestException);
+  });
+});
+
+describe('settingsHeroVideoSchema', () => {
+  const pipe = new ZodValidationPipe(settingsHeroVideoSchema);
+  const run = (video: unknown) => pipe.transform({ video });
+
+  it('acepta una URL https de video', () => {
+    expect(run('https://cdn.example.com/banner.mp4')).toEqual({
+      video: 'https://cdn.example.com/banner.mp4',
+    });
+  });
+
+  it('rechaza algo que no es una URL', () => {
+    expect(() => run('no-es-una-url')).toThrow(BadRequestException);
+  });
+
+  it('rechaza javascript:', () => {
+    expect(() => run('javascript:alert(1)')).toThrow(BadRequestException);
+  });
+
+  it('rechaza un esquema que no sea http/https', () => {
+    expect(() => run('ftp://example.com/banner.mp4')).toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('rechaza un video vacio', () => {
     expect(() => run('')).toThrow(BadRequestException);
   });
 });

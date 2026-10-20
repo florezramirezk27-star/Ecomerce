@@ -81,7 +81,7 @@ const csp = [
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
-  "media-src 'self' https://www.pexels.com https://videos.pexels.com",
+  "media-src 'self' https://www.pexels.com https://videos.pexels.com https://res.cloudinary.com https://*.cloudinary.com https://*.cloudinary-video.com",
 ];
 
 const securityHeaders = [

@@ -51,7 +51,7 @@ const menuItems = [
   { label: 'Categorías', href: '/admin/categories', icon: Tags },
   { label: 'Usuarios', href: '/admin/users', icon: Users },
   { label: 'Órdenes', href: '/admin/orders', icon: ClipboardList },
-  { label: 'Logo', href: '/admin/logo', icon: Image },
+  { label: 'Logo y banner', href: '/admin/logo', icon: Image },
   { label: 'Seguridad', href: '/admin/security', icon: ShieldCheck },
   { label: 'Dropi', href: '/admin/dropi', icon: Boxes },
 ];
