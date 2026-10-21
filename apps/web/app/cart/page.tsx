@@ -8,6 +8,7 @@ import { apiFetch } from "@/lib/api";
 import ProductImage from "@/components/ProductImage";
 import AddressMap from "@/components/AddressMap";
 import { getGuestCart, removeFromGuestCart, updateGuestCartQuantity, type GuestCartItem } from "@/lib/guest-cart";
+import { mergeGuestCartIntoServer } from "@/lib/cart-merge";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
 import { DEPARTMENTS, MUNICIPALITIES } from "@/lib/colombia";
 import { lookupPostalCode } from "@/lib/postal-code";
@@ -229,6 +230,12 @@ export default function CartPage() {
     }
 
     try {
+      /* Un cliente que armo el carrito sin iniciar sesion y luego se
+         registro lo tiene en `localStorage`. Antes de mostrar el carrito del
+         servidor se pasa lo que quedo ahi, o el cliente ve un carrito vacio
+         y piensa que el boton de agregar no funciono. */
+      await mergeGuestCartIntoServer();
+
       const cart = await apiFetch("/cart");
       setItems(cart?.items ?? []);
     } catch {

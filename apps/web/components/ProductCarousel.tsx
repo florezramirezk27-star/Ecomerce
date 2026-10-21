@@ -14,6 +14,7 @@ import { apiFetch } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
 import { addToGuestCart } from "@/lib/guest-cart";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
+import CartToast, { useCartToast } from "@/components/CartToast";
 
 interface Product {
   id: string;
@@ -62,6 +63,14 @@ export default function ProductCarousel({
   const [addingId, setAddingId] = useState<string | null>(null);
   /** Id del producto que se acaba de agregar (muestra el visto). */
   const [addedId, setAddedId] = useState<string | null>(null);
+  /**
+   * Aviso flotante de confirmacion.
+   *
+   * El boton de la tarjeta ya cambia a "Agregado", pero en el movil el
+   * cliente esta viendo otra tarjeta o esta desplazandose: un aviso en el
+   * centro de la pantalla deja claro que el producto si entro al carrito.
+   */
+  const { toast, show: mostrarToast } = useCartToast();
 
   function scrollByDir(dir: "left" | "right") {
     if (!scrollRef.current) return;
@@ -120,10 +129,16 @@ export default function ProductCarousel({
       window.setTimeout(() => {
         setAddedId((current) => (current === product.id ? null : current));
       }, 1800);
-    } catch {
-      // Si falla (sesion caducada, producto sin stock, API caida) el boton
-      // vuelve a su estado normal y no se muestra ningun visto: mejor no
-      // confirmar algo que no ocurrio.
+
+      mostrarToast("success", "✓ Agregado al carrito");
+    } catch (err) {
+      /* Si falla (sesion caducada, producto sin stock, API caida) el boton
+         vuelve a su estado normal y no se muestra ningun visto: mejor no
+         confirmar algo que no ocurrio. El aviso si dice lo que paso. */
+      mostrarToast(
+        "error",
+        err instanceof Error ? err.message : "No se pudo agregar al carrito",
+      );
     } finally {
       setAddingId(null);
     }
@@ -271,6 +286,10 @@ export default function ProductCarousel({
           <ChevronRight className="h-5 w-5" />
         </button>
       </div>
+
+      {/* Aviso de confirmacion. Va fuera de la `<section>` para que el
+          posicionado fijo no dependa de nada de la tarjeta. */}
+      <CartToast toast={toast} />
     </section>
   );
 }

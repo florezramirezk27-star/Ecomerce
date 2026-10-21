@@ -6,6 +6,7 @@ import { apiFetch, type Paginated } from "@/lib/api";
 import ProductCarousel from "@/components/ProductCarousel";
 import PromoGrid from "@/components/PromoGrid";
 import VideoHero from "@/components/VideoHero";
+import Footer from "@/components/Footer";
 import {
   Banknote,
   Eye,
@@ -256,6 +257,12 @@ export default function Home() {
         </div>
       </section>
       </main>
+
+      {/* El pie va aqui y no en el layout raiz: es el unico sitio donde se
+          quiere. En el layout salia en todas las paginas, con un bloque
+          enorme de enlaces al final del catalogo, del carrito y de la ficha
+          de producto, muy por debajo del contenido util. */}
+      <Footer />
     </>
   );
 }

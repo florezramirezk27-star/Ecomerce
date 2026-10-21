@@ -4,7 +4,6 @@ import "@fontsource-variable/inter";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Banner from "@/components/Banner";
-import Footer from "@/components/Footer";
 import StoreChat from "@/components/chat/StoreChat";
 import StorefrontPresence from "@/components/StorefrontPresence";
 import FacebookPixel from "@/components/FacebookPixel";
@@ -65,12 +64,10 @@ export default function RootLayout({
         <Navbar />
         <Banner />
         <div className="flex-1">{children}</div>
-        {/* El pie va en el layout raiz y no solo en la home: antes las
-            paginas de catalogo, producto, carrito y ordenes no tenian forma
-            de llegar a los enlaces legales (terminos, privacidad), al
-            contacto ni a las redes sociales. El propio `Footer` se oculta
-            en el panel de admin y en las pantallas de acceso. */}
-        <Footer />
+        {/* El pie va solo en la pagina de inicio, que lo dibuja `app/page.tsx`.
+            Estando en el layout raiz salia en todas las paginas y en cada
+            una era un bloque enorme de enlaces al final, muy por debajo del
+            contenido util. */}
         <StorefrontPresence />
         <StoreChat />
         <FacebookPixel />

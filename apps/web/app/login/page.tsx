@@ -8,6 +8,7 @@ import AuthShell from "@/components/auth/AuthShell";
 
 const CLIENT_API_URL = process.env.NEXT_PUBLIC_API_URL || "/api/proxy";
 import { setAuth } from "@/lib/auth";
+import { mergeGuestCartIntoServer } from "@/lib/cart-merge";
 
 function LoginForm() {
   const router = useRouter();
@@ -54,6 +55,12 @@ function LoginForm() {
     // La respuesta ya no trae token: la cookie httpOnly ya quedo puesta por la
     // API. Aqui solo se guarda el usuario para pintar la interfaz.
     setAuth(data.user);
+
+    /* Lo que el cliente habia agregado sin iniciar sesion vive en
+       `localStorage`. Ahora que ya hay sesion se pasa al carrito del
+       servidor: si no, el cliente ve un carrito vacio despues de
+       registrarse y cree que el boton de agregar no funciono. */
+    void mergeGuestCartIntoServer();
 
     const redirect = searchParams.get("redirect");
     if (redirect && data.user.role === "ADMIN") {

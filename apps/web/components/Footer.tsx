@@ -2,35 +2,19 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/api";
 import { openCookiePreferences } from "@/lib/consent";
 
 /**
- * Rutas donde el pie no debe aparecer.
+ * El pie de la tienda.
  *
- * El panel de administracion, el de Dropi y las pantallas de acceso son
- * paneles de pantalla completa con su propio marco: el pie de la tienda ahi
- * sobra y, ademas, el layout de acceso (`AuthShell`) esta centrado en una
- * altura de pantalla, asi que un pie debajo deja un hueco enorme.
+ * Solo se dibuja en la pagina de inicio: lo llama `app/page.tsx` y no el
+ * layout raiz. Antes estaba en el layout y se ocultaba con una lista de
+ * rutas, lo que dejaba el pie en el HTML de todas las demas paginas (el
+ * `usePathname()` no vale durante el prerenderizado) y lo que hacia era
+ * aparecer y desaparecer al cargar.
  */
-const ROUTES_SIN_PIE = [
-  "/admin",
-  "/dropi",
-  "/login",
-  "/register",
-  "/forgot-password",
-  "/reset-password",
-  "/auth",
-];
-
-function rutaSinPie(pathname: string | null): boolean {
-  if (!pathname) return false;
-  return ROUTES_SIN_PIE.some(
-    (ruta) => pathname === ruta || pathname.startsWith(`${ruta}/`),
-  );
-}
 
 const SOCIAL = [
   {
@@ -95,7 +79,6 @@ const LINKS = {
 const PAYMENTS = ["Contraentrega", "Efectivo"];
 
 export default function Footer() {
-  const pathname = usePathname();
   const [logo, setLogo] = useState<string | null>(null);
 
   useEffect(() => {
@@ -111,8 +94,6 @@ export default function Footer() {
     window.addEventListener("logo-change", fetchLogo);
     return () => window.removeEventListener("logo-change", fetchLogo);
   }, []);
-
-  if (rutaSinPie(pathname)) return null;
 
   return (
     <footer className="bg-slate-950 text-slate-300">

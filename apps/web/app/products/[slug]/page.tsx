@@ -15,6 +15,7 @@ import VitaminB12Landing from "@/components/VitaminB12Landing";
 import LandingFrame from "@/components/LandingFrame";
 import CountdownTimer from "@/components/CountdownTimer";
 import { getOfferEndTime } from "@/lib/offer-countdown";
+import CartToast, { useCartToast } from "@/components/CartToast";
 
 interface ProductVariation {
   id: number;
@@ -80,6 +81,17 @@ export default function ProductPage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  /**
+   * Aviso flotante de "agregado al carrito".
+   *
+   * El mensaje del panel (arriba) no sirve en el movil: cuando el cliente
+   * toca "Agregar" en la barra fija de abajo, el panel esta fuera de la
+   * pantalla y el mensaje no se ve nunca. Este aviso sale pegado a la parte
+   * baja de la pantalla, justo donde esta el boton que se acaba de tocar.
+   */
+  const { toast, show: mostrarToast } = useCartToast();
+  /** Temporizador del mensaje del panel, para que no se quede ahi forever. */
+  const panelTimerRef = useRef<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   /**
@@ -222,6 +234,29 @@ export default function ProductPage() {
     return () => window.removeEventListener("store:chat-open", onChatOpen);
   }, []);
 
+  /**
+   * Muestra el resultado de una accion en los dos sitios: el mensaje dentro
+   * del panel de compra y el aviso flotante de la parte baja de la pantalla.
+   */
+  function mostrarAviso(type: "success" | "error", text: string) {
+    setCartMessage({ type, text });
+    mostrarToast(type, text);
+
+    if (panelTimerRef.current) window.clearTimeout(panelTimerRef.current);
+    panelTimerRef.current = window.setTimeout(() => {
+      setCartMessage(null);
+      panelTimerRef.current = null;
+    }, 3000);
+  }
+
+  /* Al salir de la pagina se cancela el temporizador: si no, React avisa de
+     un cambio de estado en un componente ya desmontado. */
+  useEffect(() => {
+    return () => {
+      if (panelTimerRef.current) window.clearTimeout(panelTimerRef.current);
+    };
+  }, []);
+
   const handleAddToCart = async (overrideQuantity?: number) => {
     if (!product) return;
     const qty = Math.max(1, overrideQuantity ?? quantity);
@@ -233,6 +268,10 @@ export default function ProductPage() {
     const contentName = selectedVariation
       ? `${product.name} - ${selectedVariation.name}`
       : product.name;
+    const unidades =
+      qty === 1
+        ? "1 unidad agregada al carrito"
+        : `${qty} unidades agregadas al carrito`;
 
     if (!isAuthenticated()) {
       addToGuestCart({
@@ -252,11 +291,7 @@ export default function ProductPage() {
         value: Number(product.price) * qty,
         currency: "COP",
       });
-      setCartMessage({
-        type: "success",
-        text: `✓ ${qty} ${qty === 1 ? "unidad" : "unidades"} agregadas al carrito`,
-      });
-      setTimeout(() => setCartMessage(null), 3000);
+      mostrarAviso("success", `✓ ${unidades}`);
       return;
     }
 
@@ -284,19 +319,12 @@ export default function ProductPage() {
         currency: "COP",
       });
 
-      setCartMessage({
-        type: "success",
-        text: `✓ ${qty} ${qty === 1 ? "unidad" : "unidades"} agregadas al carrito`,
-      });
-      setTimeout(() => setCartMessage(null), 3000);
+      mostrarAviso("success", `✓ ${unidades}`);
     } catch (err) {
-      setCartMessage({
-        type: "error",
-        text:
-          err instanceof Error
-            ? err.message
-            : "Error al agregar al carrito",
-      });
+      mostrarAviso(
+        "error",
+        err instanceof Error ? err.message : "Error al agregar al carrito",
+      );
     } finally {
       setCartLoading(false);
     }
@@ -1002,6 +1030,14 @@ const isVideo = selectedMedia?.kind === "video";
           </div>
         </div>
       )}
+
+      {/* Aviso flotante de "agregado al carrito".
+
+          Sale pegado a la parte baja de la pantalla, encima de la barra de
+          compra, porque es donde el cliente acaba de tocar. Es lo unico que
+          se ve cuando se compra desde la barra: el mensaje del panel de
+          compra esta fuera de la pantalla ahi. */}
+      <CartToast toast={toast} />
 
     </main>
   );

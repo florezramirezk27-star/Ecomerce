@@ -4,6 +4,7 @@ import { Suspense, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { setAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
+import { mergeGuestCartIntoServer } from '@/lib/cart-merge';
 
 function CallbackContent() {
   const router = useRouter();
@@ -27,6 +28,8 @@ function CallbackContent() {
 
         // El exchange devuelve solo el usuario; la credencial es la cookie.
         setAuth(result.user);
+        // Lo agregado sin iniciar sesion pasa ahora al carrito del servidor.
+        void mergeGuestCartIntoServer();
         router.replace(result.user.role === 'ADMIN' ? '/admin' : '/');
       } catch {
         router.replace('/login?error=google_auth_failed');
