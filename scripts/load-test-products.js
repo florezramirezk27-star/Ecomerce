@@ -4,7 +4,7 @@ import { Rate } from 'k6/metrics';
 
 const API_BASE_URL = (__ENV.API_BASE_URL || '').replace(/\/$/, '');
 const productErrors = new Rate('product_endpoint_errors');
-const isRenderPublicService = /\.onrender\.com$/i.test(new URL(API_BASE_URL || 'http://invalid.local').hostname);
+const isRenderPublicService = /(^|\/\/)[^/]*\.onrender\.com(?:\/|$)/i.test(API_BASE_URL);
 
 if (!API_BASE_URL) {
   throw new Error('Define API_BASE_URL explícitamente antes de ejecutar la prueba.');
