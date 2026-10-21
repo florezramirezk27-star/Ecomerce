@@ -33,9 +33,33 @@ function extractOrigin(url: string): string {
 const wsOrigin = extractOrigin(WS_URL);
 const wsHost = wsOrigin.replace(/^https?:\/\//, "");
 
+/**
+ * Origenes de Meta (pixel + API de Conversiones).
+ *
+ * `connect.facebook.net` es de donde sale el `fbevents.js`; `www.facebook.com`
+ * es el endpoint clasico que recibe los eventos (`/tr`) y la cookie `_fbp`; y
+ * `graph.facebook.com` es el que usa la CAPI.
+ *
+ * `*.on.aws` y `*.run.app` son los endpoints de "OpenBridge", la ruta nueva de
+ * entrega de Meta: el pixel manda los eventos a un servidor propio de Meta (en
+ * AWS, con fallback en Cloud Run) en vez de a `facebook.com`, para que lleguen
+ * aunque el visitante bloquee facebook.com (bloqueadores de anuncios, navegadores
+ * con proteccion contra rastreo). El pixel se configura desde el Event Manager
+ * y Meta puede cambiar el host o la region en cualquier momento, asi que se
+ * permiten por sufijo y no host por host: si se listaran los nombres exactos,
+ * el dia que Meta rote la region el pixel volveria a fallar en silencio.
+ *
+ * Con estos origins fuera de la CSP el pixel seguia funcionando por la ruta
+ * clasica, pero OpenBridge fallaba en cada pagina y Meta lo reportaba como
+ * error de entrega del pixel (`pn=openbridge3`), lo que degrada la calidad de
+ * los datos que Meta calcula para las campañas.
+ */
 const META_ORIGINS = [
   "https://connect.facebook.net",
   "https://www.facebook.com",
+  "https://graph.facebook.com",
+  "https://*.on.aws",
+  "https://*.run.app",
 ].join(" ");
 
 // Vercel inyecta su toolbar de feedback/comentarios (vercel.live) en los
