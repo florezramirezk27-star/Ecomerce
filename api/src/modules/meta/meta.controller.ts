@@ -34,7 +34,7 @@ export class MetaController {
   async track(
     @Body(new ZodValidationPipe(trackSchema)) dto: z.infer<typeof trackSchema>,
     @Req() req: Request,
-  ): Promise<{ delivered: boolean; reason?: string }> {
+  ): Promise<{ delivered: boolean; reason?: string; eventsReceived?: number }> {
     const forwarded = req.headers['x-forwarded-for'];
     const ip = Array.isArray(forwarded)
       ? forwarded[0]

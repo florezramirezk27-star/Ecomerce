@@ -61,7 +61,7 @@ export class MetaService {
   async track(
     payload: MetaTrackPayload,
     context: MetaUserContext,
-  ): Promise<{ delivered: boolean; reason?: string }> {
+  ): Promise<{ delivered: boolean; reason?: string; eventsReceived?: number }> {
     if (!this.isConfigured) {
       return { delivered: false, reason: 'not_configured' };
     }
@@ -122,7 +122,11 @@ export class MetaService {
           `Meta CAPI: ${payload.event} no reconocido por Meta: ${JSON.stringify(response.data)}`,
         );
       }
-      return { delivered: true };
+      // Se devuelve lo que dijo Meta para poder distinguir "Meta lo guardo" de
+      // "Meta respondio ok pero no lo conto" (pixel equivocado, evento
+      // invalido, codigo de prueba...). Antes se devolvia delivered: true en
+      // ambos casos y no habia forma de notarlo desde afuera.
+      return { delivered: true, eventsReceived };
     } catch (error) {
       const detail =
         axios.isAxiosError(error) && error.response
