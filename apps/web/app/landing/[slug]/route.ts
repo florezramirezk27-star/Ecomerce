@@ -103,11 +103,54 @@ const RESIZE_SCRIPT = `<script>(function(){
   }
 })();</script>`;
 
-/** Inserta el script de alto antes de `</body>` si existe, o al final. */
-function withResizeScript(code: string): string {
-  return /<\/body>/i.test(code)
+/**
+ * Fondo propio de la landing.
+ *
+ * El iframe no tiene fondo por si mismo: mientras el documento carga (la
+ * landing tarda en resolver su CSS, su fuente de Google, etc.) el iframe es
+ * transparente y se ve a traves el naranja de la tienda, que parece un hueco en
+ * blanco. Con este fondo, el marco se ve limpio desde el primer instante y solo
+ * cambia de color cuando pinta la landing.
+ *
+ * Va como `style` en el `body` y `background-color` en el `html` (no como
+ * `background` en un `<style>` global) para que el propio CSS de la landing,
+ * que suele traer `body { background-color: ... }`, siga ganando cuando cargue.
+ */
+const BASE_STYLE =
+  "<style>html{background-color:#fff;}body{background-color:#fff;}</style>";
+
+/**
+ * Preconnect a los CDNs tipicos de una landing.
+ *
+ * La fuente de Google (`fonts.googleapis.com` + `fonts.gstatic.com`) es
+ * render-blocking: el navegador no pinta el `body` hasta resolverla, y eso es
+ * lo que hacia que el iframe se viera vacio durante varios segundos al entrar
+ * al producto. Con `preconnect` se abre la conexion (TLS incluido) mientras se
+ * parsea el HTML, con lo que la fuente llega antes y el pintado se adelanta.
+ *
+ * Es solo una pista: si la landing no usa ninguna de estas, no pasa nada.
+ */
+const PRECONNECT =
+  "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">" +
+  "<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>";
+
+/**
+ * Prepara el HTML que se sirve.
+ *
+ * - Inyecta el fondo para que no se vea el hueco mientras carga.
+ * - Adelanta la conexion a los CDNs mas comunes (fuente de Google).
+ * - Inserta el script de alto antes de `</body>` si existe, o al final.
+ */
+function prepareDocument(code: string): string {
+  const withScript = /<\/body>/i.test(code)
     ? code.replace(/<\/body>/i, `${RESIZE_SCRIPT}</body>`)
     : `${code}${RESIZE_SCRIPT}`;
+
+  // El estilo base va al principio del `<head>` para que cualquier regla de la
+  // landing (mas abajo) lo sobreescriba sin problemas de especificidad.
+  return /<head[^>]*>/i.test(withScript)
+    ? withScript.replace(/<head[^>]*>/i, (m) => `${m}${BASE_STYLE}${PRECONNECT}`)
+    : `${BASE_STYLE}${PRECONNECT}${withScript}`;
 }
 
 /** Documento minimo cuando el producto no tiene landing o no existe. */
@@ -116,7 +159,7 @@ function emptyDocument(mensaje: string): NextResponse {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{margin:0;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:60vh;color:#94a3b8}</style>
 </head><body><p>${mensaje}</p></body></html>`;
-  return new NextResponse(withResizeScript(html), {
+  return new NextResponse(prepareDocument(html), {
     status: 200,
     headers: landingHeaders(),
   });
@@ -161,7 +204,7 @@ export async function GET(
       return emptyDocument("Landing no disponible.");
     }
 
-    return new NextResponse(withResizeScript(code), {
+    return new NextResponse(prepareDocument(code), {
       status: 200,
       headers: landingHeaders(),
     });

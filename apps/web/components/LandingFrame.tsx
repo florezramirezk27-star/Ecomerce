@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Muestra la landing de un producto (HTML/CSS/JS pegado por el admin) dentro de
@@ -100,6 +100,25 @@ export default function LandingFrame({
   initialHeight = 900,
 }: LandingFrameProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  /**
+   * `true` cuando el iframe termina de cargar. La landing tarda varios segundos
+   * en pintar (su CSS y, sobre todo, su fuente de Google son render-blocking) y
+   * durante ese rato el iframe se veia como un hueco; con este estado se muestra
+   * un aviso de carga hasta que el documento esta listo.
+   */
+  const [loaded, setLoaded] = useState(false);
+
+  // El modo `src` lo usa la tienda (fondo blanco y esquinas redondeadas); el
+  // modo `code` es la vista previa del panel, que va a sangre. El `className`
+  // que pase quien lo usa se anade al envoltorio (el iframe ya no lo recibe,
+  // porque ahora el aspecto lo controla el contenedor).
+  const wrapperClass = [
+    "relative w-full overflow-hidden bg-white",
+    src ? "rounded-xl border border-gray-200" : "",
+    className ?? "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   // El codigo del modo `code` se envuelve una sola vez por contenido. El iframe
   // se recrea cuando cambia (`key`), asi que no hace falta sincronizarlo a mano.
@@ -130,6 +149,9 @@ export default function LandingFrame({
       if (event.source !== frameRef.current?.contentWindow) return;
       const data = event.data as { type?: string; height?: number } | null;
       if (!data || data.type !== HEIGHT_MESSAGE) return;
+      // El script de la landing corrio: el documento ya existe, asi que el
+      // aviso de carga ya no hace falta aunque el `onLoad` tarde.
+      setLoaded(true);
       applyHeight(Number(data.height));
     }
 
@@ -160,21 +182,35 @@ export default function LandingFrame({
   }, []);
 
   return (
-    <iframe
-      ref={frameRef}
-      key={src ?? srcDoc}
-      title={title}
-      src={src}
-      srcDoc={srcDoc}
-      sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-      // Sin `loading="lazy"`: la landing vive al final de una ficha larga y el
-      // navegador no la cargaba hasta acercarse al final del scroll, asi que al
-      // entrar al producto se veia un hueco en blanco y habia que recargar (con
-      // el scroll ya abajo) para que apareciera. Cargarla junto a la ficha evita
-      // ese "a la segunda".
-      referrerPolicy="no-referrer"
-      style={{ height: initialHeight }}
-      className={className}
-    />
+    <div className={wrapperClass} style={{ minHeight: initialHeight }}>
+      {/* Aviso de carga. La landing vive en un iframe y tarda en pintar (su
+          CSS y, sobre todo, su fuente de Google son render-blocking). Sin esto
+          el usuario ve un hueco del color de la tienda y cree que no cargo; con
+          esto ve que esta cargando y no recarga la pagina. Se oculta en cuanto
+          el iframe avisa de su alto (o de que termino de cargar). */}
+      {!loaded && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-white">
+          <div className="w-8 h-8 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
+          <p className="text-sm text-gray-500">Cargando la ficha del producto…</p>
+        </div>
+      )}
+      <iframe
+        ref={frameRef}
+        key={src ?? srcDoc}
+        title={title}
+        src={src}
+        srcDoc={srcDoc}
+        sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+        // Sin `loading="lazy"`: la landing vive al final de una ficha larga y el
+        // navegador no la cargaba hasta acercarse al final del scroll, asi que al
+        // entrar al producto se veia un hueco en blanco y habia que recargar (con
+        // el scroll ya abajo) para que apareciera. Cargarla junto a la ficha evita
+        // ese "a la segunda".
+        referrerPolicy="no-referrer"
+        onLoad={() => setLoaded(true)}
+        style={{ height: initialHeight, backgroundColor: "#ffffff" }}
+        className="relative block w-full border-0"
+      />
+    </div>
   );
 }
