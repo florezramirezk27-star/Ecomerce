@@ -42,6 +42,12 @@ interface LandingFrameProps {
    * mandar un mensaje. El padre —que si tiene la sesion— decide que hacer.
    */
   onAddToCart?: (payload: LandingAddToCart) => void;
+  /**
+   * Hora de fin (milisegundos) de la oferta, para que el contador de la landing
+   * marque el mismo tiempo que el aviso "¡Compra ya!" de la ficha. La landing no
+   * puede leer el `localStorage` de la tienda, asi que se lo manda el padre.
+   */
+  offerEndTime?: number;
 }
 
 /** Lo que una landing puede pedir al pulsar su boton de compra. */
@@ -66,6 +72,19 @@ const HEIGHT_MESSAGE = "kronio-landing-height";
  */
 const ADD_TO_CART_MESSAGE = "kronio-add-to-cart";
 
+/**
+ * Marca del mensaje con el que se manda a la landing la hora de fin de la
+ * oferta. Debe coincidir con la del script que inyecta
+ * `app/landing/[slug]/route.ts`.
+ *
+ * La landing vive en un iframe con origen opaco y NO puede leer el
+ * `localStorage` de la tienda, asi que su contador no puede consultar la hora
+ * que la tienda ya tiene guardada. Sin este mensaje cada uno contaba por su
+ * cuenta y el aviso "¡Compra ya!" y el reloj de la landing marcaban horas
+ * distintas; con el, los dos muestran exactamente el mismo tiempo.
+ */
+const DEADLINE_MESSAGE = "kronio-landing-deadline";
+
 /** Alto minimo y maximo, para que un codigo con `height:100000px` no rompa la pagina. */
 const MIN_HEIGHT = 240;
 const MAX_HEIGHT = 20000;
@@ -75,6 +94,16 @@ const MAX_HEIGHT = 20000;
  * `code` (vista previa); en el modo `src` el script ya lo inyecta la ruta.
  */
 const RESIZE_SCRIPT = `<script>(function(){
+  window.__kronioOfferDeadline = window.__kronioOfferDeadline || 0;
+  window.addEventListener('message', function(e){
+    var d = e && e.data;
+    if (d && d.type === '${DEADLINE_MESSAGE}' && Number(d.endTime) > 0) {
+      window.__kronioOfferDeadline = Number(d.endTime);
+      try {
+        window.dispatchEvent(new CustomEvent('kronio-landing-deadline', { detail: Number(d.endTime) }));
+      } catch(err){}
+    }
+  });
   function contentHeight(){
     var body = document.body;
     var html = document.documentElement;
@@ -122,6 +151,7 @@ export default function LandingFrame({
   className,
   initialHeight = 900,
   onAddToCart,
+  offerEndTime,
 }: LandingFrameProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   /**
@@ -134,6 +164,17 @@ export default function LandingFrame({
   useEffect(() => {
     onAddToCartRef.current = onAddToCart;
   }, [onAddToCart]);
+
+  /**
+   * La hora de fin de la oferta tambien vive en un ref: el efecto que registra
+   * los listeners no depende de ella, y si cambiara (la oferta se renueva) no
+   * hace falta re-registrar nada, solo reenviarla al cargar.
+   */
+  const offerEndTimeRef = useRef(offerEndTime);
+
+  useEffect(() => {
+    offerEndTimeRef.current = offerEndTime;
+  }, [offerEndTime]);
   /**
    * `true` cuando el iframe termina de cargar. La landing tarda varios segundos
    * en pintar (su CSS y, sobre todo, su fuente de Google son render-blocking) y
@@ -213,23 +254,35 @@ export default function LandingFrame({
     // si ese primer `postMessage` llega antes de que este listener exista, el
     // mensaje se pierde y el iframe se quedaria con el alto inicial. Al cargar
     // el iframe se le pregunta de nuevo el alto para no depender de la carrera.
-    function requestHeight() {
+    //
+    // Aprovecha el mismo `load` para mandar la hora de fin de la oferta: la
+    // landing ya tiene su listener (el script del puente se inyecta en el
+    // `<head>`), asi que este es el punto fiable para que las dos cuentas atras
+    // arranquen con el mismo valor.
+    function syncLanding() {
+      const win = frameRef.current?.contentWindow;
+      if (!win) return;
       try {
-        frameRef.current?.contentWindow?.postMessage(
-          { type: `${HEIGHT_MESSAGE}-request` },
-          "*",
-        );
+        win.postMessage({ type: `${HEIGHT_MESSAGE}-request` }, "*");
       } catch {
         // El iframe puede estar en otro origen durante la carga; se reintenta
         // con el intervalo del propio script de la landing.
       }
+      const endTime = offerEndTimeRef.current;
+      if (endTime && endTime > 0) {
+        try {
+          win.postMessage({ type: DEADLINE_MESSAGE, endTime }, "*");
+        } catch {
+          // Idem: si no se puede, la landing se queda con su valor por defecto.
+        }
+      }
     }
 
-    frame?.addEventListener("load", requestHeight);
+    frame?.addEventListener("load", syncLanding);
 
     return () => {
       window.removeEventListener("message", onMessage);
-      frame?.removeEventListener("load", requestHeight);
+      frame?.removeEventListener("load", syncLanding);
     };
   }, []);
 

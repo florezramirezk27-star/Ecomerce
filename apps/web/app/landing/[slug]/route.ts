@@ -46,6 +46,40 @@ const LANDING_CSP = [
 const HEIGHT_MESSAGE = "kronio-landing-height";
 
 /**
+ * Marca del mensaje con el que la tienda manda la hora de fin de la oferta.
+ *
+ * La landing no puede leer el `localStorage` de la tienda (vive en un iframe
+ * con origen opaco), asi que su contador se enteraba del tiempo por su cuenta y
+ * marcaba horas distintas a las del aviso "¡Compra ya!" de la ficha. Con este
+ * mensaje las dos cuentas atras son la misma: el padre manda su `endTime` y la
+ * landing lo usa.
+ */
+const DEADLINE_MESSAGE = "kronio-landing-deadline";
+
+/**
+ * Script que guarda en `window.__kronioOfferDeadline` la hora de fin que manda
+ * la tienda. Se inyecta ANTES que el codigo de la landing para que su contador
+ * pueda leerlo en cuanto arranque; si el padre lo manda despues, tambien se
+ * guarda y la landing puede escuchar `kronio-landing-deadline` para
+ * actualizarse.
+ *
+ * Es agnostico del contador: la landing decide como usarlo. Si no dice nada, no
+ * pasa nada: la landing se queda con su valor por defecto.
+ */
+const DEADLINE_BRIDGE_SCRIPT = `<script>(function(){
+  window.__kronioOfferDeadline = window.__kronioOfferDeadline || 0;
+  window.addEventListener('message', function(e){
+    var d = e && e.data;
+    if (d && d.type === '${DEADLINE_MESSAGE}' && Number(d.endTime) > 0) {
+      window.__kronioOfferDeadline = Number(d.endTime);
+      try {
+        window.dispatchEvent(new CustomEvent('kronio-landing-deadline', { detail: Number(d.endTime) }));
+      } catch(err){}
+    }
+  });
+})();</script>`;
+
+/**
  * Script que la landing ejecuta para avisar a la tienda de su alto real.
  *
  * Hace falta porque el iframe no puede leer el alto de un documento en origen
@@ -146,11 +180,15 @@ function prepareDocument(code: string): string {
     ? code.replace(/<\/body>/i, `${RESIZE_SCRIPT}</body>`)
     : `${code}${RESIZE_SCRIPT}`;
 
-  // El estilo base va al principio del `<head>` para que cualquier regla de la
-  // landing (mas abajo) lo sobreescriba sin problemas de especificidad.
+  // El estilo base y el puente del deadline van al principio del `<head>`: el
+  // estilo para que cualquier regla de la landing (mas abajo) lo sobreescriba, y
+  // el puente para que ya este escuchando cuando el padre mande la hora.
   return /<head[^>]*>/i.test(withScript)
-    ? withScript.replace(/<head[^>]*>/i, (m) => `${m}${BASE_STYLE}${PRECONNECT}`)
-    : `${BASE_STYLE}${PRECONNECT}${withScript}`;
+    ? withScript.replace(
+        /<head[^>]*>/i,
+        (m) => `${m}${BASE_STYLE}${PRECONNECT}${DEADLINE_BRIDGE_SCRIPT}`,
+      )
+    : `${BASE_STYLE}${PRECONNECT}${DEADLINE_BRIDGE_SCRIPT}${withScript}`;
 }
 
 /** Documento minimo cuando el producto no tiene landing o no existe. */

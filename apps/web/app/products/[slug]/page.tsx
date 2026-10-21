@@ -14,6 +14,7 @@ import CandleArtisanalInfographic from "@/components/CandleArtisanalInfographic"
 import VitaminB12Landing from "@/components/VitaminB12Landing";
 import LandingFrame from "@/components/LandingFrame";
 import CountdownTimer from "@/components/CountdownTimer";
+import { getOfferEndTime } from "@/lib/offer-countdown";
 
 interface ProductVariation {
   id: number;
@@ -89,6 +90,21 @@ export default function ProductPage() {
   const [selectedVariationId, setSelectedVariationId] = useState<number | null>(
     null,
   );
+
+  /**
+   * Hora de fin de la oferta, compartida por el aviso "¡Compra ya!" de la ficha
+   * y el contador de la landing. Se resuelve tras montar (no en el primer
+   * render) para no romper la hidratacion: el primer render del servidor no
+   * tiene `localStorage`, asi que no puede saber la hora.
+   */
+  const [offerEndTime, setOfferEndTime] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    // En un microtask para no llamar a `setState` de forma sincrona dentro del
+    // efecto (eso dispara renders en cascada). El primer render —el del
+    // servidor— no tiene `localStorage`, asi que la hora se resuelve aqui.
+    void Promise.resolve().then(() => setOfferEndTime(getOfferEndTime()));
+  }, []);
 
   const allImages = product
     ? [product.image, ...(product.gallery || [])].filter(Boolean)
@@ -537,7 +553,7 @@ const isVideo = selectedMedia?.kind === "video";
               </span>
             </div>
 
-            <CountdownTimer />
+            <CountdownTimer endTime={offerEndTime} />
 
             {/* Todo lo que ejecuta la compra vive en un solo panel: antes eran
                 dos cajas (Disponibilidad y Cantidad) mas el boton suelto, y tres
@@ -827,9 +843,15 @@ const isVideo = selectedMedia?.kind === "video";
           title={`Landing de ${product.name}`}
           initialHeight={1400}
           className="w-full border-0"
+          // La misma hora de fin que el aviso "¡Compra ya!" de la ficha: la
+          // landing no puede leer el `localStorage` de la tienda (vive en un
+          // iframe aislado), asi que se le manda por mensaje.
+          offerEndTime={offerEndTime}
           // El boton de compra de la landing solo manda un mensaje: la landing
           // no tiene sesion ni acceso al carrito. Aqui, en el padre, se usa la
           // misma logica que el boton de la ficha (invitado o autenticado).
+          // La cantidad es la del combo (1, 2 o 3); el precio unitario es el del
+          // producto, asi que el total es siempre precio x cantidad.
           onAddToCart={(payload) => {
             void handleAddToCart(payload.quantity ?? 1);
           }}

@@ -1,47 +1,44 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import {
+  getOfferEndTime,
+  getOfferRemaining,
+  type OfferRemaining,
+} from "@/lib/offer-countdown";
 
-const STORAGE_KEY = "offer_countdown_end";
-
-function getEndTime(): number {
-  if (typeof window === "undefined") return Date.now() + 3 * 3600000;
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    const parsed = parseInt(saved, 10);
-    if (parsed > Date.now()) return parsed;
-  }
-  const hours = 2 + Math.floor(Math.random() * 2);
-  const end = Date.now() + hours * 3600000;
-  localStorage.setItem(STORAGE_KEY, String(end));
-  return end;
-}
-
-function calcRemaining(end: number) {
-  const diff = Math.max(0, end - Date.now());
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  const s = Math.floor((diff % 60000) / 1000);
-  return { h, m, s, total: diff };
-}
-
-export default function CountdownTimer() {
+/**
+ * Aviso "¡Compra ya! Envio gratis si ordenas en:" con la cuenta atras de la
+ * oferta.
+ *
+ * La hora de fin la decide `lib/offer-countdown` y se guarda en
+ * `localStorage`, para que el tiempo no se reinicie al navegar. La landing del
+ * producto (que vive en un iframe aislado y no puede leer ese `localStorage`)
+ * recibe la misma hora por `postMessage` desde `LandingFrame`, asi que las dos
+ * muestran siempre el mismo tiempo.
+ */
+export default function CountdownTimer({ endTime }: { endTime?: number }) {
   const endRef = useRef<number>(0);
-  const [rem, setRem] = useState(() => calcRemaining(getEndTime()));
+  const [rem, setRem] = useState<OfferRemaining>(() =>
+    getOfferRemaining(endTime ?? getOfferEndTime()),
+  );
 
   useEffect(() => {
-    endRef.current = getEndTime();
+    // El padre puede fijar la hora (asi la landing y este aviso comparten el
+    // mismo valor); si no, la decide el propio modulo.
+    endRef.current = endTime && endTime > 0 ? endTime : getOfferEndTime();
 
     const tick = () => {
-      const r = calcRemaining(endRef.current);
+      const r = getOfferRemaining(endRef.current);
       setRem(r);
+      // Vencida la oferta, se genera una nueva para no dejar el contador a cero.
       if (r.total <= 0) {
-        endRef.current = getEndTime();
+        endRef.current = getOfferEndTime();
       }
     };
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [endTime]);
 
   const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -57,7 +54,7 @@ export default function CountdownTimer() {
       <div className="flex items-center justify-center gap-1.5 select-none">
         <div className="flex flex-col items-center">
           <span className="bg-gray-900 text-white font-bold text-3xl sm:text-4xl tabular-nums rounded-lg px-3 py-1.5 min-w-[4.5rem] text-center leading-none">
-            {pad(rem.h)}
+            {pad(rem.hours)}
           </span>
           <span className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Horas</span>
         </div>
@@ -66,7 +63,7 @@ export default function CountdownTimer() {
 
         <div className="flex flex-col items-center">
           <span className="bg-gray-900 text-white font-bold text-3xl sm:text-4xl tabular-nums rounded-lg px-3 py-1.5 min-w-[4.5rem] text-center leading-none">
-            {pad(rem.m)}
+            {pad(rem.minutes)}
           </span>
           <span className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Minutos</span>
         </div>
@@ -75,7 +72,7 @@ export default function CountdownTimer() {
 
         <div className="flex flex-col items-center">
           <span className="bg-gray-900 text-white font-bold text-3xl sm:text-4xl tabular-nums rounded-lg px-3 py-1.5 min-w-[4.5rem] text-center leading-none">
-            {pad(rem.s)}
+            {pad(rem.seconds)}
           </span>
           <span className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Segundos</span>
         </div>
