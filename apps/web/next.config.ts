@@ -63,12 +63,20 @@ const VIDEO_FRAME_SRC = [
 /**
  * Nota sobre `frame-src` e iframes propios:
  *
- * `frame-src` no lleva `'self'` a proposito en el resto del sitio: la tienda no
- * incrusta paginas de si misma, y sin `'self'` un atacante no puede meter el
- * login en un iframe para robar clics. Las dos rutas que si necesitan
- * incrustarse a si mismas son la ficha (`/products/...`) y la vista previa del
- * panel (`/admin/products/edit/...`); alli el `frame-src` se reemplaza por el de
- * `withSelfFraming()`, mas abajo en `headers()`.
+ * `frame-src` lleva `'self'` en TODO el sitio, no solo en la ficha. Motivo: la
+ * landing de un producto se incrusta en un iframe del propio origen y Next no
+ * vuelve a aplicar las cabeceras en la navegacion client-side (SPA). Al entrar
+ * a una ficha desde la home con un click, el documento conserva la CSP del
+ * documento inicial; si esa CSP no tuviera `'self'` en `frame-src`, el iframe de
+ * la landing se bloqueaba con "Este contenido esta bloqueado" y solo se veia
+ * tras recargar (que si reaplica las cabeceras de la ficha). Con `'self'` en
+ * todas las paginas el iframe carga igual entren por SPA o por recarga directa.
+ *
+ * El aislamiento no se pierde: `frame-ancestors 'none'` (mas abajo) impide que
+ * cualquier otro sitio incruste la tienda, que es la proteccion real contra
+ * clickjacking. `frame-src 'self'` solo permite incrustar paginas del propio
+ * dominio, que ya estan bajo nuestro control. Se mantiene `withSelfFraming()`
+ * por compatibilidad, pero ya no es imprescindible.
  */
 
 // El mapa de la direccion de envio vive en un iframe de Google. Sin estos
@@ -128,7 +136,7 @@ const csp = [
   "font-src 'self' data:",
   `img-src ${imgSrc}`,
   `connect-src ${connectSrc}`,
-  `frame-src ${dedupe([...VIDEO_FRAME_SRC, ...MAPS_FRAME_SRC, VERCEL_LIVE_FRAME])}`,
+  `frame-src 'self' ${dedupe([...VIDEO_FRAME_SRC, ...MAPS_FRAME_SRC, VERCEL_LIVE_FRAME])}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
