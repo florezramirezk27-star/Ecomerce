@@ -28,6 +28,22 @@ import { RedisService } from './common/redis/redis.service';
 import { RedisThrottlerStorage } from './common/redis/redis-throttler.storage';
 import { CacheModule } from './common/cache/cache.module';
 
+/**
+ * Lee un entero positivo de la configuración. Los valores predeterminados
+ * mantienen el límite actual; el entorno de pruebas puede aumentarlo sin
+ * modificar ni debilitar por accidente la configuración de producción.
+ */
+function positiveIntegerEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${name} debe ser un entero positivo`);
+  }
+  return value;
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -45,8 +61,11 @@ import { CacheModule } from './common/cache/cache.module';
         storage: new RedisThrottlerStorage(redis),
         throttlers: [
           {
-            ttl: 60000,
-            limit: 100,
+            // Los valores por defecto conservan el límite existente: 100
+            // solicitudes por IP cada 60 segundos. Para pruebas de carga,
+            // ajustarlos solo en un entorno aislado, no en producción.
+            ttl: positiveIntegerEnv('HTTP_RATE_LIMIT_TTL_MS', 60000),
+            limit: positiveIntegerEnv('HTTP_RATE_LIMIT_MAX', 100),
           },
         ],
       }),
