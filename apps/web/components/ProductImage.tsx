@@ -18,6 +18,21 @@ function isOptimizable(src: string) {
   return src.startsWith("http://") || src.startsWith("https://");
 }
 
+/**
+ * URLs que ya fallaron en esta sesion de pagina.
+ *
+ * El optimizador de `next/image` no distingue "imagen rota" de "error del
+ * servidor": cuando el origen responde 403 (imagenes muertas del CDN de Dropi)
+ * el endpoint `/_next/image` devuelve 502 y ensucia la consola en cada montaje,
+ * aunque el componente acabe mostrando el marcador igual. Recordando el `src`
+ * que ya fallo, a partir de la segunda vez se salta el optimizador y se intenta
+ * la URL directa: falla rapido, cae al marcador y no hay 502 en consola.
+ *
+ * Es un `Set` de modulo a proposito: vive mientras dure el documento y no
+ * provoca renders, que es justo lo que se quiere para una lista de descartes.
+ */
+const brokenSrcs = new Set<string>();
+
 type Props = Omit<ImageProps, "src" | "alt" | "onError"> & {
   src?: string | null;
   alt: string;
@@ -76,6 +91,15 @@ export default function ProductImage({
 
   const usable = typeof src === "string" && src.length > 0 && !failed;
 
+  /**
+   * Registra el fallo y, si la URL venia del optimizador, la marca para no
+   * volver a pasar por el en la misma sesion (ver `brokenSrcs`).
+   */
+  const handleError = useCallback(() => {
+    if (typeof src === "string") brokenSrcs.add(src);
+    setFailed(true);
+  }, [src]);
+
   if (!usable) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -91,7 +115,10 @@ export default function ProductImage({
     );
   }
 
-  if (!isOptimizable(src)) {
+  // Una URL que ya fallo antes en esta pagina se pinta directa: si se volviera a
+  // pasar por `next/image`, el optimizador respondería 502 otra vez (el origen
+  // sigue dando 403) y solo ensuciaria la consola antes de caer al marcador.
+  if (!isOptimizable(src) || brokenSrcs.has(src)) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -101,6 +128,7 @@ export default function ProductImage({
         style={style}
         loading={priority ? "eager" : "lazy"}
         decoding="async"
+        onError={handleError}
       />
     );
   }
@@ -114,7 +142,7 @@ export default function ProductImage({
       priority={priority}
       className={className}
       style={style}
-      onError={() => setFailed(true)}
+      onError={handleError}
       ref={checkParent}
       {...rest}
     />
