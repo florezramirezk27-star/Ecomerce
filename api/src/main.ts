@@ -53,7 +53,7 @@ async function bootstrap() {
   app.use(helmet());
 
   const allowedOrigins = (
-    process.env.CORS_ORIGIN || 'https://ecomerce-delta-three.vercel.app'
+    process.env.CORS_ORIGIN || 'https://kroniomarket.com'
   )
     .split(',')
     .map((o) => o.trim());
