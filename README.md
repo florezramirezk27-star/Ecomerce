@@ -186,6 +186,39 @@ Plantillas HTML para:
 - Actualizar rol de usuario
 - Eliminar usuario
 
+### 12. Pixel de Meta (Facebook) y API de Conversiones
+
+El pixel mide la tienda para poder anunciar. Vive en `apps/web` y manda los
+eventos por los dos caminos que Meta recomienda:
+
+- **Navegador** (`apps/web/lib/facebook-pixel.ts`): carga `fbevents.js` y dispara
+  el evento con `fbq`.
+- **Servidor** (`api/src/modules/meta/meta.service.ts`): la API de Conversiones
+  (CAPI) reenvia el evento a `graph.facebook.com` con el **mismo `event_id`**,
+  para que Meta los deduplique y no cuente el doble. El servidor hashea
+  (SHA-256) el correo y el telefono antes de mandarlos; nunca se guardan en
+  claro.
+
+Eventos que se mandan: `PageView`, `ViewContent`, `AddToCart`,
+`InitiateCheckout` y `Purchase`. Los cuatro de conversion van por los dos
+caminos; `PageView` solo por el navegador.
+
+Reglas que no se pueden romper:
+
+- **Nada sale sin consentimiento.** El aviso de cookies decide; mientras no haya
+  decision guardada no se carga ni un script de Meta (`apps/web/lib/consent.ts`).
+  Rechazar tambien borra las cookies `_fbp` y `_fbc`.
+- `NEXT_PUBLIC_FACEBOOK_PIXEL_ID` (Vercel) y `META_PIXEL_ID` (Render) deben
+  apuntar al mismo pixel.
+- El token de la CAPI (`META_CAPI_ACCESS_TOKEN`, solo en Render) es una
+  credencial: nunca en el repositorio, ni en Vercel, ni en un chat.
+- `META_CAPI_TEST_EVENT_CODE` en vacio en produccion: con el codigo puesto los
+  eventos llegan a Meta como prueba y no cuentan para los anuncios.
+
+Para comprobar que todo llega: `POST /meta/track` responde `eventsReceived`.
+Si es `1`, Meta contó el evento; si es `0`, no lo contó (pixel
+equivocado, evento inválido o código de prueba activo).
+
 ---
 
 ## Estructura del proyecto
@@ -320,6 +353,8 @@ Las principales:
 | `GOOGLE_CLIENT_ID/SECRET` | Render | Credenciales de Google OAuth |
 | `FACEBOOK_CLIENT_ID/SECRET` | Render | Credenciales de Facebook OAuth (Meta for Developers) |
 | `META_PIXEL_ID` + `META_CAPI_ACCESS_TOKEN` | Render | Pixel y Conversions API. Se necesitan las dos |
+| `META_CAPI_TEST_EVENT_CODE` | Render | Opcional. Si esta puesto, los eventos del servidor llegan a Meta como **prueba** y no cuentan para los anuncios. En produccion debe quedar vacio |
+| `NEXT_PUBLIC_FACEBOOK_PIXEL_ID` | Vercel | ID del pixel. Al ser `NEXT_PUBLIC_` se compila: cambiarla exige redesplegar |
 | `FRONTEND_URL` | Render | URL del frontend (para links de email y redirects OAuth) |
 
 ---
