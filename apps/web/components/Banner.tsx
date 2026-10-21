@@ -1,37 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useId, useState } from "react";
+import { useId } from "react";
 import { useMounted } from "@/lib/useMounted";
-
-/**
- * Clave con la fecha en la que el cliente cerro el aviso.
- *
- * Se guarda una fecha y no una marca de "cerrado" para que el aviso vuelva a
- * aparecer pasado un tiempo: si el merchant cambia el mensaje (o al cliente
- * se le ofrece otra promo) no puede quedar bloqueado para siempre.
- */
-const AVISO_CERRADO = "store-banner-cerrado";
-/** Dias que el aviso permanece oculto despues de cerrarlo. */
-const AVISO_CERRADO_DIAS = 3;
-
-function leerCerrado(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    const guardado = window.localStorage.getItem(AVISO_CERRADO);
-    if (!guardado) return false;
-    const fecha = Number(guardado);
-    if (!Number.isFinite(fecha)) return false;
-    const limite = Date.now() + AVISO_CERRADO_DIAS * 24 * 60 * 60 * 1000;
-    if (fecha > limite) {
-      window.localStorage.removeItem(AVISO_CERRADO);
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function Flag() {
   /* El `id` del recorte tiene que ser unico: el aviso repite la bandera
@@ -82,16 +53,6 @@ function Aviso({ oculto = false }: { oculto?: boolean }) {
 
 export default function Banner() {
   const pathname = usePathname();
-  /* El aviso se puede cerrar. Antes no habia forma de esconderlo: en un
-     telefono el cliente perdia un alto fijo de la pantalla en cada pagina y
-     no podia ni descartarlo ni seguir con lo suyo.
-
-     El estado inicial se lee aqui y no en un efecto a proposito: como el
-     banner no se pinta hasta que `useMounted()` dice que ya estamos en el
-     cliente, leer `localStorage` en el inicializador no produce ningun
-     desajuste de hidratacion (el servidor no pintó nada y el primer render
-     del cliente tampoco). */
-  const [cerrado, setCerrado] = useState(leerCerrado);
 
   // `usePathname()` no es fiable durante el prerenderizado estatico: en el
   // build de Vercel devuelve `null`, asi que el servidor renderiza el banner
@@ -102,39 +63,18 @@ export default function Banner() {
   // aparece donde toca.
   const mounted = useMounted();
   if (!mounted) return null;
-  if (cerrado) return null;
   if (pathname !== "/" && pathname !== "/products" && !pathname.startsWith("/products/")) return null;
-
-  function cerrar() {
-    setCerrado(true);
-    try {
-      window.localStorage.setItem(AVISO_CERRADO, String(Date.now()));
-    } catch {
-      // Sin `localStorage` (modo privado) el aviso se cierra solo en esta
-      // pestana: es preferible a dejar el boton sin efecto.
-    }
-  }
 
   return (
     <div className="bg-gradient-to-r from-[#FCD116] via-[#FFCC00] to-[#FCD116] text-black overflow-hidden py-2.5 shadow-md border-b-2 border-[#CE1126]/40">
-      <div className="flex items-center">
-        <div className="animate-marquee whitespace-nowrap flex flex-1 min-w-0">
-          <Aviso />
-          <Aviso oculto />
-          <Aviso oculto />
-          <Aviso oculto />
-        </div>
-
-        <button
-          type="button"
-          onClick={cerrar}
-          aria-label="Cerrar aviso"
-          className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center text-black/70 transition hover:text-black active:bg-black/10"
-        >
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
+      {/* El aviso ocupa todo el ancho: antes habia un boton de cerrar (una X)
+          a la derecha que lo recortaba y, en el movil, se confundia con un
+          boton de la tienda. El mensaje se muestra entero y sin nada mas. */}
+      <div className="animate-marquee whitespace-nowrap flex">
+        <Aviso />
+        <Aviso oculto />
+        <Aviso oculto />
+        <Aviso oculto />
       </div>
     </div>
   );
