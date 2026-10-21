@@ -68,6 +68,22 @@ export default function CookieConsent() {
     bar.focus();
   }, [showBar]);
 
+  /* El aviso de cookies se fija en la parte baja de la pantalla y es
+     obligatorio: mientras esta ahi, nada mas puede ocuparla. El boton del chat
+     y la barra de compra de la ficha de producto se apartan con este aviso
+     (si no, el boton del chat quedaria debajo de la barra y no se podria
+     tocar). */
+  useEffect(() => {
+    function avisar(visible: boolean) {
+      window.dispatchEvent(
+        new CustomEvent("store:consent-bar", { detail: { visible } }),
+      );
+    }
+
+    avisar(showBar);
+    return () => avisar(false);
+  }, [showBar]);
+
   const closePreferences = useCallback(() => {
     setPrefsOpen(false);
   }, []);

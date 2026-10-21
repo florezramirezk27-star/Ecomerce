@@ -3,18 +3,33 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Pila tipografica de la tienda.
+
+     Se declara como variable propia de `:root` y no solo dentro de `@theme`
+     a proposito: Tailwind v4 hace "poda" de las variables de tema y solo
+     emite las que usa alguna utilidad. `--font-sans` no lo usaba ninguna
+     clase, asi que `font-family: var(--font-sans)` en el `body` se quedaba
+     sin valor y el navegador pintaba con la fuente por defecto del
+     sistema. Con esta variable el `body` siempre tiene una pila valida. */
+  --font-store: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  /* Inter variable: un solo archivo .woff2 cubre los pesos 100-900, asi que
+     el movil descarga una fuente en vez de una por peso. Antes el `body`
+     declaraba Arial y esta fuente no se usaba para nada: se pagaban cuatro
+     archivos de Inter (400/500/600/700) y se renderizaba Arial. */
+  --font-sans: var(--font-store);
   --font-mono: var(--font-geist-mono);
   --animate-marquee: marquee 20s linear infinite;
   --animate-fade-in-up: fade-in-up 0.6s ease-out forwards;
   --animate-cookie-in: cookie-in 0.3s ease-out;
   --animate-cookie-fade: cookie-fade 0.2s ease-out;
   --animate-cookie-rise: cookie-rise 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-modal-in: modal-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Entrada del aviso de cookies: sube desde el borde inferior. */
@@ -52,11 +67,37 @@
   }
 }
 
+/* Entrada de modales y hojas (checkout, filtros). Sube desde abajo con una
+   escala leve, que es el gesto que el usuario espera al abrir una capa. */
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-cookie-in,
   .animate-cookie-fade,
-  .animate-cookie-rise {
-    animation: none;
+  .animate-cookie-rise,
+  .animate-modal-in,
+  .animate-marquee,
+  .animate-bounce {
+    animation: none !important;
+  }
+
+  /* Sin el marquesina el texto se quedaba pegado a la izquierda y cortado,
+     porque hay cuatro copias seguidas en un contenedor que no se desplaza.
+     Se muestra solo la primera, centrada. */
+  .animate-marquee {
+    justify-content: center;
+  }
+  .animate-marquee > * ~ * {
+    display: none;
   }
 }
 
@@ -99,7 +140,56 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Sin esto el `body` usaba Arial y la fuente Inter (o Geist) se descargaba
+     sin llegar a pintarse nunca. */
+  font-family: var(--font-store);
+}
+
+/* Foco visible al navegar con teclado.
+
+   La mayoria de los campos del proyecto ya traen su propio anillo de foco
+   (`focus:ring-*` con `focus:outline-none`), asi que ahi esta regla no llega
+   a verse. Lo que falta son los botones y los enlaces, que se relied en el
+   contorno por defecto del navegador: en Safari ese contorno es casi
+   invisible sobre fondo oscuro, como el pie de pagina.
+
+   Se usa `:focus-visible` para no dibujar nada cuando se navega con el raton
+   o con el dedo. */
+:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Van dentro de `utilities` para competir con las utilidades de Tailwind en
+   su misma capa: si estuvieran sueltas (fuera de capa) ganarianle a cualquier
+   `min-h-*` de Tailwind, aunque se escribiera despues. */
+@layer utilities {
+  /* `100dvh` (altura dinamica del viewport) en vez de `100vh`: en el
+     navegador movil `100vh` es la altura con la barra de direcciones oculta,
+     asi que el pie de pagina y el boton de checkout quedan debajo de la
+     interfaz del navegador y no se pueden pulsar. Tailwind v4 define
+     `min-h-screen` como `100vh`, por eso se usa la variante dinamica. */
+  .min-h-dvh {
+    min-height: 100dvh;
+  }
+
+  /* Espacio reservado para el indicador de inicio del iPhone y la barra de
+     gestos de Android. Sin esto los elementos fijos pegados al borde inferior
+     quedan debajo del indicador del sistema.
+
+     `bottom-safe-6` y `bottom-safe-24` sustituyen a `bottom-6` y `bottom-24`
+     de Tailwind: no se pueden usar a la vez, porque las dos utilidades
+     compiten por la misma propiedad y la que gana es la que aparece despues
+     en la capa `utilities`. */
+  .pb-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .bottom-safe-6 {
+    bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  .bottom-safe-24 {
+    bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .scrollbar-none {

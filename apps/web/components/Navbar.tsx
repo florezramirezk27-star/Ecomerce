@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { getUser, serverLogout } from "@/lib/auth";
+import { getUser, serverLogout, isAuthenticated } from "@/lib/auth";
 import { API_URL } from "@/lib/api";
+import { getGuestCartCount } from "@/lib/guest-cart";
 
 interface Category {
   id: string;
@@ -25,6 +26,95 @@ function getCurrentUser() {
   if (!raw) { cachedUser = null; return null; }
   try { cachedUser = JSON.parse(raw); } catch { cachedUser = null; }
   return cachedUser;
+}
+
+/* ------------------------------------------------------------------
+   Contador del carrito
+   ------------------------------------------------------------------
+   Para un visitante sin sesion el carrito vive en `localStorage`
+   (`guest_cart`), asi que el numero sale de ahi al instante. Para un
+   usuario con sesion el carrito esta en el servidor: se pide una vez y se
+   refresca cada vez que la pagina del carrito avisa con `cart-change`.
+
+   El valor vive en una variable de modulo y los componentes se suscriben
+   con `useSyncExternalStore`, el mismo patron que ya usa este archivo para
+   el usuario. Con un `useState` + `useEffect` el numero apareceria un
+   instante despues de pintar la pagina.
+
+   El carrito del servidor se pide con `fetch` y no con `apiFetch` a
+   proposito: `apiFetch` redirige a `/login` cuando la API responde 401, y
+   un contador no puede expulsar al usuario de la pagina que esta
+   viendo solo porque su sesion caduco. */
+let serverCartCount = 0;
+const cartCountListeners = new Set<() => void>();
+
+function notifyCartCount() {
+  cartCountListeners.forEach((listener) => listener());
+}
+
+async function loadServerCartCount() {
+  try {
+    const response = await fetch(`${API_URL}/cart`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("No se pudo leer el carrito");
+    const cart = await response.json();
+    const items = Array.isArray(cart?.items) ? cart.items : [];
+    serverCartCount = items.reduce(
+      (sum: number, item: { quantity?: number }) =>
+        sum + (Number(item?.quantity) || 0),
+      0,
+    );
+  } catch {
+    serverCartCount = 0;
+  }
+  notifyCartCount();
+}
+
+function getCartCountSnapshot(): number {
+  if (typeof window === "undefined") return 0;
+  if (!isAuthenticated()) return getGuestCartCount();
+  return serverCartCount;
+}
+
+function subscribeCartCount(onStoreChange: () => void): () => void {
+  cartCountListeners.add(onStoreChange);
+
+  const refresh = () => {
+    if (isAuthenticated()) {
+      void loadServerCartCount();
+    } else {
+      serverCartCount = 0;
+      notifyCartCount();
+    }
+  };
+
+  window.addEventListener("cart-change", refresh);
+  window.addEventListener("auth-change", refresh);
+
+  // Al suscribirse se pide el carrito del servidor. Sin esto el contador de
+  // un usuario con sesion se quedaria en cero hasta que tocara "agregar".
+  if (isAuthenticated()) void loadServerCartCount();
+
+  return () => {
+    cartCountListeners.delete(onStoreChange);
+    window.removeEventListener("cart-change", refresh);
+    window.removeEventListener("auth-change", refresh);
+  };
+}
+
+/** Chincheta con el numero de articulos del carrito. */
+function CartBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-bold leading-none text-white"
+      aria-label={`${count} ${count === 1 ? "artículo" : "artículos"} en el carrito`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
 }
 
 async function logout() {
@@ -110,6 +200,7 @@ function CategoryDropdown({
 }
 
 export default function Navbar() {
+  const router = useRouter();
   const user = useSyncExternalStore(
     (callback) => {
       window.addEventListener("storage", callback);
@@ -122,9 +213,16 @@ export default function Navbar() {
     () => getCurrentUser(),
     () => null,
   );
+  const cartCount = useSyncExternalStore(
+    subscribeCartCount,
+    getCartCountSnapshot,
+    () => 0,
+  );
   const [logo, setLogo] = useState<string | null>(null);
   const [catOpen, setCatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [pendingLogoutCb, setPendingLogoutCb] = useState<(() => void) | null>(null);
@@ -183,6 +281,46 @@ export default function Navbar() {
     return () => { document.body.style.overflow = ""; };
   }, [menuOpen]);
 
+  /* El menu se cierra solo al cambiar de ruta (por ejemplo al usar el boton
+     "atras" del navegador, donde los enlaces no se ejecutan) y con la tecla
+     Escape, que es lo que se espera de un menu lateral superpuesto.
+
+     El cierre por ruta se hace ajustando el estado durante el render (el
+     patron "derivar estado de una prop" de React) en vez de dentro de un
+     efecto: un `setState` sincrono en un efecto dispara una cascada de
+     renders y la regla `react-hooks/set-state-in-effect` lo marca como
+     error. */
+  const [rutaAnterior, setRutaAnterior] = useState(pathname);
+  if (rutaAnterior !== pathname) {
+    setRutaAnterior(pathname);
+    setMenuOpen(false);
+    setCatOpen(false);
+    setSearchOpen(false);
+  }
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
+
+  /**
+   * La busqueda de la cabecera lleva a la pagina de busqueda con el termino
+   * en la URL (`/products/search?search=...`). La pagina de busqueda lo lee
+   * al montarse y deja el campo con el texto ya escrito.
+   */
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const term = query.trim();
+    setSearchOpen(false);
+    router.push(
+      term ? `/products/search?search=${encodeURIComponent(term)}` : "/products/search",
+    );
+  }
+
   const handleLogoutClick = (cb?: () => void) => {
     setPendingLogoutCb(() => cb || null);
     setShowLogoutConfirm(true);
@@ -201,7 +339,13 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="flex items-center justify-between px-4 md:px-10 py-4 border-b relative z-40">
+    <>
+    {/* En movil la barra tiene altura fija (`h-16`) para que el menu lateral
+       pueda anclarse debajo con `top-16` sin depender de un numero magico:
+       antes usaba un desplazamiento fijo de 57px, cuando la barra real media
+       81px, asi que el menu tapaba 24px del contenido. En escritorio
+       vuelve a su altura automatica. */}
+    <nav className="flex h-16 items-center justify-between border-b px-4 md:h-auto md:px-10 md:py-4 relative z-40">
       <Link href="/" className="font-bold text-lg shrink-0 flex items-center gap-3">
         {logo ? (
                   <Image
@@ -211,7 +355,7 @@ export default function Navbar() {
                     height={48}
                     priority
                     sizes="180px"
-                    className="h-auto w-auto max-h-12 max-w-[180px] object-contain mix-blend-multiply"
+                    className="h-auto w-auto max-h-9 max-w-[180px] object-contain mix-blend-multiply md:max-h-12"
                   />
         ) : (
           <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-yellow-400 via-blue-500 to-red-500 flex items-center justify-center text-white text-sm font-bold shadow-sm">
@@ -250,8 +394,22 @@ export default function Navbar() {
           )}
         </div>
 
-        <Link href="/cart" className="hover:underline">
+        <button
+          type="button"
+          onClick={() => { setSearchOpen((v) => !v); setMenuOpen(false); }}
+          className="hover:underline cursor-pointer flex items-center gap-1"
+          aria-label="Buscar productos"
+          aria-expanded={searchOpen}
+        >
+          Buscar
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </button>
+
+        <Link href="/cart" className="hover:underline inline-flex items-center">
           Carrito
+          <CartBadge count={cartCount} />
         </Link>
 
         <Link href="/orders" className="hover:underline">
@@ -284,40 +442,71 @@ export default function Navbar() {
         )}
       </div>
 
-      {/* Mobile hamburger */}
-      <button
-        onClick={() => setMenuOpen(!menuOpen)}
-        className="md:hidden p-2 cursor-pointer"
-        aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
-      >
-        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          {menuOpen ? (
-            <path d="M6 18L18 6M6 6l12 12" />
-          ) : (
-            <path d="M4 6h16M4 12h16M4 18h16" />
-          )}
-        </svg>
-      </button>
+      {/* Botones de la barra en movil: buscar y menu. Son mutuamente
+          excluyentes: si los dos estuvieran abiertos a la vez, el menu
+          lateral (anclado con `top-16`) se solaparia con el panel de
+          busqueda. */}
+      <div className="md:hidden -mr-2 flex items-center">
+        <button
+          type="button"
+          onClick={() => { setSearchOpen((v) => !v); setMenuOpen(false); }}
+          className="flex h-11 w-11 items-center justify-center cursor-pointer"
+          aria-label={searchOpen ? "Cerrar búsqueda" : "Buscar productos"}
+          aria-expanded={searchOpen}
+          aria-controls="header-search"
+        >
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </button>
+
+        {/* Mobile hamburger */}
+        <button
+          onClick={() => { setMenuOpen((v) => !v); setSearchOpen(false); }}
+          className="flex h-11 w-11 items-center justify-center cursor-pointer"
+          aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
+          aria-expanded={menuOpen}
+          aria-controls="mobile-menu"
+        >
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            {menuOpen ? (
+              <path d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
+      </div>
 
       {/* Mobile drawer overlay */}
       {menuOpen && (
-        <div className="fixed inset-0 top-[57px] bg-black/40 z-30 md:hidden" onClick={() => setMenuOpen(false)} />
+        <div className="fixed inset-0 top-16 bg-black/40 z-30 md:hidden" onClick={() => setMenuOpen(false)} />
       )}
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer.
+          `top-16 bottom-0` en vez de una altura calculada: el menu ocupa
+          exactamente desde el borde inferior de la barra hasta el final de la
+          pantalla, sin depender de la altura real del viewport ni de que
+          `100vh` sea mas alto que lo que se ve con la barra del navegador
+          abierta. */}
       <div
-        className={`fixed top-[57px] right-0 h-[calc(100vh-57px)] w-72 bg-white border-l border-gray-200 shadow-2xl z-40 transform transition-transform duration-300 md:hidden flex flex-col gap-4 p-6 overflow-y-auto ${
-          menuOpen ? "translate-x-0" : "translate-x-full"
+        id="mobile-menu"
+        aria-hidden={!menuOpen}
+        className={`fixed top-16 bottom-0 right-0 w-[min(18rem,85vw)] bg-white border-l border-gray-200 shadow-2xl z-40 transform transition-[transform,opacity,visibility] duration-300 md:hidden flex flex-col gap-1 p-6 overflow-y-auto overscroll-contain pb-safe-bottom ${
+          menuOpen
+            ? "translate-x-0 opacity-100 visible"
+            : "translate-x-full opacity-0 invisible pointer-events-none"
         }`}
       >
-        <Link href="/" onClick={() => setMenuOpen(false)} className="hover:underline">
+        <Link href="/" onClick={() => setMenuOpen(false)} className="block py-2.5 hover:underline">
           Inicio
         </Link>
 
         <div>
           <button
             onClick={() => setCatOpen(!catOpen)}
-            className="hover:underline cursor-pointer flex items-center gap-1"
+            className="hover:underline cursor-pointer flex items-center gap-1 py-2.5"
+            aria-expanded={catOpen}
           >
             Categorías
             <svg
@@ -332,7 +521,7 @@ export default function Navbar() {
           </button>
 
           {catOpen && (
-            <div className="pl-4 mt-2 space-y-2 border-l-2 border-gray-100">
+            <div className="pl-4 mt-2 space-y-1 border-l-2 border-gray-100">
               {categories.length === 0 ? (
                 <p className="text-sm text-gray-400 py-1">Cargando...</p>
               ) : (
@@ -341,7 +530,7 @@ export default function Navbar() {
                     key={cat.id}
                     href={`/products?categoryId=${cat.id}`}
                     onClick={() => { setCatOpen(false); setMenuOpen(false); }}
-                    className="block text-sm text-gray-600 hover:text-gray-900 hover:underline transition"
+                    className="block py-2 text-sm text-gray-600 hover:text-gray-900 hover:underline transition"
                   >
                     {cat.name}
                     {cat._count && (
@@ -356,27 +545,28 @@ export default function Navbar() {
           )}
         </div>
 
-        <Link href="/cart" onClick={() => setMenuOpen(false)} className="hover:underline">
+        <Link href="/cart" onClick={() => setMenuOpen(false)} className="block py-2.5 hover:underline">
           Carrito
+          <CartBadge count={cartCount} />
         </Link>
 
-        <Link href="/orders" onClick={() => setMenuOpen(false)} className="hover:underline">
+        <Link href="/orders" onClick={() => setMenuOpen(false)} className="block py-2.5 hover:underline">
           Mis órdenes
         </Link>
 
         {user?.role === "ADMIN" && (
           <>
-            <Link href="/admin" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-blue-600 hover:underline">
+            <Link href="/admin" onClick={() => setMenuOpen(false)} className="block py-2.5 text-sm font-semibold text-blue-600 hover:underline">
               Panel Admin
             </Link>
-            <Link href="/dropi" onClick={() => setMenuOpen(false)} className="hover:underline">
+            <Link href="/dropi" onClick={() => setMenuOpen(false)} className="block py-2.5 hover:underline">
               Dropi
             </Link>
           </>
         )}
 
         {user ? (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 py-2.5">
             <span className="text-sm text-gray-500">{user.name}</span>
             <button onClick={() => handleLogoutClick(() => setMenuOpen(false))} className="text-sm text-red-500 hover:underline">
               Cerrar sesión
@@ -384,8 +574,8 @@ export default function Navbar() {
           </div>
         ) : (
           <>
-            <Link href="/login" onClick={() => setMenuOpen(false)} className="hover:underline">Login</Link>
-            <Link href="/register" onClick={() => setMenuOpen(false)} className="hover:underline">Registro</Link>
+            <Link href="/login" onClick={() => setMenuOpen(false)} className="block py-2.5 hover:underline">Login</Link>
+            <Link href="/register" onClick={() => setMenuOpen(false)} className="block py-2.5 hover:underline">Registro</Link>
           </>
         )}
       </div>
@@ -396,5 +586,42 @@ export default function Navbar() {
         onCancel={cancelLogout}
       />
     </nav>
+
+    {/* Panel de busqueda. Va fuera del `<nav>` para que la barra conserve su
+        altura fija de 64px en movil: el menu lateral se ancla con `top-16` y
+        esa altura no puede depender de si el panel esta abierto. */}
+    {searchOpen && (
+      <div
+        id="header-search"
+        className="relative z-40 border-b border-gray-200 bg-white px-4 py-3 shadow-sm"
+      >
+        <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </span>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar productos..."
+              autoFocus
+              enterKeyHint="search"
+              /* 16px en movil: con menos, iOS hace zoom al enfocar el campo. */
+              className="w-full rounded-xl border border-gray-300 bg-gray-50 py-2.5 pl-10 pr-3 text-base text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+            />
+          </div>
+          <button
+            type="submit"
+            className="shrink-0 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
+            Buscar
+          </button>
+        </form>
+      </div>
+    )}
+    </>
   );
 }

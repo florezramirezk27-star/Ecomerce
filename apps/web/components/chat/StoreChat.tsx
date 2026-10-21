@@ -117,8 +117,62 @@ export default function StoreChat() {
     initialGuestSecret
   );
   const [loading, setLoading] = useState(false);
+  /**
+   * Hay una barra fija en la parte baja de la pantalla.
+   *
+   * La ficha de producto muestra una barra de compra al desplazarse y el
+   * carrito una barra con el total y el boton de finalizar. Ambas ocupan el
+   * sitio del boton flotante del chat, asi que el boton se aparta mientras
+   * haya alguna ahi. El aviso llega con el evento `store:bottom-bar`.
+   */
+  const [bottomBarVisible, setBottomBarVisible] = useState(false);
+  /**
+   * El aviso de cookies se fija en la parte baja de la pantalla y es
+   * obligatorio decidir antes de seguir. Mientras esta ahi el chat no cabe:
+   * su boton quedaria tapado por el aviso. El aviso llega con el evento
+   * `store:consent-bar`, que dispara el componente de consentimiento.
+   */
+  const [consentBarVisible, setConsentBarVisible] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onBottomBarChange(event: Event) {
+      const detail = (event as CustomEvent<{ visible?: boolean }>).detail;
+      setBottomBarVisible(Boolean(detail?.visible));
+    }
+
+    function onConsentBarChange(event: Event) {
+      const detail = (event as CustomEvent<{ visible?: boolean }>).detail;
+      setConsentBarVisible(Boolean(detail?.visible));
+    }
+
+    window.addEventListener("store:bottom-bar", onBottomBarChange);
+    window.addEventListener("store:consent-bar", onConsentBarChange);
+    return () => {
+      window.removeEventListener("store:bottom-bar", onBottomBarChange);
+      window.removeEventListener("store:consent-bar", onConsentBarChange);
+    };
+  }, []);
+
+  /* Avisa a la pagina de que el chat esta abierto.
+
+     Cuando el chat esta abierto, su boton flotante se convierte en el de
+     cerrar y vive en la parte baja de la pantalla: es justo donde esta la
+     barra de compra de la ficha o la de finalizar compra del carrito. Si
+     las dos estan ahi, el boton de cerrar queda debajo de la barra y no se
+     puede cerrar el chat. La pagina se aparta mientras el chat esta
+     abierto. */
+  useEffect(() => {
+    function avisar(estado: boolean) {
+      window.dispatchEvent(
+        new CustomEvent("store:chat-open", { detail: { open: estado } }),
+      );
+    }
+
+    avisar(open);
+    return () => avisar(false);
+  }, [open]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({
@@ -288,13 +342,23 @@ export default function StoreChat() {
 
   return (
     <>
-      {/* Botón flotante */}
-      <button
-        type="button"
-        onClick={() => setOpenedOn(open ? null : pathname)}
-        className="fixed bottom-6 right-6 z-50 flex h-16 w-16 items-center justify-center rounded-full bg-gray-900 text-white shadow-2xl transition hover:scale-105 hover:bg-gray-800"
-        aria-label="Abrir asistente"
-      >
+      {/* Botón flotante.
+          Se oculta mientras haya una barra fija en la parte baja de la
+          pantalla (barra de compra de la ficha, barra de finalizar compra
+          del carrito) o el aviso de cookies: todas ocupan el mismo sitio y
+          se pisarian. El aviso llega con los eventos `store:bottom-bar` y
+          `store:consent-bar`.
+
+          Con el chat abierto el boton se conserva aunque haya barra: ese
+          boton es el de cerrar, y sin el el chat no se podria cerrar. Las
+          barras se apartan solas mientras el chat esta abierto. */}
+      {(open || (!bottomBarVisible && !consentBarVisible)) && (
+        <button
+          type="button"
+          onClick={() => setOpenedOn(open ? null : pathname)}
+          className="fixed bottom-safe-6 right-4 sm:right-6 z-50 flex h-16 w-16 items-center justify-center rounded-full bg-gray-900 text-white shadow-2xl transition hover:scale-105 hover:bg-gray-800"
+          aria-label="Abrir asistente"
+        >
         {open ? (
           <svg
             className="h-7 w-7"
@@ -329,10 +393,17 @@ export default function StoreChat() {
           </svg>
         )}
       </button>
+      )}
 
       {/* Ventana */}
-      {open && (
-        <div className="fixed bottom-24 right-6 z-50 flex h-[600px] w-[380px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+      {open && !consentBarVisible && (
+        /* La altura se calcula con `dvh` y con un tope: antes era una altura
+           fija de 600px + 96px de margen inferior, o sea 696px, mas que la
+           altura de un iPhone SE (667px). La ventana se salia por arriba y
+           tapaba la barra de navegacion. Ahora ocupa como maximo
+           `100dvh - 10rem` (160px), de forma que el borde superior nunca
+           queda por encima de la barra (64px) ni del borde de la pantalla. */
+        <div className="fixed bottom-safe-24 right-4 sm:right-6 z-50 flex h-[min(600px,calc(100dvh-10rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
           {/* Header */}
           <div className="flex items-center justify-between bg-gray-900 px-5 py-4 text-white">
             <div>
@@ -472,7 +543,7 @@ export default function StoreChat() {
                 }
                 disabled={loading}
                 placeholder="Escribe tu mensaje..."
-                className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                className="min-w-0 flex-1 bg-transparent px-2 py-2 text-base sm:text-sm text-gray-900 outline-none placeholder:text-gray-400"
               />
 
               <button

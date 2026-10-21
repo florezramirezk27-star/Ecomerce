@@ -1,20 +1,14 @@
 import Link from "next/link";
 import { apiFetch, type Paginated } from "@/lib/api";
-import ProductImage from "@/components/ProductImage";
+import ProductCatalog, {
+  type CatalogProduct,
+} from "@/components/ProductCatalog";
 
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 24;
 
-interface ProductSummary {
-  id: string;
-  name: string;
-  price: string | number;
-  stock: number;
-  image: string | null;
-  slug: string;
-  category?: { id: string; name: string };
-}
+type ProductSummary = CatalogProduct;
 
 interface CategoryInfo {
   id: string;
@@ -47,6 +41,7 @@ export default async function ProductsPage({
   }
 
   let products: ProductSummary[] = [];
+  let total = 0;
   let category: CategoryInfo | null = null;
   let error = "";
 
@@ -56,13 +51,14 @@ export default async function ProductsPage({
       categoryId ? getCategory(categoryId) : Promise.resolve(null),
     ]);
     products = catalog.items ?? [];
+    total = catalog.total ?? products.length;
     category = categoryInfo;
   } catch {
     error = "Error al cargar los productos.";
   }
 
   return (
-    <main className="min-h-screen bg-orange-50">
+    <main className="min-h-dvh bg-orange-50">
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 md:py-12">
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
@@ -99,59 +95,12 @@ export default async function ProductsPage({
         )}
 
         {!error && products.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {products.map((product) => (
-              <Link
-                key={product.id}
-                href={`/products/${product.slug}`}
-                className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 hover:border-gray-200 flex flex-col"
-              >
-                <div className="relative overflow-hidden aspect-[4/3] bg-gray-100">
-                  <ProductImage
-                    src={product.image}
-                    alt={product.name}
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
-                    className="object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                  {product.stock <= 5 && product.stock > 0 && (
-                    <span className="absolute top-3 left-3 bg-amber-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
-                      Últimas unidades
-                    </span>
-                  )}
-                  {product.stock === 0 && (
-                    <span className="absolute top-3 left-3 bg-red-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
-                      Agotado
-                    </span>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                </div>
-                <div className="p-4 flex flex-col flex-1">
-                  {product.category && (
-                    <span className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-1">
-                      {product.category.name}
-                    </span>
-                  )}
-                  <h2 className="font-semibold text-gray-900 text-sm leading-snug line-clamp-2">
-                    {product.name}
-                  </h2>
-                  <div className="mt-auto pt-3 flex items-center justify-between">
-                    <span className="text-lg font-bold text-gray-900">
-                      {Number(product.price).toLocaleString("es-CO")} COP
-                    </span>
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                      product.stock > 5
-                        ? "bg-green-50 text-green-700"
-                        : product.stock > 0
-                        ? "bg-amber-50 text-amber-700"
-                        : "bg-red-50 text-red-700"
-                    }`}>
-                      {product.stock > 0 ? `${product.stock} und.` : "Agotado"}
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <ProductCatalog
+            initialProducts={products}
+            categoryId={categoryId}
+            pageSize={PAGE_SIZE}
+            total={total}
+          />
         )}
 
         {!error && products.length === 0 && (

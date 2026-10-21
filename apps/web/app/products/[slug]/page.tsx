@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import ProductImage from "@/components/ProductImage";
 import VideoEmbed from "@/components/VideoEmbed";
@@ -90,6 +90,24 @@ export default function ProductPage() {
   const [selectedVariationId, setSelectedVariationId] = useState<number | null>(
     null,
   );
+  /**
+   * Barra de compra fija en movil.
+   *
+   * En el movil el boton de "Agregar al carrito" queda muy arriba: entre la
+   * galeria, la descripcion y las variaciones hay que desplazar bastante
+   * para llegar. Con esta barra el cliente puede comprar en cualquier punto
+   * de la ficha.
+   *
+   * Solo aparece cuando el boton original NO se ve: si los dos estuvieran a
+   * la vez el cliente veria dos CTA para la misma accion. Para saberlo se
+   * observa el boton con un `IntersectionObserver`.
+   */
+  const buyButtonRef = useRef<HTMLButtonElement>(null);
+  const [showBuyBar, setShowBuyBar] = useState(false);
+  /** El aviso de cookies esta ahi y es obligatorio: la barra se aparta. */
+  const [consentBarVisible, setConsentBarVisible] = useState(false);
+  /** El chat abierto se lleva el boton de cerrar, que esta en la misma zona. */
+  const [chatOpen, setChatOpen] = useState(false);
 
   /**
    * Hora de fin de la oferta, compartida por el aviso "¡Compra ya!" de la ficha
@@ -143,6 +161,67 @@ export default function ProductPage() {
     });
   }, [product]);
 
+  /* Observa el boton de compra del panel: mientras este a la vista no hace
+     falta la barra fija de abajo. El margen superior de -72px sube un poco
+     el punto de corte para que la barra no aparezca en el momento exacto
+     en que el boton sale por el borde superior de la pantalla. */
+  useEffect(() => {
+    const button = buyButtonRef.current;
+    if (!button) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry) setShowBuyBar(!entry.isIntersecting);
+      },
+      { rootMargin: "-72px 0px 0px 0px", threshold: 0 },
+    );
+
+    observer.observe(button);
+    return () => observer.disconnect();
+  }, [product]);
+
+  /* La barra fija ocupa la parte baja de la pantalla, justo donde esta el
+     boton flotante del chat. Se avisa al chat para que se aparte mientras la
+     barra este visible. Al salir de la pagina se avisa con `false` para que
+     el chat vuelva a su sitio. */
+  useEffect(() => {
+    function avisar(visible: boolean) {
+      window.dispatchEvent(
+        new CustomEvent("store:bottom-bar", { detail: { visible } }),
+      );
+    }
+
+    avisar(showBuyBar);
+    return () => avisar(false);
+  }, [showBuyBar]);
+
+  /* El aviso de cookies tambien ocupa la parte baja de la pantalla y, como
+     es obligatorio, tiene prioridad: mientras este visible la barra de
+     compra se esconde para que el aviso se pueda leer y aceptar. */
+  useEffect(() => {
+    function onConsentBarChange(event: Event) {
+      const detail = (event as CustomEvent<{ visible?: boolean }>).detail;
+      setConsentBarVisible(Boolean(detail?.visible));
+    }
+
+    window.addEventListener("store:consent-bar", onConsentBarChange);
+    return () =>
+      window.removeEventListener("store:consent-bar", onConsentBarChange);
+  }, []);
+
+  /* Con el chat abierto su boton de cerrar queda en la parte baja de la
+     pantalla, justo donde va la barra de compra. */
+  useEffect(() => {
+    function onChatOpen(event: Event) {
+      const detail = (event as CustomEvent<{ open?: boolean }>).detail;
+      setChatOpen(Boolean(detail?.open));
+    }
+
+    window.addEventListener("store:chat-open", onChatOpen);
+    return () => window.removeEventListener("store:chat-open", onChatOpen);
+  }, []);
+
   const handleAddToCart = async (overrideQuantity?: number) => {
     if (!product) return;
     const qty = Math.max(1, overrideQuantity ?? quantity);
@@ -192,6 +271,11 @@ export default function ProductPage() {
         }),
       });
 
+      /* Avisa al resto de la pagina (p. ej. el contador del carrito en la
+         cabecera) que el carrito del servidor cambio. El carrito de
+         invitado ya dispara este evento por su cuenta en `lib/guest-cart.ts`. */
+      window.dispatchEvent(new Event("cart-change"));
+
       void trackMetaEvent("AddToCart", {
         content_ids: [product.id],
         content_name: contentName,
@@ -220,7 +304,7 @@ export default function ProductPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-orange-50 flex items-center justify-center">
+      <main className="min-h-dvh bg-orange-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
           <p className="text-gray-600">Cargando producto...</p>
@@ -231,7 +315,7 @@ export default function ProductPage() {
 
   if (error || !product) {
     return (
-      <main className="min-h-screen bg-orange-50 p-6">
+      <main className="min-h-dvh bg-orange-50 p-6">
         <div className="max-w-4xl mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
             <h1 className="text-xl font-bold text-red-900 mb-2">
@@ -365,7 +449,7 @@ const selectedMedia = mediaItems[selectedIndex] ?? null;
 const isVideo = selectedMedia?.kind === "video";
 
   return (
-    <main className="min-h-screen bg-orange-50">
+    <main className="min-h-dvh bg-orange-50">
       <div className="bg-white border-b border-gray-200">
         <nav className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-2 text-sm">
           <Link
@@ -389,7 +473,9 @@ const isVideo = selectedMedia?.kind === "video";
         </nav>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-12">
+      {/* `pb-28` en movil deja aire para la barra de compra fija de abajo,
+          que si no taparia el ultimo bloque de la ficha. */}
+      <div className="max-w-7xl mx-auto px-6 py-12 pb-28 md:pb-12">
         <button
           onClick={() => router.back()}
           className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 mb-6 transition-colors"
@@ -633,7 +719,7 @@ const isVideo = selectedMedia?.kind === "video";
                           }}
                           disabled={outOfStock}
                           aria-pressed={isSelected}
-                          className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition ${
+                          className={`px-3.5 py-2 min-h-11 rounded-lg border text-sm font-medium transition ${
                             isSelected
                               ? "border-blue-600 bg-blue-50 text-blue-700"
                               : "border-gray-300 text-gray-700 hover:border-blue-400"
@@ -663,12 +749,15 @@ const isVideo = selectedMedia?.kind === "video";
                     Selecciona cuántas unidades quieres
                   </p>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                  {/* 44x44 (44px es el minimo que recomiendan Apple y
+                      Material para un control tactil). Antes media 36px y en
+                      el movil era facil tocar el boton equivocado. */}
                   <button
                     type="button"
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                     disabled={!inStock}
-                    className="w-9 h-9 rounded-lg border border-gray-300 hover:border-blue-500 hover:text-blue-600 disabled:opacity-40 flex items-center justify-center text-lg font-bold text-gray-700 transition"
+                    className="w-11 h-11 rounded-lg border border-gray-300 hover:border-blue-500 hover:text-blue-600 active:bg-blue-50 disabled:opacity-40 flex items-center justify-center text-lg font-bold text-gray-700 transition"
                     aria-label="Disminuir cantidad"
                   >
                     −
@@ -682,7 +771,7 @@ const isVideo = selectedMedia?.kind === "video";
                       setQuantity((q) => Math.min(availableStock, q + 1))
                     }
                     disabled={!inStock || quantity >= availableStock}
-                    className="w-9 h-9 rounded-lg border border-gray-300 hover:border-blue-500 hover:text-blue-600 disabled:opacity-40 flex items-center justify-center text-lg font-bold text-gray-700 transition"
+                    className="w-11 h-11 rounded-lg border border-gray-300 hover:border-blue-500 hover:text-blue-600 active:bg-blue-50 disabled:opacity-40 flex items-center justify-center text-lg font-bold text-gray-700 transition"
                     aria-label="Aumentar cantidad"
                   >
                     +
@@ -708,6 +797,7 @@ const isVideo = selectedMedia?.kind === "video";
                   radio grande solo se nota pegado al borde del panel. */}
               <div className="p-3">
                 <button
+                  ref={buyButtonRef}
                   onClick={() => handleAddToCart()}
                   disabled={!inStock || cartLoading}
                   className={`w-full py-3.5 px-6 rounded-lg font-semibold text-white transition-all duration-200 flex items-center justify-center gap-2 ${
@@ -866,6 +956,51 @@ const isVideo = selectedMedia?.kind === "video";
             productImage={product.image}
           />
         )
+      )}
+
+      {/* Barra de compra fija (solo movil).
+          Aparece cuando el boton del panel ya no se ve al desplazarse. Va
+          por encima del chat flotante (`z-40` contra `z-50` del chat, pero el
+          chat se aparta mientras esta barra este visible: se avisa con el
+          evento `store:bottom-bar`). */}
+      {showBuyBar && !consentBarVisible && !chatOpen && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur md:hidden">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[11px] text-gray-500">{product.name}</p>
+              <p className="truncate text-sm font-bold text-gray-900">
+                {priceFormatted}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void handleAddToCart()}
+              disabled={!inStock || cartLoading}
+              className={`flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white transition active:scale-[0.99] ${
+                inStock
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-sm shadow-blue-600/20"
+                  : "bg-gray-400 cursor-not-allowed"
+              } ${cartLoading ? "opacity-75 cursor-wait" : ""}`}
+            >
+              {cartLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Agregando...
+                </>
+              ) : inStock ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                  </svg>
+                  Agregar
+                </>
+              ) : (
+                "Agotado"
+              )}
+            </button>
+          </div>
+        </div>
       )}
 
     </main>

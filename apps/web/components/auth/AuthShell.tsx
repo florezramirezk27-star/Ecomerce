@@ -38,13 +38,13 @@ const features = [
 
 export default function AuthShell({ children }: AuthShellProps) {
   return (
-    <main className="min-h-screen bg-gray-50 lg:grid lg:grid-cols-2">
+    <main className="min-h-dvh bg-gray-50 lg:grid lg:grid-cols-2">
       {/* Brand panel */}
       <section className="relative hidden overflow-hidden bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 lg:flex lg:flex-col">
         <div className="pointer-events-none absolute -top-24 -right-24 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-cyan-400/20 blur-3xl" />
 
-        <div className="relative flex flex-col justify-between p-12 h-full min-h-screen">
+        <div className="relative flex flex-col justify-between p-12 h-full min-h-dvh">
           <Link href="/" className="flex items-center gap-3 w-fit">
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-xl font-extrabold text-blue-700 shadow-lg">
               K
@@ -85,7 +85,7 @@ export default function AuthShell({ children }: AuthShellProps) {
       </section>
 
       {/* Form panel */}
-      <section className="flex min-h-screen items-center justify-center px-6 py-12">
+      <section className="flex min-h-dvh items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
           <Link href="/" className="mb-8 flex items-center gap-2 text-gray-500 hover:text-gray-900 transition w-fit">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

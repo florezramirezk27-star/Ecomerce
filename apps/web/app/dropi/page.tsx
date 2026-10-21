@@ -555,7 +555,7 @@ export default function DropiCatalogPage() {
 
   if (checkingAuth) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-dvh">
         <div className="inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
       </div>
     );
@@ -565,7 +565,7 @@ export default function DropiCatalogPage() {
     'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-700';
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-dvh bg-slate-50">
       {importMsg && (
         <div className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2">
           <div
@@ -868,7 +868,7 @@ export default function DropiCatalogPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar por nombre o ID del producto..."
-                  className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-base sm:text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100"
                 />
               </div>
               <button

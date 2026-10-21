@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { API_URL } from "@/lib/api";
 
@@ -9,6 +9,24 @@ import { API_URL } from "@/lib/api";
  * reemplazarlo desde el panel (Logo -> Video del banner).
  */
 const DEFAULT_VIDEO = "https://www.pexels.com/download/video/8306452/";
+
+/**
+ * Si el sistema pide menos movimiento, el video no se reproduce solo.
+ *
+ * Se lee con `useSyncExternalStore` y no con `useState` + `useEffect`: el
+ * valor cambia con la preferencia del sistema (el usuario puede activarla en
+ * caliente) y ademas el `setState` dentro del efecto dispararia renders en
+ * cascada.
+ */
+function subscribeReducedMotion(callback: () => void) {
+  const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+}
+
+function getReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 
 export default function VideoHero() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -20,6 +38,11 @@ export default function VideoHero() {
   // llegar la respuesta se cambiaba al configurado. En cada recarga se veia el
   // video viejo un instante.
   const [resolved, setResolved] = useState(false);
+  const reducedMotion = useSyncExternalStore(
+    subscribeReducedMotion,
+    getReducedMotion,
+    () => false,
+  );
 
   useEffect(() => {
     function fetchVideo() {
@@ -38,16 +61,44 @@ export default function VideoHero() {
     return () => window.removeEventListener("hero-video-change", fetchVideo);
   }, []);
 
+  /* El hero se reproduce en segundo plano mientras el cliente baja a ver el
+     catalogo: eso gasta bateria y datos sin que nadie lo este mirando. Se
+     pausa en cuanto el video sale de pantalla. */
+  useEffect(() => {
+    const element = videoRef.current;
+    if (!element) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+
+        if (entry.isIntersecting) {
+          if (!reducedMotion) void element.play().catch(() => {});
+        } else {
+          element.pause();
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [resolved, video, reducedMotion]);
+
   return (
-    <section className="relative w-full h-[80vh] md:h-[90vh] overflow-hidden bg-gray-900">
+    <section className="relative w-full h-[72dvh] md:h-[90vh] overflow-hidden bg-gray-900">
       {resolved && (
         <video
           ref={videoRef}
           key={video}
-          autoPlay
+          autoPlay={!reducedMotion}
           muted
           loop
           playsInline
+          preload="metadata"
+          aria-hidden="true"
+          tabIndex={-1}
           onCanPlay={() => setLoaded(true)}
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
             loaded ? "opacity-100" : "opacity-0"

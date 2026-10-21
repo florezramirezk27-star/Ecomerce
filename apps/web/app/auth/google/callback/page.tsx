@@ -39,7 +39,7 @@ function CallbackContent() {
 
 export default function GoogleCallback() {
   return (
-    <main className="flex items-center justify-center min-h-screen">
+    <main className="flex items-center justify-center min-h-dvh">
       <Suspense fallback={<p className="text-gray-500">Iniciando sesión con Google...</p>}>
         <CallbackContent />
       </Suspense>

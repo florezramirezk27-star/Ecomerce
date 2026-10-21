@@ -140,7 +140,7 @@ export default function OrdersPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-orange-50 flex items-center justify-center">
+      <main className="min-h-dvh bg-orange-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
           <p className="text-gray-600">
@@ -153,7 +153,7 @@ export default function OrdersPage() {
 
   if (!isAuthenticated()) {
     return (
-      <main className="min-h-screen bg-orange-50 p-6">
+      <main className="min-h-dvh bg-orange-50 p-6">
         <div className="max-w-4xl mx-auto">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center">
             <h1 className="text-2xl font-bold text-blue-900 mb-2">
@@ -176,7 +176,7 @@ export default function OrdersPage() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-orange-50 p-6">
+      <main className="min-h-dvh bg-orange-50 p-6">
         <div className="max-w-4xl mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-8">
             <p className="text-red-700">{error}</p>
@@ -188,7 +188,7 @@ export default function OrdersPage() {
 
   if (orders.length === 0) {
     return (
-      <main className="min-h-screen bg-orange-50 p-6">
+      <main className="min-h-dvh bg-orange-50 p-6">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold mb-8">
             Mis órdenes
@@ -229,7 +229,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <main className="min-h-screen bg-orange-50">
+    <main className="min-h-dvh bg-orange-50">
       <div className="max-w-4xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-8">
           Mis órdenes
@@ -378,17 +378,17 @@ export default function OrdersPage() {
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="min-h-11 px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
                   Anterior
                 </button>
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-gray-600 px-1">
                   Página {page} de {totalPages}
                 </span>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="min-h-11 px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
                   Siguiente
                 </button>

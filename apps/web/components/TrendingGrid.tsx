@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
+import { isAuthenticated } from "@/lib/auth";
+import { addToGuestCart } from "@/lib/guest-cart";
+import { trackMetaEvent } from "@/lib/facebook-pixel";
 
 interface Product {
   id: string;
@@ -32,6 +36,7 @@ export default function TrendingGrid({ products }: { products: Product[] }) {
   const [activeTab, setActiveTab] = useState("all");
   const [quickViewId, setQuickViewId] = useState<string | null>(null);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [addedId, setAddedId] = useState<string | null>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
 
   const categories: CategoryTab[] = useMemo(
@@ -52,11 +57,51 @@ export default function TrendingGrid({ products }: { products: Product[] }) {
   const filtered =
     activeTab === "all" ? products : products.filter((p) => p.category?.id === activeTab);
 
-  function handleAddToCart(e: React.MouseEvent, productId: string) {
+  function handleAddToCart(e: React.MouseEvent, product: Product) {
     e.preventDefault();
     e.stopPropagation();
-    setAddingId(productId);
-    setTimeout(() => setAddingId(null), 800);
+    if (addingId) return;
+    if (product.stock <= 0) return;
+
+    setAddingId(product.id);
+    void (async () => {
+      try {
+        if (isAuthenticated()) {
+          await apiFetch("/cart/add", {
+            method: "POST",
+            body: JSON.stringify({ productId: product.id, quantity: 1 }),
+          });
+          window.dispatchEvent(new Event("cart-change"));
+        } else {
+          addToGuestCart({
+            productId: product.id,
+            name: product.name,
+            price: product.price,
+            image: product.image,
+            slug: product.slug,
+            quantity: 1,
+          });
+        }
+
+        void trackMetaEvent("AddToCart", {
+          content_ids: [product.id],
+          content_name: product.name,
+          content_type: "product",
+          value: Number(product.price),
+          currency: "COP",
+        });
+
+        setAddedId(product.id);
+        window.setTimeout(() => {
+          setAddedId((current) => (current === product.id ? null : current));
+        }, 1800);
+      } catch {
+        // Si falla no se muestra el visto: mejor no confirmar algo que no
+        // ocurrio.
+      } finally {
+        setAddingId(null);
+      }
+    })();
   }
 
   return (
@@ -109,13 +154,19 @@ export default function TrendingGrid({ products }: { products: Product[] }) {
             : 0;
 
           return (
-            <Link
+            /* La tarjeta es un `div`, no un enlace: el boton de "anadir al
+               carrito" es un control interactivo y HTML no permite anidar
+               un boton dentro de un enlace. La imagen y el titulo si son
+               enlaces, y el boton queda como hermano. */
+            <div
               key={product.id}
-              href={`/products/${product.slug}`}
               className="group/card bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col"
               onMouseEnter={() => setQuickViewId(product.id)}
             >
-              <div className="relative aspect-[4/3] overflow-hidden bg-gray-50">
+              <Link
+                href={`/products/${product.slug}`}
+                className="relative block aspect-[4/3] overflow-hidden bg-gray-50"
+              >
                 <img
                   src={product.image}
                   alt={product.name}
@@ -144,7 +195,7 @@ export default function TrendingGrid({ products }: { products: Product[] }) {
                     Vista Rápida
                   </span>
                 </div>
-              </div>
+              </Link>
 
               <div className="p-4 flex flex-col flex-1 gap-1.5">
                 {product.category && (
@@ -154,7 +205,7 @@ export default function TrendingGrid({ products }: { products: Product[] }) {
                 )}
 
                 <h3 className="font-semibold text-gray-900 text-sm leading-snug line-clamp-2">
-                  {product.name}
+                  <Link href={`/products/${product.slug}`}>{product.name}</Link>
                 </h3>
 
                 <div className="flex items-center gap-2 mt-1">
@@ -186,16 +237,21 @@ export default function TrendingGrid({ products }: { products: Product[] }) {
 
                 <div className="mt-auto pt-3">
                   <button
-                    onClick={(e) => handleAddToCart(e, product.id)}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold transition-all duration-300 cursor-pointer ${
-                      addingId === product.id
-                        ? "bg-emerald-500 scale-95"
-                        : "bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 hover:shadow-lg hover:shadow-cyan-500/30"
+                    type="button"
+                    onClick={(e) => handleAddToCart(e, product)}
+                    disabled={addingId === product.id || product.stock <= 0}
+                    aria-label={`Añadir ${product.name} al carrito`}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold transition-all duration-300 cursor-pointer disabled:opacity-60 ${
+                      addedId === product.id
+                        ? "bg-emerald-500"
+                        : addingId === product.id
+                          ? "bg-emerald-500 scale-95"
+                          : "bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 hover:shadow-lg hover:shadow-cyan-500/30"
                     }`}
                   >
-                    {addingId === product.id ? (
+                    {addedId === product.id ? (
                       <>
-                        <svg className="w-4 h-4 animate-bounce" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <path d="M5 13l4 4L19 7" />
                         </svg>
                         ¡Agregado!
@@ -211,7 +267,7 @@ export default function TrendingGrid({ products }: { products: Product[] }) {
                   </button>
                 </div>
               </div>
-            </Link>
+            </div>
           );
         })}
       </div>

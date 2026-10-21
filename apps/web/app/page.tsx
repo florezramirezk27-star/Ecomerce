@@ -6,7 +6,6 @@ import { apiFetch, type Paginated } from "@/lib/api";
 import ProductCarousel from "@/components/ProductCarousel";
 import PromoGrid from "@/components/PromoGrid";
 import VideoHero from "@/components/VideoHero";
-import Footer from "@/components/Footer";
 import {
   Banknote,
   Eye,
@@ -79,7 +78,7 @@ export default function Home() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-orange-50 flex items-center justify-center">
+      <main className="min-h-dvh bg-orange-50 flex items-center justify-center">
         <p className="text-gray-500 text-lg">Cargando productos...</p>
       </main>
     );
@@ -87,9 +86,9 @@ export default function Home() {
 
   return (
     <>
-    <main className="min-h-screen bg-orange-50">
+    <main className="min-h-dvh bg-orange-50">
       <VideoHero />
-      <div className="max-w-7xl mx-auto px-6 py-12 space-y-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 space-y-12">
         {error ? (
           <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 text-center">
             {error}
@@ -136,7 +135,7 @@ export default function Home() {
         <div className="pointer-events-none absolute -top-32 -right-32 h-96 w-96 rounded-full bg-blue-100/50 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-orange-100/50 blur-3xl" />
 
-        <div className="relative mx-auto max-w-7xl px-6 py-12 md:py-16">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 py-12 md:py-16">
           {/* Header */}
           <div className="mx-auto mb-10 max-w-3xl text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-blue-700">
@@ -155,8 +154,12 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Images + Misión/Visión */}
-          <div className="grid items-center gap-8 lg:grid-cols-2">
+          {/* Images + Misión/Visión.
+              En movil el bloque de arriba es una columna, asi que las
+              chapas flotantes que sobresalen de la foto necesitan mas
+              separacion vertical: si no, la de "Envios a todo el pais" queda
+              encima del texto de abajo. */}
+          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-8">
             {/* Image collage */}
             <div className="relative mx-auto w-full max-w-xl lg:mx-0">
               {/* 16/10 en vez de 4/3: la foto es de gente delivering, no de
@@ -253,7 +256,6 @@ export default function Home() {
         </div>
       </section>
       </main>
-      <Footer />
     </>
   );
 }

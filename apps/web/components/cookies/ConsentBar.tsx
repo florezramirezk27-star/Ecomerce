@@ -38,21 +38,23 @@ export default function ConsentBar({
         className="h-[3px] w-full bg-gradient-to-r from-[#FCD116] via-[#CE1126] to-[#003893]"
       />
 
-      <div className="mx-auto max-w-6xl px-4 py-6 md:px-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:gap-8">
+      <div className="mx-auto max-w-6xl px-4 py-4 md:px-8 md:py-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-8">
           <div className="flex gap-4">
-            <BrandMark />
+            {/* En movil la marca sobra: el logo ya esta en la cabecera y lo
+                que hace falta es que el aviso ocupe lo menos posible. */}
+            <BrandMark className="hidden h-12 w-12 sm:flex" />
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600">
                 Aviso de privacidad
               </p>
               <h2
                 id="cookie-consent-title"
-                className="mt-1 text-lg font-extrabold leading-snug tracking-tight text-gray-900"
+                className="mt-1 text-base font-extrabold leading-snug tracking-tight text-gray-900 sm:text-lg"
               >
                 Tu privacidad tambi&eacute;n es negocio nuestro
               </h2>
-              <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-gray-600">
+              <p className="mt-1.5 max-w-2xl text-[12.5px] leading-relaxed text-gray-600 sm:text-[13px]">
                 Usamos cookies esenciales para que la tienda funcione. Con tu
                 permiso{" "}
                 <strong className="font-semibold text-gray-700">
@@ -73,12 +75,16 @@ export default function ConsentBar({
           </div>
 
           {/* Las tres acciones al mismo peso. Que sea mas facil negar que
-              aceptar es una de las Observationes de la SIC. */}
-          <div className="flex shrink-0 flex-col gap-2.5 sm:flex-row sm:items-center lg:flex-col lg:items-stretch">
+              aceptar es una de las Observationes de la SIC.
+
+              En movil van en dos columnas (y "Personalizar" ocupa la fila
+              entera): en una sola columna eran tres botones de 44px apilados
+              que empujaban el aviso a media pantalla y tapaban la tienda. */}
+          <div className="grid shrink-0 grid-cols-2 gap-2.5 sm:flex sm:flex-row sm:items-center lg:flex-col lg:items-stretch">
             <button
               type="button"
               onClick={onAccept}
-              className={`${acceptButton} order-1 lg:order-2`}
+              className={`${acceptButton} order-1 px-3 text-[13px] sm:px-5 sm:text-sm lg:order-2`}
             >
               <CheckIcon />
               Aceptar todo
@@ -86,7 +92,7 @@ export default function ConsentBar({
             <button
               type="button"
               onClick={onReject}
-              className={`${outlineButton} order-2 lg:order-3`}
+              className={`${outlineButton} order-2 px-3 text-[13px] sm:px-5 sm:text-sm lg:order-3`}
             >
               <RejectIcon />
               Rechazar todo
@@ -94,7 +100,7 @@ export default function ConsentBar({
             <button
               type="button"
               onClick={onCustomize}
-              className={`${ghostButton} order-3 lg:order-1`}
+              className={`${ghostButton} order-3 col-span-2 sm:col-span-1 lg:order-1`}
             >
               <TuneIcon />
               Personalizar

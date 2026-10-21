@@ -126,6 +126,61 @@ export default function CartPage() {
   }, []);
 
   /**
+   * Barra fija de "finalizar compra" en movil.
+   *
+   * En el movil el resumen del pedido queda debajo de la lista de productos:
+   * el cliente tenia que bajar hasta el final del scroll para encontrar el
+   * boton que completa la compra. Con la barra fija el total y el boton
+   * estan siempre a la vista.
+   */
+  const [consentBarVisible, setConsentBarVisible] = useState(false);
+  /** El chat abierto se lleva el boton de cerrar, que esta en la misma zona. */
+  const [chatOpen, setChatOpen] = useState(false);
+  const bottomBarVisible =
+    items.length > 0 &&
+    !showCheckout &&
+    !consentBarVisible &&
+    !chatOpen;
+
+  /* El aviso de cookies es obligatorio y ocupa la parte baja de la pantalla:
+     mientras este ahi no cabe otra barra. */
+  useEffect(() => {
+    function onConsentBarChange(event: Event) {
+      const detail = (event as CustomEvent<{ visible?: boolean }>).detail;
+      setConsentBarVisible(Boolean(detail?.visible));
+    }
+
+    window.addEventListener("store:consent-bar", onConsentBarChange);
+    return () =>
+      window.removeEventListener("store:consent-bar", onConsentBarChange);
+  }, []);
+
+  /* Con el chat abierto su boton de cerrar queda en la parte baja de la
+     pantalla, justo donde va esta barra. */
+  useEffect(() => {
+    function onChatOpen(event: Event) {
+      const detail = (event as CustomEvent<{ open?: boolean }>).detail;
+      setChatOpen(Boolean(detail?.open));
+    }
+
+    window.addEventListener("store:chat-open", onChatOpen);
+    return () => window.removeEventListener("store:chat-open", onChatOpen);
+  }, []);
+
+  /* Avisa al chat flotante de que la parte baja de la pantalla esta ocupada
+     por la barra, para que su boton se aparte. */
+  useEffect(() => {
+    function avisar(visible: boolean) {
+      window.dispatchEvent(
+        new CustomEvent("store:bottom-bar", { detail: { visible } }),
+      );
+    }
+
+    avisar(bottomBarVisible);
+    return () => avisar(false);
+  }, [bottomBarVisible]);
+
+  /**
    * false = el campo lo pone el geocoder, true = lo escribio el cliente y ya no
    * se vuelve a tocar (salvo que lo borre, que lo devuelve a automatico).
    */
@@ -212,6 +267,7 @@ export default function CartPage() {
 
     try {
       await apiFetch(`/cart/${cartItemId}`, { method: "DELETE" });
+      window.dispatchEvent(new Event("cart-change"));
       setItems((prev) => prev.filter((item) => item.id !== cartItemId));
       setMessage({ type: "success", text: "Producto removido" });
       setTimeout(() => setMessage(null), 2000);
@@ -254,6 +310,7 @@ export default function CartPage() {
         method: "PATCH",
         body: JSON.stringify({ quantity: next }),
       });
+      window.dispatchEvent(new Event("cart-change"));
       setItems((prev) =>
         prev.map((i) =>
           i.id === cartItemId ? { ...i, quantity: next } : i,
@@ -385,6 +442,7 @@ export default function CartPage() {
           : "✓ Pedido realizado con éxito. Pagarás contra entrega.",
       });
       setItems([]);
+      window.dispatchEvent(new Event("cart-change"));
       void trackMetaEvent("Purchase", {
         value: items.reduce(
           (acc, item) =>
@@ -424,7 +482,7 @@ export default function CartPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-orange-50 to-white flex items-center justify-center">
+      <main className="min-h-dvh bg-gradient-to-b from-orange-50 to-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-gray-200 border-t-orange-500 rounded-full animate-spin" />
           <p className="text-gray-500">Cargando carrito...</p>
@@ -435,7 +493,7 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
+      <main className="min-h-dvh bg-gradient-to-b from-orange-50 to-white">
         <div className="max-w-4xl mx-auto px-6 py-20">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16 text-center">
             <div className="w-20 h-20 mx-auto mb-6 bg-orange-100 rounded-full flex items-center justify-center">
@@ -461,8 +519,10 @@ export default function CartPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <main className="min-h-dvh bg-gradient-to-b from-orange-50 to-white">
+      {/* `pb-28` en movil deja aire para la barra fija de "finalizar compra",
+          que si no taparia el ultimo bloque (los pedidos recientes). */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12 pb-28 lg:pb-12">
 
         {message && !showCheckout && (
           <div className={`mb-6 p-4 rounded-xl text-sm font-medium flex items-center gap-3 ${
@@ -541,19 +601,22 @@ export default function CartPage() {
                       )}
                       <p className="text-xs sm:text-sm text-gray-400 mt-0.5">{formatPrice(item.product.price)} c/u</p>
                       <div className="flex items-center gap-2 mt-1.5">
+                        {/* 40x40 en vez de 28x28: con 28px el dedo tapa el
+                            boton y casi siempre se falla el primer toque.
+                            Es el control que mas se usa en el movil. */}
                         <button
                           onClick={() => handleUpdateQuantity(item.id, -1)}
-                          className="w-7 h-7 rounded-md border border-gray-300 bg-white hover:bg-gray-100 flex items-center justify-center text-gray-700 text-sm font-bold transition disabled:opacity-40"
+                          className="w-10 h-10 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 active:bg-gray-200 flex items-center justify-center text-gray-700 text-base font-bold transition disabled:opacity-40"
                           aria-label="Disminuir cantidad"
                         >
                           −
                         </button>
-                        <span className="min-w-7 text-center text-xs font-semibold text-gray-700">
+                        <span className="min-w-8 text-center text-sm font-semibold text-gray-700">
                           {item.quantity}
                         </span>
                         <button
                           onClick={() => handleUpdateQuantity(item.id, 1)}
-                          className="w-7 h-7 rounded-md border border-gray-300 bg-white hover:bg-gray-100 flex items-center justify-center text-gray-700 text-sm font-bold transition disabled:opacity-40"
+                          className="w-10 h-10 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 active:bg-gray-200 flex items-center justify-center text-gray-700 text-base font-bold transition disabled:opacity-40"
                           aria-label="Aumentar cantidad"
                         >
                           +
@@ -787,9 +850,73 @@ export default function CartPage() {
           </div>
         )}
 
+        {/* Barra fija de compra (solo movil).
+
+            En movil el resumen del pedido queda debajo de la lista de
+            productos, asi que el boton de finalizar compra quedaba fuera
+            de la pantalla hasta que el cliente llegaba al final del scroll.
+            Esta barra lo deja siempre a la vista.
+
+            En escritorio no se muestra: ahi el resumen va en una columna
+            lateral que ya esta visible. */}
+        {bottomBarVisible && (
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur lg:hidden">
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] text-gray-500">
+                  Total · {items.length}{" "}
+                  {items.length === 1 ? "producto" : "productos"}
+                </p>
+                <p className="truncate text-sm font-bold text-gray-900">
+                  {totalFormatted}
+                </p>
+              </div>
+
+              {/* Para un invitado el boton de finalizar compra no puede
+                  funcionar (el checkout pide sesion). En vez de un boton
+                  que no hace nada se ofrece entrar a la cuenta: el aviso
+                  de arriba queda lejos al desplazarse y el cliente no
+                  entendia por que no avanzaba. */}
+              {isAuthenticated() ? (
+                <button
+                  type="button"
+                  onClick={handleOpenCheckout}
+                  disabled={checkoutLoading}
+                  className={`flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white transition active:scale-[0.99] ${
+                    checkoutLoading
+                      ? "bg-gray-300 cursor-not-allowed"
+                      : "bg-gray-900 shadow-lg shadow-gray-900/20"
+                  }`}
+                >
+                  {checkoutLoading ? (
+                    <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  ) : (
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                  Finalizar compra
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 text-sm font-semibold text-white shadow-lg shadow-gray-900/20 transition active:scale-[0.99]"
+                >
+                  Iniciar sesión
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
+
         {showCheckout && (
           <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/60 backdrop-blur-sm p-4 pt-8 sm:pt-12 overflow-y-auto">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in slide-in-from-bottom-4">
+            {/* `animate-modal-in` es la animacion propia del proyecto.
+                Antes se usaba `animate-in slide-in-from-bottom-4`, que viene
+                del plugin `tailwindcss-animate`: ese plugin no esta
+                instalado, asi que esas dos clases no existian y el modal
+                aparecia de golpe, sin ningun efecto. */}
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-modal-in">
               {/* Header */}
               <div className="relative bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 px-6 sm:px-8 py-6 text-white overflow-hidden">
                 <div className="absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10" />
@@ -806,7 +933,7 @@ export default function CartPage() {
                   </div>
                   <button
                     onClick={() => setShowCheckout(false)}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/20"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/20 active:bg-white/30"
                     aria-label="Cerrar"
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -866,7 +993,7 @@ export default function CartPage() {
                         type="text"
                         value={shippingForm.shippingName}
                         onChange={(e) => setShippingForm({ ...shippingForm, shippingName: e.target.value })}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                         placeholder="Juan Pérez"
                       />
                     </div>
@@ -876,7 +1003,7 @@ export default function CartPage() {
                         type="tel"
                         value={shippingForm.shippingPhone}
                         onChange={(e) => setShippingForm({ ...shippingForm, shippingPhone: e.target.value })}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                         placeholder="300 123 4567"
                       />
                     </div>
@@ -887,7 +1014,7 @@ export default function CartPage() {
                       type="email"
                       value={shippingForm.shippingEmail}
                       onChange={(e) => setShippingForm({ ...shippingForm, shippingEmail: e.target.value })}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                       placeholder="cliente@correo.com"
                     />
                     <p className="mt-1.5 text-xs text-gray-400">
@@ -910,7 +1037,7 @@ export default function CartPage() {
                       <select
                         value={shippingForm.shippingDocType}
                         onChange={(e) => setShippingForm({ ...shippingForm, shippingDocType: e.target.value })}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                       >
                         <option value="CC">Cédula de ciudadanía</option>
                         <option value="CE">Cédula de extranjería</option>
@@ -925,7 +1052,7 @@ export default function CartPage() {
                         inputMode="numeric"
                         value={shippingForm.shippingDocNumber}
                         onChange={(e) => setShippingForm({ ...shippingForm, shippingDocNumber: e.target.value.replace(/[^0-9]/g, "") })}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                         placeholder="1012345678"
                       />
                     </div>
@@ -950,7 +1077,7 @@ export default function CartPage() {
                       type="text"
                       value={shippingForm.shippingAddress}
                       onChange={(e) => setShippingForm({ ...shippingForm, shippingAddress: e.target.value })}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                       placeholder="Calle 123 # 45-67, casa / apto 3"
                     />
                   </div>
@@ -962,7 +1089,7 @@ export default function CartPage() {
                         onChange={(e) =>
                           setShippingForm({ ...shippingForm, shippingState: e.target.value, shippingCity: "" })
                         }
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                       >
                         <option value="">Selecciona un departamento</option>
                         {DEPARTMENTS.map((d) => (
@@ -980,7 +1107,7 @@ export default function CartPage() {
                         value={shippingForm.shippingCity}
                         onChange={(e) => setShippingForm({ ...shippingForm, shippingCity: e.target.value })}
                         disabled={!shippingForm.shippingState}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                         placeholder={shippingForm.shippingState ? "Ej: Medellín" : "Primero elige el departamento"}
                       />
                       <datalist id="ciudades-colombia">
@@ -1010,7 +1137,7 @@ export default function CartPage() {
                         zipTouchedRef.current = zip !== "";
                         setShippingForm({ ...shippingForm, shippingZip: zip });
                       }}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                       placeholder="110111"
                     />
                     {!shippingForm.shippingZip && (
@@ -1025,7 +1152,7 @@ export default function CartPage() {
                       value={shippingForm.notes}
                       onChange={(e) => setShippingForm({ ...shippingForm, notes: e.target.value })}
                       rows={2}
-                      className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                       placeholder="Indicaciones adicionales para la entrega..."
                     />
                   </div>

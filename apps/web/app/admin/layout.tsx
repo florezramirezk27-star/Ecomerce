@@ -128,7 +128,7 @@ export default function AdminLayout({
 
   if (!hydrated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100">
+      <div className="flex min-h-dvh items-center justify-center bg-slate-100">
         <div className="flex flex-col items-center gap-4 text-center">
           <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
           <p className="text-sm text-slate-500">Cargando panel...</p>
@@ -239,7 +239,7 @@ export default function AdminLayout({
   );
 
   return (
-    <div className="flex min-h-screen bg-slate-100">
+    <div className="flex min-h-dvh bg-slate-100">
       <div
         className={cn(
           'hidden shrink-0 transition-all duration-300 md:block',
