@@ -1,10 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Package } from 'lucide-react';
 import { apiFetch, Category } from '@/lib/admin';
-import { uploadImage } from '@/lib/cloudinary';
+import { uploadImage, uploadVideo } from '@/lib/cloudinary';
 import {
   Alert,
   Button,
@@ -19,6 +19,9 @@ import {
 const fileInputClass =
   'w-full cursor-pointer text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100';
 
+/** Mismo limite que el API y que el video del banner. */
+const MAX_VIDEO_BYTES = 25_000_000;
+
 export default function NewProductPage() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -28,6 +31,9 @@ export default function NewProductPage() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoError, setVideoError] = useState('');
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -67,6 +73,40 @@ export default function NewProductPage() {
       URL.revokeObjectURL(prev[index]);
       return prev.filter((_, i) => i !== index);
     });
+  }
+
+  /**
+   * Sube el video del producto al elegir el archivo. Se hace antes de guardar
+   * para dar su propio estado de carga: subir 25 MB tarda y no conviene dejar
+   * todo el formulario bloqueado sin decir por que.
+   */
+  async function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setVideoError('');
+
+    if (!file.type.startsWith('video/')) {
+      setVideoError('Solo se permiten videos.');
+      return;
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      setVideoError('El video debe pesar menos de 25 MB.');
+      return;
+    }
+
+    setUploadingVideo(true);
+    try {
+      const url = await uploadVideo(file);
+      setFormData((prev) => ({ ...prev, video: url }));
+    } catch (err) {
+      setVideoError(
+        err instanceof Error ? err.message : 'Error al subir el video.',
+      );
+    } finally {
+      setUploadingVideo(false);
+    }
   }
 
   const uploadImageFile = async () => {
@@ -303,19 +343,78 @@ export default function NewProductPage() {
             <h3 className="mb-4 text-sm font-bold text-slate-900">
               Video del producto (opcional)
             </h3>
-            <Field label="URL del video">
-              <Input
-                type="url"
-                value={formData.video}
-                onChange={(e) =>
-                  setFormData({ ...formData, video: e.target.value })
-                }
-                placeholder="https://youtube.com/watch?v=..."
-              />
-              <p className="mt-1.5 text-xs text-slate-400">
-                Soporta YouTube, Vimeo, o URL directa de video
-              </p>
-            </Field>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Subir video desde archivo
+                </label>
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoFile}
+                  disabled={uploadingVideo}
+                  className="hidden"
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => videoInputRef.current?.click()}
+                    disabled={uploadingVideo}
+                  >
+                    {uploadingVideo ? 'Subiendo...' : 'Elegir archivo'}
+                  </Button>
+                  {formData.video && !uploadingVideo && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, video: '' });
+                        setVideoError('');
+                      }}
+                      className="text-sm font-semibold text-red-600 transition hover:text-red-700"
+                    >
+                      Quitar video
+                    </button>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  MP4, WebM o MOV, hasta 25 MB. Se sube al API y queda alojado
+                  en Cloudinary.
+                </p>
+              </div>
+
+              {videoError && (
+                <p className="text-sm font-medium text-red-600">{videoError}</p>
+              )}
+
+              {formData.video && !uploadingVideo && (
+                <div className="relative aspect-video overflow-hidden rounded-xl border border-slate-200 bg-slate-900">
+                  <video
+                    key={formData.video}
+                    src={formData.video}
+                    controls
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              )}
+
+              <Field label="URL del video">
+                <Input
+                  type="url"
+                  value={formData.video}
+                  onChange={(e) => {
+                    setFormData({ ...formData, video: e.target.value });
+                    setVideoError('');
+                  }}
+                  placeholder="https://youtube.com/watch?v=..."
+                />
+                <p className="mt-1.5 text-xs text-slate-400">
+                  Alternativa a subir el archivo: YouTube, Vimeo, o URL directa
+                  de video
+                </p>
+              </Field>
+            </div>
           </div>
 
           {previewUrl && (

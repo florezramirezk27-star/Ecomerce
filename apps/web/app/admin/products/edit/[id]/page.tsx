@@ -16,7 +16,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import { apiFetch, Category } from '@/lib/admin';
-import { uploadImage } from '@/lib/cloudinary';
+import { uploadImage, uploadVideo } from '@/lib/cloudinary';
 import {
   Alert,
   Button,
@@ -66,6 +66,8 @@ const EMPTY_FORM: ProductForm = {
 
 const NAME_HINT_LENGTH = 60;
 const MAX_SLUG_LENGTH = 140;
+/** Mismo limite que el API y que el video del banner. */
+const MAX_VIDEO_BYTES = 25_000_000;
 
 function slugify(value: string): string {
   return value
@@ -147,6 +149,14 @@ export default function EditProductPage() {
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
   const [existingGallery, setExistingGallery] = useState<string[]>([]);
+  /**
+   * El video se sube al elegir el archivo (no al guardar, como las imagenes):
+   * un video tarda lo suyo y conviene dar su propio estado de carga en vez de
+   * bloquear todo el formulario. Ya subido, su URL queda en `form.video`.
+   */
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoError, setVideoError] = useState('');
+  const videoInputRef = useRef<HTMLInputElement>(null);
   /** Valores tal como venían del servidor, para poder volver atrás. */
   const [original, setOriginal] = useState<{
     form: ProductForm;
@@ -245,6 +255,8 @@ export default function EditProductPage() {
     setPreviewUrl('');
     setGalleryFiles([]);
     setGalleryPreviews([]);
+    setVideoError('');
+    if (videoInputRef.current) videoInputRef.current.value = '';
     setError('');
   }
 
@@ -284,16 +296,51 @@ export default function EditProductPage() {
     });
   }
 
-  function removeExistingGalleryImage(index: number) {
-    setExistingGallery((prev) => prev.filter((_, i) => i !== index));
-  }
-
   function handleMainFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
     if (previewUrl) revokeObjectUrl(previewUrl);
     setSelectedFile(file);
     setPreviewUrl(file ? createObjectUrl(file) : '');
     e.target.value = '';
+  }
+
+  function removeExistingGalleryImage(index: number) {
+    setExistingGallery(prev => prev.filter((_, i) => i !== index));
+  }
+
+  /**
+   * Sube el video del producto en cuanto se elige el archivo. Se hace aqui y no
+   * al guardar para poder mostrar un estado de carga propio: un video de 25 MB
+   * tarda, y bloquear todo el formulario mientras tanto da la sensacion de que
+   * la pagina se colgo. Al terminar, la URL publica se guarda en `form.video`.
+   */
+  async function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setVideoError('');
+
+    if (!file.type.startsWith('video/')) {
+      setVideoError('Solo se permiten videos.');
+      return;
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      setVideoError('El video debe pesar menos de 25 MB.');
+      return;
+    }
+
+    setUploadingVideo(true);
+    try {
+      const url = await uploadVideo(file);
+      update({ video: url });
+    } catch (err) {
+      setVideoError(
+        err instanceof Error ? err.message : 'Error al subir el video.',
+      );
+    } finally {
+      setUploadingVideo(false);
+    }
   }
 
   function clearMainFile() {
@@ -734,23 +781,95 @@ export default function EditProductPage() {
             title="Video (opcional)"
             description="Se muestra bajo las imágenes, en la misma proporción del producto."
           >
-            <Field
-              label="URL del video"
-              htmlFor="video"
-              hint={
-                <p className="text-xs text-slate-400">
-                  Admite YouTube y Vimeo. Con el video de ejemplo el sitio no
-                  carga nada de Google hasta que el visitante pulse reproducir.
+            <div className="space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Subir video desde archivo
+                </label>
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoFile}
+                  disabled={uploadingVideo}
+                  className="hidden"
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => videoInputRef.current?.click()}
+                    disabled={uploadingVideo}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {uploadingVideo ? 'Subiendo...' : 'Elegir archivo'}
+                  </Button>
+                  {form.video && !uploadingVideo && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        update({ video: '' });
+                        setVideoError('');
+                      }}
+                      className="text-sm font-semibold text-red-600 transition hover:text-red-700"
+                    >
+                      Quitar video
+                    </button>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  MP4, WebM o MOV, hasta 25 MB. Se sube al API y queda alojado
+                  en Cloudinary.
                 </p>
-              }
-            >
-              <Input
-                id="video"
-                value={form.video}
-                onChange={(e) => update({ video: e.target.value })}
-                placeholder="https://youtube.com/watch?v=..."
-              />
-            </Field>
+              </div>
+
+              {videoError && (
+                <p className="text-sm font-medium text-red-600">{videoError}</p>
+              )}
+
+              {uploadingVideo && (
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-amber-500" />
+                  Subiendo el video, no cierres esta página...
+                </div>
+              )}
+
+              {form.video && !uploadingVideo && (
+                <div className="relative aspect-video overflow-hidden rounded-xl border border-slate-200 bg-slate-900">
+                  {/* `key` por URL: al cambiar de video React recrea el
+                      reproductor en vez de reutilizar el anterior con la
+                      fuente vieja. */}
+                  <video
+                    key={form.video}
+                    src={form.video}
+                    controls
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              )}
+
+              <Field
+                label="URL del video"
+                htmlFor="video"
+                hint={
+                  <p className="text-xs text-slate-400">
+                    Alternativa a subir el archivo: admite YouTube, Vimeo o una
+                    URL directa. Con YouTube o Vimeo el sitio no carga nada de
+                    ellos hasta que el visitante pulse reproducir.
+                  </p>
+                }
+              >
+                <Input
+                  id="video"
+                  value={form.video}
+                  onChange={(e) => {
+                    update({ video: e.target.value });
+                    setVideoError('');
+                  }}
+                  placeholder="https://youtube.com/watch?v=..."
+                />
+              </Field>
+            </div>
           </SectionCard>
         </div>
 
