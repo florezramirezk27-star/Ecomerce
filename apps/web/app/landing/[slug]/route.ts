@@ -88,6 +88,12 @@ const RESIZE_SCRIPT = `<script>(function(){
       try { new ResizeObserver(send).observe(document.body); } catch(e){}
     }
     window.addEventListener('load', send);
+    // El padre puede pedir el alto al terminar de cargar (handshake): asi no se
+    // pierde el primer aviso si llego antes de que el padre tuviera su listener.
+    window.addEventListener('message', function(e){
+      var d = e && e.data;
+      if (d && d.type === '${HEIGHT_MESSAGE}-request') send();
+    });
     setInterval(send, 800);
   }
   if (document.readyState === 'complete' || document.readyState === 'interactive') {

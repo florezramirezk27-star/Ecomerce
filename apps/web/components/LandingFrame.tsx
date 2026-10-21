@@ -79,6 +79,10 @@ const RESIZE_SCRIPT = `<script>(function(){
       try { new ResizeObserver(send).observe(document.body); } catch(e){}
     }
     window.addEventListener('load', send);
+    window.addEventListener('message', function(e){
+      var d = e && e.data;
+      if (d && d.type === '${HEIGHT_MESSAGE}-request') send();
+    });
     setInterval(send, 800);
   }
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
@@ -112,11 +116,9 @@ export default function LandingFrame({
   }, [src, code]);
 
   useEffect(() => {
-    function onMessage(event: MessageEvent) {
-      if (event.source !== frameRef.current?.contentWindow) return;
-      const data = event.data as { type?: string; height?: number } | null;
-      if (!data || data.type !== HEIGHT_MESSAGE) return;
-      const height = Number(data.height);
+    const frame = frameRef.current;
+
+    function applyHeight(height: number) {
       if (!Number.isFinite(height) || height <= 0) return;
       const capped = Math.min(Math.max(height, MIN_HEIGHT), MAX_HEIGHT);
       if (frameRef.current) {
@@ -124,8 +126,37 @@ export default function LandingFrame({
       }
     }
 
+    function onMessage(event: MessageEvent) {
+      if (event.source !== frameRef.current?.contentWindow) return;
+      const data = event.data as { type?: string; height?: number } | null;
+      if (!data || data.type !== HEIGHT_MESSAGE) return;
+      applyHeight(Number(data.height));
+    }
+
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+
+    // Handshake: el script de la landing manda el alto en cuanto arranca, pero
+    // si ese primer `postMessage` llega antes de que este listener exista, el
+    // mensaje se pierde y el iframe se quedaria con el alto inicial. Al cargar
+    // el iframe se le pregunta de nuevo el alto para no depender de la carrera.
+    function requestHeight() {
+      try {
+        frameRef.current?.contentWindow?.postMessage(
+          { type: `${HEIGHT_MESSAGE}-request` },
+          "*",
+        );
+      } catch {
+        // El iframe puede estar en otro origen durante la carga; se reintenta
+        // con el intervalo del propio script de la landing.
+      }
+    }
+
+    frame?.addEventListener("load", requestHeight);
+
+    return () => {
+      window.removeEventListener("message", onMessage);
+      frame?.removeEventListener("load", requestHeight);
+    };
   }, []);
 
   return (
@@ -136,7 +167,11 @@ export default function LandingFrame({
       src={src}
       srcDoc={srcDoc}
       sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-      loading="lazy"
+      // Sin `loading="lazy"`: la landing vive al final de una ficha larga y el
+      // navegador no la cargaba hasta acercarse al final del scroll, asi que al
+      // entrar al producto se veia un hueco en blanco y habia que recargar (con
+      // el scroll ya abajo) para que apareciera. Cargarla junto a la ficha evita
+      // ese "a la segunda".
       referrerPolicy="no-referrer"
       style={{ height: initialHeight }}
       className={className}
