@@ -67,6 +67,16 @@ async function fetchWithRetry(
 
 let refreshPromise: Promise<boolean> | null = null;
 
+/**
+ * Refresco de sesión con deduplicación global.
+ *
+ * Todas las llamadas concurrentes comparten la misma promesa: si tres
+ * peticiones reciben 401 a la vez (el caso normal al abrir /admin, donde
+ * /auth/profile, /dashboard/stats y /users salen en paralelo), solo se hace
+ * UN POST /auth/refresh. Antes cada helper tenía su propia promesa, así que dos
+ * refrescos simultáneos se pisaban la sesión recién creada y una de las
+ * peticiones moría con 401 aunque el usuario siguiera logueado.
+ */
 export function refreshSession(): Promise<boolean> {
   if (!refreshPromise) {
     refreshPromise = performRefresh().finally(() => {

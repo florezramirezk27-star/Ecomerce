@@ -12,6 +12,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { FacebookStrategy } from './strategies/facebook.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { SessionCacheService } from './session-cache.service';
+import { SessionCleanupService } from './session-cleanup.service';
 import { RedisModule } from '../../common/redis/redis.module';
 
 const facebookStrategyProvider = {
@@ -67,6 +68,7 @@ const facebookStrategyProvider = {
   providers: [
     AuthService,
     SessionCacheService,
+    SessionCleanupService,
     JwtStrategy,
     GoogleStrategy,
     GoogleTokenService,

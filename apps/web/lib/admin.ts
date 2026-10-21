@@ -1,6 +1,17 @@
 // Admin shared types and utilities
 
-import { refreshSession } from './api';
+import { API_URL, apiFetch, refreshSession } from './api';
+
+// Se reexporta `refreshSession` por compatibilidad: algun componente pudo
+// importarlo desde aqui historicamente.
+export { refreshSession };
+
+// `lib/admin.ts` reexporta `apiFetch` para no cambiar los imports existentes de
+// los componentes. La implementación vive en `lib/api.ts`, que es la unica: antes
+// habia dos copias con dos `refreshPromise` distintos y al abrir /admin las
+// peticiones en paralelo lanzaban dos refrescos que se anulaban entre si,
+// dejando 401 en la consola estando el usuario logueado.
+export { apiFetch };
 
 export interface User {
   id: string;
@@ -132,9 +143,7 @@ export function isAdmin() {
   }
 }
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  '/api/proxy';
+export const API_BASE = API_URL;
 
 // Solo el Content-Type. El token ya no se manda aqui: viaja en la cookie
 // httpOnly y estas peticiones llevan credentials: 'include' mas abajo.
@@ -185,118 +194,3 @@ export const timeAgo = (date: string, now: number = Date.now()) => {
   return months === 1 ? 'hace 1 mes' : `hace ${months} meses`;
 };
 
-async function fetchWithRetry(
-  url: string,
-  options: RequestInit,
-  retries = 2,
-): Promise<Response> {
-  for (let i = 0; i <= retries; i++) {
-    try {
-      const response = await fetch(url, options);
-      return response;
-    } catch (error) {
-      if (i === retries) throw error;
-      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, i)));
-    }
-  }
-  throw new Error('Unreachable');
-}
-
-function getCsrfToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  for (const name of ['__Host-csrf-token', 'csrf-token']) {
-    const matches = [
-      ...document.cookie.matchAll(
-        new RegExp(`(?:^|;\\s*)${name}=([^;]*)`, 'g'),
-      ),
-    ];
-    if (matches.length > 0) {
-      return decodeURIComponent(matches[matches.length - 1][1]);
-    }
-  }
-  return null;
-}
-
-async function ensureCsrfCookie(): Promise<void> {
-  if (getCsrfToken()) return;
-  try {
-    await fetch(`${API_BASE}/auth`, {
-      method: 'GET',
-      credentials: 'include',
-      cache: 'no-store',
-    });
-  } catch {}
-}
-
-export const apiFetch = async (
-  endpoint: string,
-  options?: RequestInit,
-) => {
-  const method = (options?.method || 'GET').toUpperCase();
-  const csrfHeaders: Record<string, string> = {};
-
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-    await ensureCsrfCookie();
-    const csrfToken = getCsrfToken();
-    if (csrfToken) {
-      csrfHeaders['X-CSRF-Token'] = csrfToken;
-    }
-  }
-
-  const buildHeaders = () => ({
-    ...getAuthHeader(options?.body ?? undefined),
-    ...csrfHeaders,
-    ...options?.headers,
-  });
-
-  let response = await fetchWithRetry(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: buildHeaders(),
-    credentials: 'include',
-  });
-
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && response.status === 403) {
-    const errBody = await response.clone().json().catch(() => ({}));
-    if (typeof errBody.message === 'string' && errBody.message.includes('CSRF')) {
-      await ensureCsrfCookie();
-      const fresh = getCsrfToken();
-      if (fresh) csrfHeaders['X-CSRF-Token'] = fresh;
-      response = await fetchWithRetry(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers: buildHeaders(),
-        credentials: 'include',
-      });
-    }
-  }
-
-  if (response.status === 401 && (await refreshSession())) {
-    const freshCsrf = getCsrfToken();
-    if (freshCsrf) csrfHeaders['X-CSRF-Token'] = freshCsrf;
-    response = await fetchWithRetry(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers: buildHeaders(),
-      credentials: 'include',
-    });
-  }
-
-  if (response.status === 401) {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('user');
-      // La cookie 'token' es httpOnly: no se puede borrar desde aqui. La
-      // limpia el logout de la API. La de 'role' si es legible.
-      document.cookie = 'role=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
-      window.dispatchEvent(new Event('auth-change'));
-      window.location.href = '/login';
-    }
-    throw new Error('Sesión expirada');
-  }
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(
-      error.message || `API Error: ${response.status}`,
-    );
-  }
-
-  return response.json();
-};

@@ -96,13 +96,6 @@ export class AuthService {
       throw new UnauthorizedException('Sesión expirada o inválida');
     }
 
-    const newSession = await this.createSession(userId);
-
-    await this.prisma.session.deleteMany({
-      where: { id: session.id, userId },
-    });
-    await this.sessionCache.invalidate(session.id);
-
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -110,6 +103,28 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Usuario no encontrado');
     }
+
+    // Rotacion de sesion en una transaccion: la vieja se borra y la nueva se
+    // crea en el mismo commit. Si se hiciera secuencial (crear y luego borrar)
+    // una peticion que llegara justo en medio veria la cookie vieja invalida sin
+    // que la nueva exista todavia. El `deleteMany` filtra por `userId`, asi que
+    // es idempotente si dos refresh compitieran por la misma sesion.
+    const newSession = await this.prisma.$transaction(async (tx) => {
+      await tx.session.deleteMany({
+        where: { id: currentSessionId, userId },
+      });
+
+      const expiresAt = new Date(Date.now() + sessionLifetimeMs());
+      return tx.session.create({
+        data: {
+          userId,
+          token: randomBytes(32).toString('hex'),
+          expiresAt,
+        },
+      });
+    });
+
+    await this.sessionCache.invalidate(currentSessionId);
 
     const payload = {
       sub: user.id,

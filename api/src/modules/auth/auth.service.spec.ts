@@ -16,6 +16,10 @@ describe('AuthService', () => {
   const findByResetToken = jest.fn();
   const usersUpdate = jest.fn();
   const sessionDeleteMany = jest.fn();
+  const sessionFindUnique = jest.fn();
+  const userFindUnique = jest.fn();
+  const sessionCreate = jest.fn();
+  const transaction = jest.fn();
   const cacheGet = jest.fn();
   const cacheSet = jest.fn();
   const cacheInvalidate = jest.fn();
@@ -27,6 +31,27 @@ describe('AuthService', () => {
     findByResetToken.mockResolvedValue(null);
     usersUpdate.mockResolvedValue({});
     sessionDeleteMany.mockResolvedValue({ count: 0 });
+    sessionFindUnique.mockResolvedValue(null);
+    userFindUnique.mockResolvedValue(null);
+    sessionCreate.mockResolvedValue({
+      id: 'sess-nueva',
+      userId: 'user-1',
+      token: 'tok',
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+    // `$transaction` recibe un callback y le pasa un cliente `tx` con la misma
+    // forma que `prisma`. El mock lo ejecuta tal cual para que el test valide el
+    // flujo real (borrar + crear dentro de la misma transaccion).
+    transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+      Promise.resolve(
+        cb({
+          session: {
+            deleteMany: sessionDeleteMany,
+            create: sessionCreate,
+          },
+        }),
+      ),
+    );
     cacheGet.mockResolvedValue(null);
     cacheSet.mockResolvedValue(undefined);
     cacheInvalidate.mockResolvedValue(undefined);
@@ -41,7 +66,7 @@ describe('AuthService', () => {
         },
         {
           provide: JwtService,
-          useValue: {},
+          useValue: { sign: jest.fn().mockReturnValue('jwt-firmado') },
         },
         {
           provide: MailService,
@@ -49,7 +74,14 @@ describe('AuthService', () => {
         },
         {
           provide: PrismaService,
-          useValue: { session: { deleteMany: sessionDeleteMany } },
+          useValue: {
+            session: {
+              deleteMany: sessionDeleteMany,
+              findUnique: sessionFindUnique,
+            },
+            user: { findUnique: userFindUnique },
+            $transaction: transaction,
+          },
         },
         {
           provide: RedisService,
@@ -94,6 +126,73 @@ describe('AuthService', () => {
         where: { userId: 'user-1' },
       });
       expect(cacheInvalidateUser).toHaveBeenCalledWith('user-1');
+    });
+  });
+
+  describe('refreshSession', () => {
+    const sesionViva = {
+      id: 'sess-vieja',
+      userId: 'user-1',
+      token: 'tok-viejo',
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+
+    beforeEach(() => {
+      sessionFindUnique.mockResolvedValue(sesionViva);
+      userFindUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'admin@kronio.co',
+        name: 'Admin',
+        role: 'ADMIN',
+      });
+    });
+
+    it('rota la sesion dentro de una transaccion y devuelve un JWT nuevo', async () => {
+      const result = await service.refreshSession('user-1', 'sess-vieja');
+
+      // La rotacion ocurre en UNA transaccion: si se hiciera secuencial (crear
+      // y luego borrar) una peticion que llegara en medio veria la cookie vieja
+      // invalida sin que la nueva exista todavia.
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(sessionDeleteMany).toHaveBeenCalledWith({
+        where: { id: 'sess-vieja', userId: 'user-1' },
+      });
+      expect(sessionCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 'user-1',
+        }) as unknown,
+      });
+
+      // El cache de la sesion vieja debe invalidarse para que no siga sirviendo.
+      expect(cacheInvalidate).toHaveBeenCalledWith('sess-vieja');
+      expect(result.access_token).toBe('jwt-firmado');
+      expect(result.user).toEqual(
+        expect.objectContaining({ id: 'user-1', role: 'ADMIN' }),
+      );
+    });
+
+    it('rechaza el refresh si la sesion ya expiro', async () => {
+      sessionFindUnique.mockResolvedValue({
+        ...sesionViva,
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+
+      await expect(
+        service.refreshSession('user-1', 'sess-vieja'),
+      ).rejects.toThrow('Sesión expirada o inválida');
+
+      // Nada se rota si la sesion no es valida.
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('rechaza el refresh si la sesion pertenece a otro usuario', async () => {
+      sessionFindUnique.mockResolvedValue({ ...sesionViva, userId: 'otro' });
+
+      await expect(
+        service.refreshSession('user-1', 'sess-vieja'),
+      ).rejects.toThrow('Sesión expirada o inválida');
+
+      expect(transaction).not.toHaveBeenCalled();
     });
   });
 });
