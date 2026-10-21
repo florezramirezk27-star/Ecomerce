@@ -35,6 +35,21 @@ interface LandingFrameProps {
   className?: string;
   /** Alto mientras el iframe reporta el suyo. */
   initialHeight?: number;
+  /**
+   * Se llama cuando la landing pide agregar su producto al carrito. La landing
+   * vive en un iframe con origen opaco (sin `allow-same-origin`), asi que no
+   * puede tocar el carrito ni las cookies de la tienda por si misma: solo puede
+   * mandar un mensaje. El padre —que si tiene la sesion— decide que hacer.
+   */
+  onAddToCart?: (payload: LandingAddToCart) => void;
+}
+
+/** Lo que una landing puede pedir al pulsar su boton de compra. */
+export interface LandingAddToCart {
+  productSlug?: string;
+  comboName?: string;
+  comboPrice?: number;
+  quantity?: number;
 }
 
 /**
@@ -42,6 +57,14 @@ interface LandingFrameProps {
  * `app/landing/[slug]/route.ts` para el modo `src`.
  */
 const HEIGHT_MESSAGE = "kronio-landing-height";
+
+/**
+ * Marca del mensaje con el que la landing pide agregar al carrito. El boton de
+ * compra de una landing que solo es HTML no tiene sesion ni acceso al carrito,
+ * asi que manda esto al padre para que use la misma logica que el boton de la
+ * ficha.
+ */
+const ADD_TO_CART_MESSAGE = "kronio-add-to-cart";
 
 /** Alto minimo y maximo, para que un codigo con `height:100000px` no rompa la pagina. */
 const MIN_HEIGHT = 240;
@@ -98,8 +121,19 @@ export default function LandingFrame({
   title,
   className,
   initialHeight = 900,
+  onAddToCart,
 }: LandingFrameProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  /**
+   * El listener de mensajes se registra una sola vez (el efecto no depende del
+   * callback), asi que el callback vive en un ref para no quedar con la version
+   * del primer render.
+   */
+  const onAddToCartRef = useRef(onAddToCart);
+
+  useEffect(() => {
+    onAddToCartRef.current = onAddToCart;
+  }, [onAddToCart]);
   /**
    * `true` cuando el iframe termina de cargar. La landing tarda varios segundos
    * en pintar (su CSS y, sobre todo, su fuente de Google son render-blocking) y
@@ -147,12 +181,30 @@ export default function LandingFrame({
 
     function onMessage(event: MessageEvent) {
       if (event.source !== frameRef.current?.contentWindow) return;
-      const data = event.data as { type?: string; height?: number } | null;
-      if (!data || data.type !== HEIGHT_MESSAGE) return;
+      const data = event.data as
+        | { type?: string; height?: number }
+        | (LandingAddToCart & { type?: string })
+        | null;
+      if (!data) return;
+
+      // La landing pide agregar su producto al carrito. Se reenvia al padre por
+      // el callback, que es quien tiene la sesion y la logica del carrito.
+      if (data.type === ADD_TO_CART_MESSAGE) {
+        const payload = data as LandingAddToCart;
+        onAddToCartRef.current?.({
+          productSlug: payload.productSlug,
+          comboName: payload.comboName,
+          comboPrice: Number(payload.comboPrice) || undefined,
+          quantity: Number(payload.quantity) || 1,
+        });
+        return;
+      }
+
+      if (data.type !== HEIGHT_MESSAGE) return;
       // El script de la landing corrio: el documento ya existe, asi que el
       // aviso de carga ya no hace falta aunque el `onLoad` tarde.
       setLoaded(true);
-      applyHeight(Number(data.height));
+      applyHeight(Number((data as { height?: number }).height));
     }
 
     window.addEventListener("message", onMessage);

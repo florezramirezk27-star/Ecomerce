@@ -127,8 +127,9 @@ export default function ProductPage() {
     });
   }, [product]);
 
-  const handleAddToCart = async () => {
+  const handleAddToCart = async (overrideQuantity?: number) => {
     if (!product) return;
+    const qty = Math.max(1, overrideQuantity ?? quantity);
     const selectedVariation =
       (product.variations ?? []).find((v) => v.id === selectedVariationId) ??
       null;
@@ -145,7 +146,7 @@ export default function ProductPage() {
         price: product.price,
         image: product.image,
         slug: product.slug,
-        quantity,
+        quantity: qty,
         variationId,
         variationName,
       });
@@ -153,12 +154,12 @@ export default function ProductPage() {
         content_ids: [product.id],
         content_name: contentName,
         content_type: "product",
-        value: Number(product.price) * quantity,
+        value: Number(product.price) * qty,
         currency: "COP",
       });
       setCartMessage({
         type: "success",
-        text: `✓ ${quantity} ${quantity === 1 ? "unidad" : "unidades"} agregadas al carrito`,
+        text: `✓ ${qty} ${qty === 1 ? "unidad" : "unidades"} agregadas al carrito`,
       });
       setTimeout(() => setCartMessage(null), 3000);
       return;
@@ -170,7 +171,7 @@ export default function ProductPage() {
         method: "POST",
         body: JSON.stringify({
           productId: product.id,
-          quantity,
+          quantity: qty,
           variationId,
         }),
       });
@@ -179,13 +180,13 @@ export default function ProductPage() {
         content_ids: [product.id],
         content_name: contentName,
         content_type: "product",
-        value: Number(product.price) * quantity,
+        value: Number(product.price) * qty,
         currency: "COP",
       });
 
       setCartMessage({
         type: "success",
-        text: `✓ ${quantity} ${quantity === 1 ? "unidad" : "unidades"} agregadas al carrito`,
+        text: `✓ ${qty} ${qty === 1 ? "unidad" : "unidades"} agregadas al carrito`,
       });
       setTimeout(() => setCartMessage(null), 3000);
     } catch (err) {
@@ -691,7 +692,7 @@ const isVideo = selectedMedia?.kind === "video";
                   radio grande solo se nota pegado al borde del panel. */}
               <div className="p-3">
                 <button
-                  onClick={handleAddToCart}
+                  onClick={() => handleAddToCart()}
                   disabled={!inStock || cartLoading}
                   className={`w-full py-3.5 px-6 rounded-lg font-semibold text-white transition-all duration-200 flex items-center justify-center gap-2 ${
                     inStock
@@ -826,6 +827,12 @@ const isVideo = selectedMedia?.kind === "video";
           title={`Landing de ${product.name}`}
           initialHeight={1400}
           className="w-full border-0"
+          // El boton de compra de la landing solo manda un mensaje: la landing
+          // no tiene sesion ni acceso al carrito. Aqui, en el padre, se usa la
+          // misma logica que el boton de la ficha (invitado o autenticado).
+          onAddToCart={(payload) => {
+            void handleAddToCart(payload.quantity ?? 1);
+          }}
         />
       ) : (
         /* Si no hay landing pegada, el B12 conserva la suya diseñada. */
