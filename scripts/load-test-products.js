@@ -1,31 +1,31 @@
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check } from 'k6';
 import { Rate } from 'k6/metrics';
 
 const API_BASE_URL = (__ENV.API_BASE_URL || '').replace(/\/$/, '');
 const productErrors = new Rate('product_endpoint_errors');
+const isRenderPublicService = /\.onrender\.com$/i.test(new URL(API_BASE_URL || 'http://invalid.local').hostname);
 
 if (!API_BASE_URL) {
+  throw new Error('Define API_BASE_URL explícitamente antes de ejecutar la prueba.');
+}
+
+if (isRenderPublicService && __ENV.ALLOW_PRODUCTION_LOAD_TEST !== 'YES') {
   throw new Error(
-    'Define API_BASE_URL con la URL del backend de pruebas. No apuntes a producción para una prueba de carga.',
+    'Destino Render detectado. Para autorizar únicamente esta prueba ligera, define ALLOW_PRODUCTION_LOAD_TEST=YES. No ejecutes pruebas agresivas contra producción.',
   );
 }
 
 export const options = {
   scenarios: {
     products_read_only: {
-      executor: 'ramping-arrival-rate',
-      startRate: 1,
+      executor: 'constant-arrival-rate',
+      rate: 1,
       timeUnit: '1s',
-      preAllocatedVUs: 5,
-      maxVUs: 20,
-      stages: [
-        { target: 1, duration: '1m' },
-        { target: 2, duration: '1m' },
-        { target: 5, duration: '1m' },
-        { target: 10, duration: '1m' },
-      ],
-      gracefulStop: '30s',
+      duration: '2m',
+      preAllocatedVUs: 3,
+      maxVUs: 5,
+      gracefulStop: '15s',
     },
   },
   thresholds: {
@@ -37,14 +37,11 @@ export const options = {
 };
 
 export default function () {
-  const response = http.get(
-    `${API_BASE_URL}/products?limit=20`,
-    {
-      headers: { Accept: 'application/json' },
-      tags: { endpoint: 'products_list' },
-      timeout: '20s',
-    },
-  );
+  const response = http.get(`${API_BASE_URL}/products?limit=20`, {
+    headers: { Accept: 'application/json' },
+    tags: { endpoint: 'products_list' },
+    timeout: '20s',
+  });
 
   const ok = check(response, {
     'GET /products devuelve HTTP 200': (r) => r.status === 200,
@@ -53,5 +50,4 @@ export default function () {
   });
 
   productErrors.add(!ok);
-  sleep(0.2);
 }
