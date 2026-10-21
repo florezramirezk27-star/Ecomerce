@@ -14,13 +14,9 @@ import {
   Upload,
   Video as VideoIcon,
   Wand2,
-  Code2,
-  Eye,
-  ExternalLink,
 } from 'lucide-react';
 import { apiFetch, Category } from '@/lib/admin';
 import { uploadImage } from '@/lib/cloudinary';
-import LandingFrame from '@/components/LandingFrame';
 import {
   Alert,
   Button,
@@ -151,8 +147,6 @@ export default function EditProductPage() {
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
   const [existingGallery, setExistingGallery] = useState<string[]>([]);
-  /** Muestra la vista previa de la landing dentro del formulario. */
-  const [showLandingPreview, setShowLandingPreview] = useState(false);
   /** Valores tal como venían del servidor, para poder volver atrás. */
   const [original, setOriginal] = useState<{
     form: ProductForm;
@@ -757,92 +751,6 @@ export default function EditProductPage() {
                 placeholder="https://youtube.com/watch?v=..."
               />
             </Field>
-          </SectionCard>
-
-          <SectionCard
-            icon={Code2}
-            tone="blue"
-            title="Landing con código (opcional)"
-            description="Pega el HTML de una página de venta. Se muestra debajo de la ficha del producto."
-          >
-            <Field
-              label="Código HTML/CSS/JS"
-              htmlFor="landingCode"
-              hint={
-                <p className="text-xs text-slate-400">
-                  {form.landingCode.length.toLocaleString('es-CO')} caracteres.
-                  Acepta HTML completo (etiquetas, estilos y scripts). Se aísla
-                  en un marco para que no afecte al resto de la tienda.
-                </p>
-              }
-            >
-              <Textarea
-                id="landingCode"
-                value={form.landingCode}
-                onChange={(e) => update({ landingCode: e.target.value })}
-                rows={14}
-                spellCheck={false}
-                className="font-mono text-xs leading-relaxed"
-                placeholder={
-                  '<section class="mi-landing">\n  <h2>...</h2>\n</section>'
-                }
-              />
-            </Field>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setShowLandingPreview((v) => !v)}
-                disabled={!form.landingCode.trim()}
-              >
-                <Eye className="h-4 w-4" />
-                {showLandingPreview ? 'Ocultar vista previa' : 'Ver vista previa'}
-              </Button>
-              {form.slug && form.landingCode.trim() && (
-                <a
-                  href={`/products/${form.slug}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Ver en la tienda
-                </a>
-              )}
-              {form.landingCode.trim() && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => update({ landingCode: '' })}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Quitar landing
-                </Button>
-              )}
-            </div>
-
-            {showLandingPreview && form.landingCode.trim() && (
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-2">
-                  <Eye className="h-3.5 w-3.5 text-slate-400" />
-                  <span className="text-xs font-medium text-slate-500">
-                    Vista previa del código sin guardar
-                  </span>
-                </div>
-                <p className="border-b border-slate-100 bg-amber-50/60 px-3 py-2 text-xs text-amber-700">
-                  Muestra el HTML, el CSS y los scripts propios. Los recursos
-                  externos (CDN de Tailwind, fuentes de Google, iconos) solo se
-                  ven al guardar, con el botón «Ver en la tienda».
-                </p>
-                <LandingFrame
-                  code={form.landingCode}
-                  title="Vista previa de la landing"
-                  initialHeight={520}
-                  className="w-full border-0"
-                />
-              </div>
-            )}
           </SectionCard>
         </div>
 
