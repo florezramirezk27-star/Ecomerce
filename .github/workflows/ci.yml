@@ -31,4 +31,7 @@ jobs:
 
       - run: pnpm --dir apps/web exec tsc --noEmit
       - run: pnpm --dir apps/web lint
-      - run: pnpm --dir apps/web build
+      - name: Build frontend
+        run: pnpm --dir apps/web build
+        env:
+          API_URL: https://ecomerce-vslf.onrender.com
