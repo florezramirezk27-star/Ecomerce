@@ -11,8 +11,6 @@ import { addToGuestCart } from "@/lib/guest-cart";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
 import CandleInfographic from "@/components/CandleInfographic";
 import CandleArtisanalInfographic from "@/components/CandleArtisanalInfographic";
-import VitaminB12Landing from "@/components/VitaminB12Landing";
-import LandingFrame from "@/components/LandingFrame";
 import CountdownTimer from "@/components/CountdownTimer";
 import { getOfferEndTime } from "@/lib/offer-countdown";
 import CartToast, { useCartToast } from "@/components/CartToast";
@@ -951,40 +949,6 @@ const isVideo = selectedMedia?.kind === "video";
 
       {product.name === "Set de Velas Aromáticas" && <CandleInfographic />}
       {product.name === "Set de Velas Aromáticas" && <CandleArtisanalInfographic />}
-
-      {/* Landing con codigo pegada desde el admin. Va al final, debajo de la
-          ficha generica. Se aisla en un iframe (`LandingFrame`) porque el
-          codigo puede traer CSS global y scripts que romperian la tienda. */}
-      {product.landingCode?.trim() ? (
-        <LandingFrame
-          src={`/landing/${product.slug}`}
-          title={`Landing de ${product.name}`}
-          initialHeight={1400}
-          className="w-full border-0"
-          // La misma hora de fin que el aviso "¡Compra ya!" de la ficha: la
-          // landing no puede leer el `localStorage` de la tienda (vive en un
-          // iframe aislado), asi que se le manda por mensaje.
-          offerEndTime={offerEndTime}
-          // El boton de compra de la landing solo manda un mensaje: la landing
-          // no tiene sesion ni acceso al carrito. Aqui, en el padre, se usa la
-          // misma logica que el boton de la ficha (invitado o autenticado).
-          // La cantidad es la del combo (1, 2 o 3); el precio unitario es el del
-          // producto, asi que el total es siempre precio x cantidad.
-          onAddToCart={(payload) => {
-            void handleAddToCart(payload.quantity ?? 1);
-          }}
-        />
-      ) : (
-        /* Si no hay landing pegada, el B12 conserva la suya diseñada. */
-        product.name === "VITAMIN B12 B6 B1 LIQUID FORMULA" && (
-          <VitaminB12Landing
-            productId={product.id}
-            productName={product.name}
-            productSlug={product.slug}
-            productImage={product.image}
-          />
-        )
-      )}
 
       {/* Barra de compra fija (solo movil).
           Aparece cuando el boton del panel ya no se ve al desplazarse. Va
