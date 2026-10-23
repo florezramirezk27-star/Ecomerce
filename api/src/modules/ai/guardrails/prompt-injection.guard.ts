@@ -14,7 +14,14 @@ export class PromptInjectionGuard {
     /\bnew\s+rule\b/i,
     /\boverride\s+(system\s+)?prompt\b/i,
     /\byour\s+new\s+(name|role|identity|persona)\s+is\b/i,
-    /\bDAN\b/i,
+    // El patron DAN iba a secas y en insensitive: casaba con el verbo "dan"
+    // en español ("¿me dan descuento?", "¿qué dan en promoción?") y el
+    // cliente se llevaba el rechazo de inyeccion, como si el bot no supiera
+    // responder. Ahora exige contexto de jailbreak; el de "olvida
+    // instrucciones" cubre ademas el intento clasico traducido.
+    /\b(olvida|ignora|descarta)\s+(todas\s+)?las?\s+(instrucciones|reglas)\s+(anteriores|previas|antiguas|de\s+arriba|superiores)\b/i,
+    /\b(you are|act as|become|roleplay as|enter)\s+(the\s+)?DAN\b/i,
+    /\bDAN\s+(mode|jailbreak|persona)\b/i,
     /\bdo\s+anything\s+now\b/i,
     /\bno\s+(restrictions|limits|boundaries|rules|filters)\b/i,
     /\boutput\s+without\s+(filters|restrictions|censorship)\b/i,

@@ -294,4 +294,33 @@ describe('AIService sin clave de IA', () => {
 
     gen.mockReset();
   });
+
+  it('responde reclamos y garantias mandando al canal de contacto, sin inventar politicas', async () => {
+    const service = await montar(undefined);
+
+    // Antes "problema con un producto" caia en PRODUCT_INFO o UNKNOWN y el
+    // cliente recibia busquedas raras o el menu generico. El sistema no tiene
+    // politicas de garantias ni devoluciones que prometer.
+    const { text } = await service.processMessage(
+      'Tengo un problema con un producto dañado',
+      [],
+      config,
+    );
+
+    expect(text).toContain('soporte');
+    expect(text).toContain('canal de contacto');
+    expect(text).not.toMatch(/\d+\s*d[ií]as/);
+  });
+
+  it('contesta en texto plano porque el chat no renderiza markdown', async () => {
+    const service = await montar(undefined);
+
+    const { text } = await service.processMessage('hola', [], config);
+
+    // El widget pinta `content` tal cual, sin interpretar markdown: los **
+    // y los enlaces [texto](url) se veian con los simbolos a la vista en la
+    // burbuja. Este test bloqueia volver a escribir respuestas con markdown.
+    expect(text).not.toContain('**');
+    expect(text).not.toMatch(/\[[^\]]+\]\([^)]+\)/);
+  });
 });
