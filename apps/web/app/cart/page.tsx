@@ -513,9 +513,6 @@ export default function CartPage() {
     minimumFractionDigits: 0,
   });
 
-  const FREE_SHIPPING_THRESHOLD = 100000;
-  const freeShippingProgress = Math.min(100, (total / FREE_SHIPPING_THRESHOLD) * 100);
-
   if (loading) {
     return (
       <main className="min-h-dvh bg-gradient-to-b from-orange-50 to-white flex items-center justify-center">
@@ -700,34 +697,6 @@ export default function CartPage() {
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sticky top-6 space-y-5">
                 <h2 className="text-lg font-bold text-gray-900">Resumen del pedido</h2>
-
-                {total < FREE_SHIPPING_THRESHOLD && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <svg className="w-4 h-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2-1m0 0l2 1m-2-1v-4a1 1 0 011-1h2a1 1 0 011 1v4m-4 0l4 1m4-1l2 1m-2-1v-4a1 1 0 011-1h2a1 1 0 011 1v4m-4 0l4-1m4 1V6a1 1 0 00-1-1h-7a1 1 0 00-1 1v10" />
-                      </svg>
-                      <p className="text-xs font-semibold text-amber-800">¡Agrega más productos!</p>
-                    </div>
-                    <p className="text-xs text-amber-700 mb-2">
-                      Te faltan <span className="font-bold">{formatPrice(FREE_SHIPPING_THRESHOLD - total)}</span> para envío gratis
-                    </p>
-                    <div className="w-full bg-amber-200 rounded-full h-1.5">
-                      <div className="bg-amber-500 h-1.5 rounded-full transition-all" style={{ width: `${freeShippingProgress}%` }} />
-                    </div>
-                  </div>
-                )}
-
-                {total >= FREE_SHIPPING_THRESHOLD && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-200 flex items-center justify-center shrink-0">
-                      <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <p className="text-sm font-semibold text-emerald-800">¡Envío gratis confirmado!</p>
-                  </div>
-                )}
 
                 <div className="space-y-3 pb-5 border-b border-gray-100">
                   <div className="flex justify-between text-sm">
