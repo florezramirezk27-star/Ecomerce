@@ -632,7 +632,11 @@ const isVideo = selectedMedia?.kind === "video";
             </div>
 
           <div className="flex flex-col justify-between gap-6">
-            <div className="flex flex-col gap-5">
+            {/* La ficha de compra entera (categoria, titulo, precio, contador,
+                disponibilidad, cantidad, boton y "Lo que necesitas saber") va
+                dentro de una tarjeta blanca para que se lea como un solo
+                bloque sobre el fondo naranja de la pagina. */}
+            <div className="flex flex-col gap-5 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
             {product.category && (
               <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full w-fit">
                 {product.category.name}
@@ -672,7 +676,7 @@ const isVideo = selectedMedia?.kind === "video";
                 cajas apiladas se leen como adorno en vez de como una accion.
                 Separadas por lineas de 1px, el panel se lee como una sola
                 ficha con secciones. */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="px-5 py-4 flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-gray-700">
                   Disponibilidad
@@ -903,7 +907,7 @@ const isVideo = selectedMedia?.kind === "video";
                           obligaba a la pillora a letra diminuta: con tres
                           columnas y `whitespace-nowrap` la fecha completa no
                           cabia en movil y hubo que bajarla a 9px. */}
-                      <span className="text-[10px] sm:text-[11px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                      <span className="text-[9px] sm:text-[11px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
                         {formatDateRange(b.rango[0], b.rango[1])}
                       </span>
                     </div>
