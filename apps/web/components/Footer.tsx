@@ -29,7 +29,7 @@ const SOCIAL = [
   },
   {
     name: "Instagram",
-    href: "https://www.instagram.com",
+    href: "https://www.instagram.com/kroniomarket26/",
     hover: "hover:bg-gradient-to-tr hover:from-[#F58529] hover:via-[#DD2A7B] hover:to-[#8134AF]",
     icon: (
       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
