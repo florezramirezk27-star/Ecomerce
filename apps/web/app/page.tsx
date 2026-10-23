@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { apiFetch, type Paginated } from "@/lib/api";
 import ProductCarousel from "@/components/ProductCarousel";
-import PromoGrid from "@/components/PromoGrid";
 import VideoHero from "@/components/VideoHero";
 import Footer from "@/components/Footer";
 import {
@@ -59,20 +58,6 @@ export default function Home() {
   }, []);
 
   const recommended = products.slice(0, 8);
-  const promotions = products
-    .filter(
-      (p) =>
-        p.oldPrice !== null &&
-        p.oldPrice !== undefined &&
-        Number(p.oldPrice) > Number(p.price),
-    )
-    .sort(
-      (a, b) =>
-        Number(b.oldPrice) -
-        Number(b.price) -
-        (Number(a.oldPrice) - Number(a.price)),
-    )
-    .slice(0, 8);
   const homeProducts = products.filter(
     (p) => p.category?.slug === "hogar-y-decoracion",
   );
@@ -104,10 +89,6 @@ export default function Home() {
                 actionHref="/products"
               />
             </section>
-
-            {promotions.length > 0 && (
-              <PromoGrid products={promotions} />
-            )}
 
             {homeProducts.length > 0 && (
               <section>
