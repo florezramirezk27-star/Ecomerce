@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -243,12 +244,16 @@ export class AuthService {
   }
 
   /**
-   * Codigos de un solo uso para el intercambio del redirect de Google/Facebook.
+   * Códigos de un solo uso para el intercambio OAuth.
    *
-   * Se guardan en Redis con TTL porque el redirect de OAuth y el POST de
-   * /auth/exchange pueden caer en instancias distintas de la API (o entre un
-   * reinicio y el otro), y un Map en memoria pierde el codigo en ese caso. El
-   * Map queda como red de seguridad cuando no hay REDIS_URL o Redis falla.
+   * Redis es la fuente de verdad cuando está configurado.
+   * El almacenamiento local solo se utiliza cuando Redis está deshabilitado.
+   *
+   * El motivo de que el Map no sea un repliegue cuando Redis esta activo: el
+   * redirect de OAuth y el POST de `/auth/exchange` pueden caer en instancias
+   * distintas de la API, y el codigo generado en una no existiria en la otra.
+   * Un codigo que a veces esta en Redis y a veces en el Map es peor que uno
+   * que siempre esta en Redis: falla de forma intermitente y sin pistas.
    */
   private readonly exchangeCodes = new Map<
     string,
@@ -257,9 +262,55 @@ export class AuthService {
 
   private pruneExchangeCodes() {
     const now = Date.now();
+
     for (const [code, entry] of this.exchangeCodes) {
-      if (entry.expiresAt < now) this.exchangeCodes.delete(code);
+      if (entry.expiresAt <= now) {
+        this.exchangeCodes.delete(code);
+      }
     }
+  }
+
+  /**
+   * Valida la estructura del valor guardado antes de devolverlo.
+   *
+   * El valor viene de Redis, no de esta aplicacion. Si alguien lo manipula,
+   * o si el formato cambia, no se debe entregar un token o un usuario con la
+   * forma equivocada. Se comprueba campo a campo y, si algo no cuadra, el
+   * codigo se considera invalido.
+   */
+  private parseExchangePayload(
+    raw: string,
+  ): { token: string; user: ExchangeUser } | null {
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+
+    if (typeof parsed !== 'object' || parsed === null) return null;
+
+    const { token, user } = parsed as { token?: unknown; user?: unknown };
+
+    if (typeof token !== 'string' || token.length === 0) return null;
+    if (typeof user !== 'object' || user === null) return null;
+
+    const { id, name, email, role } = user as Partial<ExchangeUser>;
+
+    if (typeof id !== 'string' || id.length === 0) return null;
+    if (typeof email !== 'string' || email.length === 0) return null;
+    if (role !== 'ADMIN' && role !== 'CUSTOMER') return null;
+
+    return {
+      token,
+      user: {
+        id,
+        name: typeof name === 'string' ? name : '',
+        email,
+        role,
+      },
+    };
   }
 
   async generateExchangeCode(
@@ -267,20 +318,36 @@ export class AuthService {
     user: ExchangeUser,
   ): Promise<string> {
     const code = randomUUID();
-    const expiresAt = Date.now() + EXCHANGE_CODE_TTL_MS;
-
-    this.pruneExchangeCodes();
-    this.exchangeCodes.set(code, { token, user, expiresAt });
 
     if (this.redis.isEnabled()) {
-      await this.redis
+      /* El codigo tiene que estar en Redis antes de redirigir al frontend:
+         si el guardado falla, el intercambio no podria completarse nunca.
+         Fallar aqui con un 503 es mejor que redirigir con un codigo que no
+         existe y que el usuario vera como "codigo invalido" al final. */
+      const guardado = await this.redis
         .setWithTtl(
           `${EXCHANGE_CODE_PREFIX}${code}`,
           EXCHANGE_CODE_TTL_S,
           JSON.stringify({ token, user }),
         )
-        .catch(() => {});
+        .catch(() => false);
+
+      if (!guardado) {
+        throw new ServiceUnavailableException(
+          'No se pudo guardar el código de intercambio. Inténtalo de nuevo.',
+        );
+      }
+
+      return code;
     }
+
+    /* Sin Redis: modo local, solo para desarrollo en una sola instancia. */
+    this.pruneExchangeCodes();
+    this.exchangeCodes.set(code, {
+      token,
+      user,
+      expiresAt: Date.now() + EXCHANGE_CODE_TTL_MS,
+    });
 
     return code;
   }
@@ -289,23 +356,32 @@ export class AuthService {
     code: string,
   ): Promise<{ access_token: string; user: ExchangeUser } | null> {
     if (this.redis.isEnabled()) {
-      const raw = await this.redis
-        .getAndDelete(`${EXCHANGE_CODE_PREFIX}${code}`)
-        .catch(() => null);
+      let raw: string | null;
 
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as {
-            token: string;
-            user: ExchangeUser;
-          };
-          return { access_token: parsed.token, user: parsed.user };
-        } catch {
-          return null;
-        }
+      try {
+        /* GETDEL consume el codigo de forma atomica: un codigo de un solo
+           uso no puede canjearse dos veces, ni aunque dos peticiones lleguen
+           a la vez. */
+        raw = await this.redis.getAndDelete(`${EXCHANGE_CODE_PREFIX}${code}`);
+      } catch {
+        /* Un fallo de Redis no es "codigo invalido": es la infraestructura
+           caida. Se distingue con un 503 para que el cliente pueda reintentar
+           en vez de mostrar un error definitivo. */
+        throw new ServiceUnavailableException(
+          'No se pudo canjear el código de intercambio. Inténtalo de nuevo.',
+        );
       }
+
+      /* `null` = el codigo no existe o ya se canjeo. No es un fallo. */
+      if (raw === null) return null;
+
+      const parsed = this.parseExchangePayload(raw);
+      if (!parsed) return null;
+
+      return { access_token: parsed.token, user: parsed.user };
     }
 
+    /* Sin Redis: modo local, solo para desarrollo en una sola instancia. */
     this.pruneExchangeCodes();
     const entry = this.exchangeCodes.get(code);
     if (!entry) return null;

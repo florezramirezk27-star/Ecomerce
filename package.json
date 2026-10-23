@@ -1,7 +1,7 @@
 {
     "name": "Ecommerce",
     "version": "1.0.0",
-    "packageManager": "pnpm@9.15.4",
+    "packageManager": "pnpm@11.5.0",
     "description": "",
     "main": "index.js",
     "scripts": {
@@ -18,14 +18,12 @@
         "test": "pnpm --dir api test",
         "lint": "pnpm --dir apps/web lint",
         "prisma:generate": "prisma generate",
-        "prisma:migrate": "prisma migrate dev"
+        "prisma:migrate": "prisma migrate dev",
+        "postinstall": "prisma generate"
     },
     "keywords": [],
     "author": "",
     "license": "ISC",
-    "prisma": {
-        "seed": "ts-node prisma/seed.ts"
-    },
     "type": "module",
     "dependencies": {
         "@nestjs/passport": "^11.0.5",
@@ -41,12 +39,5 @@
         "dotenv": "^17.4.2",
         "prisma": "^6.19.3",
         "ts-node": "^10.9.2"
-    },
-    "pnpm": {
-        "overrides": {
-            "shell-quote": "^1.11.0",
-            "proxy-addr": "^2.0.8",
-            "handlebars": ">=4.7.10"
-        }
     }
 }

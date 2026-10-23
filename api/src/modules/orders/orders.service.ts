@@ -482,16 +482,8 @@ export class OrdersService {
 
   /** Invalida la cache del catalogo tras cambiar stock, sin propagar fallos. */
   private async invalidateProductCache(): Promise<void> {
-    try {
-      await this.cache.invalidate('products');
-      await this.cache.invalidate('product');
-    } catch (e) {
-      this.logger.warn(
-        `No se pudo invalidar la cache de productos: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
-      );
-    }
+    await this.cache.invalidate('products');
+    await this.cache.invalidate('product');
   }
 
   /**

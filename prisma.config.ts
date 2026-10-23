@@ -7,6 +7,10 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    // La configuracion del seed vive aqui y no en el campo "prisma" de
+    // package.json, que es el formato antiguo. Con las dos definidas, Prisma
+    // avisa de que hay un conflicto.
+    seed: "ts-node prisma/seed.ts",
   },
   datasource: {
     url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],

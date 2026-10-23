@@ -5,6 +5,14 @@ import Redis from 'ioredis';
 const LOG_THROTTLE_MS = 30_000;
 
 /**
+ * Prefijo de las claves de generacion de la cache.
+ *
+ * Separate del prefijo de la cache (`cache`) a proposito: el barrido por
+ * patron de un scope usa `cache:<scope>:*` y no debe tocar la generacion.
+ */
+const GENERATION_NAMESPACE = 'cachegen';
+
+/**
  * Extrae un mensaje util de un error desconocido.
  *
  * Narrowing sobre `unknown` cubre tanto un `Error` real como los strings y
@@ -255,16 +263,21 @@ export class RedisService implements OnModuleDestroy {
     return result !== null;
   }
 
-  /** Lectura y borrado atomicos (GETDEL), con repliegue a get+del en Redis < 6.2. */
+  /**
+   * Consume un valor de forma atomica mediante GETDEL.
+   *
+   * `null` significa que la clave no existe. Los errores de conexion o de
+   * comando se propagan al llamador.
+   *
+   * Antes habia un repliegue a `get` + `del` para Redis < 6.2, pero esa
+   * secuencia **no es atomica**: entre el `get` y el `del` otra peticion
+   * podia leer el mismo valor, y un codigo de un solo uso se usaria dos
+   * veces. GETDEL lo resuelve en una sola operacion.
+   *
+   * Requiere Redis 6.2 o superior.
+   */
   async getAndDelete(key: string): Promise<string | null> {
-    const value = await this.safe('getdel', (client) => client.getdel(key));
-    if (value !== null) return value;
-
-    const fallback = await this.safe('get', (client) => client.get(key));
-    if (fallback !== null) {
-      await this.safe('del', (client) => client.del(key));
-    }
-    return fallback;
+    return this.safeOrThrow('getdel', (client) => client.getdel(key));
   }
 
   /**
@@ -341,13 +354,102 @@ export class RedisService implements OnModuleDestroy {
   /**
    * Borra todas las claves que casen con un patron. Usa SCAN en lugar de KEYS
    * para no bloquear Redis durante el recorrido.
+   *
+   * El resultado distingue tres situaciones, que antes se confundian en una:
+   * - `undefined`: Redis no estaba disponible. No se pudo ni comprobar si
+   *   habia claves ni borrarlas, asi que la invalidacion **no** se puede dar
+   *   por buena. Antes devolvia `0` y el llamador creia que todo habia ido
+   *   bien, dejando datos viejos sirviendo hasta que expiraran.
+   * - `0`: Redis respondio y no habia ninguna clave que borrar. Todo bien.
+   * - Un numero mayor que cero: cuantas claves se borraron.
    */
-  async delByPattern(pattern: string): Promise<number> {
+  async delByPattern(pattern: string): Promise<number | undefined> {
     const keys = await this.getByPattern(pattern);
-    if (keys === undefined || keys.length === 0) return 0;
+
+    // Redis no esta disponible: no se pudo comprobar ni invalidar la cache.
+    if (keys === undefined) return undefined;
+
+    // Redis respondio, pero no hay claves que borrar.
+    if (keys.length === 0) return 0;
 
     const count = await this.safeOrThrow('del', (c) => c.del(...keys));
     return count ?? 0;
+  }
+
+  /**
+   * Generacion vigente de un scope de cache.
+   *
+   * `undefined` significa que **no se puede saber**: Redis no esta
+   * configurado, esta desconectado o el comando fallo. No es lo mismo que
+   * "todavia no hay ninguna generacion", que es `0`.
+   *
+   * La distincion importa: quien llama usa `undefined` para saber que no
+   * puede confiar en la cache y `0` para saber que la cache es valida pero
+   * vacia. Confundir los dos haria que, con Redis caido, se sirviesen datos
+   * de una generacion antigua.
+   */
+  async getGeneration(scope: string): Promise<number | undefined> {
+    const client = await this.ready();
+    if (!client) return undefined;
+
+    try {
+      const raw = await client.get(this.generationKey(scope));
+
+      // Todavia no se ha incrementado ninguna vez: la primera generacion.
+      if (raw === null) return 0;
+
+      const generacion = Number(raw);
+      if (!Number.isSafeInteger(generacion) || generacion < 0) {
+        this.logger.warn(
+          `Redis getGeneration devolvio un valor invalido: ${raw}`,
+        );
+        return undefined;
+      }
+
+      return generacion;
+    } catch (error: unknown) {
+      this.logger.warn(`Redis getGeneration fallo: ${describe(error)}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * Incrementa la generacion de un scope y devuelve la nueva.
+   *
+   * `INCR` es atomico en Redis: dos invalidaciones simultaneas obtienen dos
+   * generaciones distintas y la segunda no pisa a la primera. Por eso el
+   * valor devuelto es el de **despues** de incrementar, y la generacion
+   * anterior es ese valor menos uno.
+   *
+   * `undefined` si Redis no esta disponible: la invalidacion no se pudo hacer
+   * y quien llama tiene que avisarlo.
+   */
+  async bumpGeneration(scope: string): Promise<number | undefined> {
+    const client = await this.ready();
+    if (!client) return undefined;
+
+    try {
+      return await client.incr(this.generationKey(scope));
+    } catch (error: unknown) {
+      this.logger.warn(`Redis bumpGeneration fallo: ${describe(error)}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * Clave donde vive la generacion de un scope.
+   *
+   * El prefijo `cachegen` es deliberadamente distinto del de la cache
+   * (`cache`): el barrido por patron de un scope usa `cache:<scope>:*`, y si
+   * la generacion viviera debajo de ese patron se borraria con el. Si la
+   * generacion volviera a 0, se volverian a usar las claves de la generacion
+   * 0, que podrian seguir vivas con datos viejos.
+   *
+   * Esta clave **no lleva TTL**: la generacion tiene que sobrevivir a los
+   * reinicios del proceso, o la cache volveria a una generacion ya usada.
+   */
+  private generationKey(scope: string): string {
+    return `${GENERATION_NAMESPACE}:${scope}`;
   }
 
   /**

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
@@ -24,6 +25,22 @@ describe('AuthService', () => {
   const cacheSet = jest.fn();
   const cacheInvalidate = jest.fn();
   const cacheInvalidateUser = jest.fn();
+
+  /**
+   * Redis del intercambio OAuth.
+   *
+   * `isEnabled` decide si el codigo vive en Redis (fuente de verdad) o en el
+   * Map local (modo desarrollo sin Redis). `getAndDelete` consume el codigo
+   * de forma atomica.
+   */
+  const redisIsEnabled = jest.fn();
+  const redisGetAndDelete = jest.fn();
+  const redisSetWithTtl = jest.fn();
+  const redisMock = {
+    isEnabled: redisIsEnabled,
+    getAndDelete: redisGetAndDelete,
+    setWithTtl: redisSetWithTtl,
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -56,6 +73,10 @@ describe('AuthService', () => {
     cacheSet.mockResolvedValue(undefined);
     cacheInvalidate.mockResolvedValue(undefined);
     cacheInvalidateUser.mockResolvedValue(undefined);
+    // Por defecto, sin Redis: el modo local.
+    redisIsEnabled.mockReturnValue(false);
+    redisGetAndDelete.mockResolvedValue(null);
+    redisSetWithTtl.mockResolvedValue(true);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -85,7 +106,7 @@ describe('AuthService', () => {
         },
         {
           provide: RedisService,
-          useValue: {},
+          useValue: redisMock,
         },
         {
           provide: SessionCacheService,
@@ -193,6 +214,126 @@ describe('AuthService', () => {
       ).rejects.toThrow('Sesión expirada o inválida');
 
       expect(transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('intercambio OAuth', () => {
+    const usuario = {
+      id: 'user-1',
+      name: 'Ana',
+      email: 'ana@kronio.co',
+      role: 'CUSTOMER' as const,
+    };
+
+    it('con Redis, guarda el codigo en Redis y no en el Map local', async () => {
+      redisIsEnabled.mockReturnValue(true);
+
+      const codigo = await service.generateExchangeCode('tok', usuario);
+
+      expect(redisSetWithTtl).toHaveBeenCalledWith(
+        expect.stringContaining(codigo),
+        expect.any(Number),
+        JSON.stringify({ token: 'tok', user: usuario }),
+      );
+    });
+
+    it('con Redis, canjea el codigo leyendolo de Redis', async () => {
+      redisIsEnabled.mockReturnValue(true);
+      redisGetAndDelete.mockResolvedValue(
+        JSON.stringify({ token: 'tok', user: usuario }),
+      );
+
+      const resultado = await service.exchangeCode('codigo-123');
+
+      expect(resultado).toEqual({ access_token: 'tok', user: usuario });
+      expect(redisGetAndDelete).toHaveBeenCalledWith(
+        expect.stringContaining('codigo-123'),
+      );
+    });
+
+    it('con Redis, no recurre al Map local si el codigo no existe', async () => {
+      redisIsEnabled.mockReturnValue(true);
+      redisGetAndDelete.mockResolvedValue(null);
+
+      const resultado = await service.exchangeCode('codigo-inexistente');
+
+      expect(resultado).toBeNull();
+      // El Map local no se consulta: con Redis activo la fuente de verdad es
+      // Redis, y un codigo que esta en un lado y no en el otro fallaria de
+      // forma intermitente.
+      expect(redisGetAndDelete).toHaveBeenCalledTimes(1);
+    });
+
+    it('con Redis, un fallo de infraestructura es 503 y no "código inválido"', async () => {
+      redisIsEnabled.mockReturnValue(true);
+      redisGetAndDelete.mockRejectedValue(new Error('Redis no disponible'));
+
+      // Un 400 "código inválido" seria mentira: el problema no es el codigo,
+      // es que Redis no responde, y el cliente deberia poder reintentar.
+      await expect(service.exchangeCode('codigo-123')).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
+    it('con Redis, un fallo al guardar el codigo es 503', async () => {
+      redisIsEnabled.mockReturnValue(true);
+      redisSetWithTtl.mockResolvedValue(false);
+
+      await expect(
+        service.generateExchangeCode('tok', usuario),
+      ).rejects.toThrow(ServiceUnavailableException);
+    });
+
+    it('rechaza un valor con la estructura manipulada', async () => {
+      redisIsEnabled.mockReturnValue(true);
+
+      // Token que no es texto.
+      redisGetAndDelete.mockResolvedValue(
+        JSON.stringify({ token: 42, user: usuario }),
+      );
+      await expect(service.exchangeCode('codigo')).resolves.toBeNull();
+
+      // Rol que no existe.
+      redisGetAndDelete.mockResolvedValue(
+        JSON.stringify({
+          token: 'tok',
+          user: { ...usuario, role: 'SUPERADMIN' },
+        }),
+      );
+      await expect(service.exchangeCode('codigo')).resolves.toBeNull();
+
+      // Usuario que no es un objeto.
+      redisGetAndDelete.mockResolvedValue(
+        JSON.stringify({ token: 'tok', user: 'ana' }),
+      );
+      await expect(service.exchangeCode('codigo')).resolves.toBeNull();
+
+      // JSON invalido.
+      redisGetAndDelete.mockResolvedValue('{no es json');
+      await expect(service.exchangeCode('codigo')).resolves.toBeNull();
+    });
+
+    it('sin Redis, el modo local guarda y canjea el codigo', async () => {
+      redisIsEnabled.mockReturnValue(false);
+
+      const codigo = await service.generateExchangeCode('tok', usuario);
+      const resultado = await service.exchangeCode(codigo);
+
+      expect(resultado).toEqual({ access_token: 'tok', user: usuario });
+      expect(redisSetWithTtl).not.toHaveBeenCalled();
+    });
+
+    it('sin Redis, el codigo local es de un solo uso', async () => {
+      redisIsEnabled.mockReturnValue(false);
+
+      const codigo = await service.generateExchangeCode('tok', usuario);
+
+      await expect(service.exchangeCode(codigo)).resolves.toEqual({
+        access_token: 'tok',
+        user: usuario,
+      });
+      // La segunda vez ya no esta: se borro al canjearlo.
+      await expect(service.exchangeCode(codigo)).resolves.toBeNull();
     });
   });
 });

@@ -889,5 +889,6 @@ export class DropiProductsService {
     await this.cache.invalidate('products');
     await this.cache.invalidate('product');
     await this.cache.invalidate('categories');
+    await this.cache.invalidate('category');
   }
 }

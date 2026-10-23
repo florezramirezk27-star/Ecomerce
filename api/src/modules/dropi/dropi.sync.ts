@@ -318,6 +318,8 @@ export class DropiSyncService implements OnModuleInit, OnModuleDestroy {
     if (summary.updated > 0) {
       await this.cache.invalidate('products');
       await this.cache.invalidate('product');
+      await this.cache.invalidate('categories');
+      await this.cache.invalidate('category');
     }
 
     return summary;

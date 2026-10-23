@@ -3,8 +3,26 @@ packages:
   - "api"
   - "packages/*"
 
+# Generaciones de la cache del catalogo y limites de seguridad.
+#
+# Este archivo es la unica fuente de los overrides: pnpm 10+ dejo de leer el
+# campo "pnpm" de package.json (por eso el aviso "no longer read by pnpm" y
+# por eso se quito de ahi). Con pnpm 9, en cambio, este bloque se ignoraba y
+# las reglas solo se aplicaban desde package.json.
 overrides:
   shell-quote: ^1.11.0
   proxy-addr: ^2.0.8
   handlebars: ">=4.7.10"
   multer: "^2.3.0"
+
+# pnpm 10+ no ejecuta los scripts de compilacion de las dependencias salvo
+# que esten en esta lista. Sin ella, prisma no genera el cliente y bcrypt se
+# queda sin su binario nativo: la API no arranca.
+allowBuilds:
+  "@prisma/client": true
+  "@prisma/engines": true
+  bcrypt: true
+  prisma: true
+  unrs-resolver: true
+  # Telemetria de descargas: no hace falta para que nada funcione.
+  "@scarf/scarf": false

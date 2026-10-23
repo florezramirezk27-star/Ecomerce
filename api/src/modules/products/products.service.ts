@@ -209,6 +209,10 @@ export class ProductsService {
     await this.cache.invalidate('products');
     await this.cache.invalidate('product');
     await this.cache.invalidate('categories');
+    // La categoria se cachea **con sus productos** (precio, stock, nombre).
+    // Sin esta invalidacion, `GET /categories/:id` seguiria devolviendo la
+    // ficha anterior del producto recien creado.
+    await this.cache.invalidate('category');
     return product;
   }
 
@@ -223,6 +227,10 @@ export class ProductsService {
     await this.cache.invalidate('products');
     await this.cache.invalidate('product');
     await this.cache.invalidate('categories');
+    // La categoria se cachea **con sus productos**: al cambiar el precio, el
+    // stock o el nombre de un producto, la ficha de su categoria seguia
+    // mostrando los datos viejos.
+    await this.cache.invalidate('category');
     return product;
   }
 
@@ -250,6 +258,9 @@ export class ProductsService {
     await this.cache.invalidate('products');
     await this.cache.invalidate('product');
     await this.cache.invalidate('categories');
+    // Tambien aqui: la categoria cachea la lista de sus productos, asi que
+    // un producto borrado (o archivado) seguia apareciendo en su ficha.
+    await this.cache.invalidate('category');
     return result;
   }
 }
