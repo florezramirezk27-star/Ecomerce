@@ -19,7 +19,7 @@ import { openCookiePreferences } from "@/lib/consent";
 const SOCIAL = [
   {
     name: "Facebook",
-    href: "https://www.facebook.com",
+    href: "https://www.facebook.com/profile.php?id=61594302555957",
     hover: "hover:bg-[#1877F2]",
     icon: (
       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
