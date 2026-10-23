@@ -31,6 +31,7 @@ describe('OrdersService', () => {
   const orderFindUnique = jest.fn();
   const orderUpdate = jest.fn();
   const cartFindUnique = jest.fn();
+  const productFindMany = jest.fn();
   const trackingUpsert = jest.fn();
   const trackingFindUnique = jest.fn();
   const transactionMock = jest.fn();
@@ -71,6 +72,7 @@ describe('OrdersService', () => {
     orderFindFirst.mockResolvedValue(null);
     orderFindUnique.mockResolvedValue(null);
     cartFindUnique.mockResolvedValue(null);
+    productFindMany.mockResolvedValue([]);
     orderUpdate.mockResolvedValue({ status: 'PAID' });
     trackingUpsert.mockResolvedValue({});
     trackingFindUnique.mockResolvedValue(null);
@@ -116,6 +118,7 @@ describe('OrdersService', () => {
               update: orderUpdate,
             },
             cart: { findUnique: cartFindUnique },
+            product: { findMany: productFindMany },
             orderTracking: {
               upsert: trackingUpsert,
               findUnique: trackingFindUnique,
@@ -379,6 +382,129 @@ describe('OrdersService', () => {
       expect(dropiCreateOrder).not.toHaveBeenCalled();
       // Sin productos de proveedor no hay nada que re-sincronizar.
       expect(dropiSyncStock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('checkout de invitado (sin sesion)', () => {
+    const producto = {
+      id: 'prod-1',
+      name: 'Reloj',
+      price: 100000,
+      stock: 5,
+      active: true,
+      dropiProductId: null,
+      variations: null,
+    };
+
+    const dto: CheckoutDto = {
+      shippingName: 'Pedro Gomez',
+      shippingPhone: '3009876543',
+      shippingAddress: 'Carrera 7 #8-9',
+      shippingCity: 'Medellin',
+      shippingState: 'Antioquia',
+      shippingEmail: 'pedro@test.com',
+      items: [{ productId: 'prod-1', quantity: 2 }],
+    };
+
+    beforeEach(() => {
+      productFindMany.mockResolvedValue([producto]);
+      txMock.product.findMany.mockResolvedValue([producto]);
+    });
+
+    it('crea el pedido sin sesion, sin usuario y sin carrito en el servidor', async () => {
+      const res = (await service.checkout(null, dto)) as CheckoutRes;
+
+      // El invitado no tiene cuenta ni carrito en el servidor: ninguna de
+      // las dos consultas debe ejecutarse.
+      expect(userFindUnique).not.toHaveBeenCalled();
+      expect(cartFindUnique).not.toHaveBeenCalled();
+
+      expect(txMock.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: null,
+            // El precio viene del producto de la base, no del cliente.
+            items: {
+              create: [
+                expect.objectContaining({
+                  productId: 'prod-1',
+                  quantity: 2,
+                  price: 100000,
+                  variationId: 0,
+                }),
+              ],
+            },
+          }) as unknown,
+        }),
+      );
+
+      // No hay carrito del servidor que vaciar.
+      expect(txMock.cartItem.deleteMany).not.toHaveBeenCalled();
+      expect(res.status).toBe('PENDING');
+    });
+
+    it('responde "Tu carrito esta vacio" cuando el invitado no manda items', async () => {
+      await expect(
+        service.checkout(null, { ...dto, items: [] }),
+      ).rejects.toThrow('Tu carrito está vacío');
+
+      expect(cartFindUnique).not.toHaveBeenCalled();
+      expect(txMock.order.create).not.toHaveBeenCalled();
+    });
+
+    it('rechaza un producto que ya no existe en el catalogo', async () => {
+      productFindMany.mockResolvedValue([]);
+
+      await expect(service.checkout(null, dto)).rejects.toThrow(
+        'Un producto de tu carrito ya no está disponible',
+      );
+      expect(txMock.order.create).not.toHaveBeenCalled();
+    });
+
+    it('rechaza una presentacion inexistente (no se confia en el cliente)', async () => {
+      const conVariaciones = {
+        ...producto,
+        variations: [{ id: 10, name: 'Rojo', stock: 3 }],
+      };
+      productFindMany.mockResolvedValue([conVariaciones]);
+      txMock.product.findMany.mockResolvedValue([conVariaciones]);
+
+      await expect(
+        service.checkout(null, {
+          ...dto,
+          items: [{ productId: 'prod-1', quantity: 1, variationId: 999 }],
+        }),
+      ).rejects.toThrow('La presentación seleccionada no existe');
+      expect(txMock.order.create).not.toHaveBeenCalled();
+    });
+
+    it('resuelve el nombre de la presentacion en el servidor', async () => {
+      const conVariaciones = {
+        ...producto,
+        variations: [{ id: 10, name: 'Rojo', stock: 3 }],
+      };
+      productFindMany.mockResolvedValue([conVariaciones]);
+      txMock.product.findMany.mockResolvedValue([conVariaciones]);
+
+      await service.checkout(null, {
+        ...dto,
+        items: [{ productId: 'prod-1', quantity: 1, variationId: 10 }],
+      });
+
+      expect(txMock.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            items: {
+              create: [
+                expect.objectContaining({
+                  variationId: 10,
+                  variationName: 'Rojo',
+                }),
+              ],
+            },
+          }) as unknown,
+        }),
+      );
     });
   });
 });

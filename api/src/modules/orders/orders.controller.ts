@@ -17,9 +17,13 @@ import { parsePagination } from '../../common/pipes/parse-pagination';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { checkoutSchema, updateOrderStatusSchema } from '../../common/schemas';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import type { AuthenticatedRequest } from '../../common/types/auth-request';
+import type {
+  AuthenticatedRequest,
+  OptionalAuthRequest,
+} from '../../common/types/auth-request';
 
 @Controller('orders')
 export class OrdersController {
@@ -37,17 +41,20 @@ export class OrdersController {
   }
 
   @Post('checkout')
-  @UseGuards(JwtAuthGuard)
+  // Compra sin sesión: el guard es opcional y el servicio recibe `userId`
+  // solo cuando hay sesión. El invitado manda sus items en el cuerpo; el
+  // usuario registrado sigue usando su carrito del servidor.
+  @UseGuards(OptionalJwtAuthGuard)
   // Cada checkout escribe pedido, descuenta stock y llama a la API de Dropi.
   // El limite global (100/min) deja margen de sobra para automatizar pedidos y
   // agotar el stock de un producto. 10/min sigue siendo comodamente mas que lo
   // que necesita un comprador legitimo.
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async checkout(
-    @Req() req: AuthenticatedRequest,
+    @Req() req: OptionalAuthRequest,
     @Body(new ZodValidationPipe(checkoutSchema)) dto: CheckoutDto,
   ) {
-    return this.ordersService.checkout(req.user.id, dto);
+    return this.ordersService.checkout(req.user?.id ?? null, dto);
   }
 
   @Get('my-orders')

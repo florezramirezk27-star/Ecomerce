@@ -72,7 +72,8 @@ export interface OrderTrackingInfo {
 
 export interface Order {
   id: string;
-  userId: string;
+  /** `null` en pedidos de invitado (checkout sin sesión). */
+  userId: string | null;
   user?: User;
   status:
     | 'PENDING'
@@ -83,6 +84,7 @@ export interface Order {
   total: number | string;
   items: OrderItem[];
   createdAt: string;
+  shippingName?: string | null;
   shippingEmail?: string | null;
   tracking?: OrderTrackingInfo | null;
 }

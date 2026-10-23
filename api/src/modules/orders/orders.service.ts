@@ -12,7 +12,25 @@ import { Prisma, OrderStatus } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
 import { CheckoutDto } from './dto/checkout.dto';
-import { effectiveStock } from '../../common/utils/product-variations';
+import {
+  effectiveStock,
+  findProductVariation,
+} from '../../common/utils/product-variations';
+import type { Product } from '@prisma/client';
+
+/**
+ * Linea de pedido ya preparada: salio del carrito del servidor o del cuerpo
+ * que manda el invitado. `product` es la fila real de la base de datos: el
+ * precio, el stock y el id de Dropi se leen de ahi, nunca del cliente.
+ */
+type CheckoutLine = {
+  productId: string;
+  quantity: number;
+  /** Presentacion elegida (0 = producto simple). */
+  variationId: number;
+  variationName: string | null;
+  product: Product;
+};
 
 type ShippingLike = {
   name: string;
@@ -72,16 +90,21 @@ export class OrdersService {
     private readonly cache: CatalogCacheService,
   ) {}
 
-  async checkout(userId: string, dto: CheckoutDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+  async checkout(userId: string | null, dto: CheckoutDto) {
+    // Con sesion `userId` trae el id; sin sesion (invitado) llega null y las
+    // lineas del pedido se leen del cuerpo de la peticion.
+    const user = userId
+      ? await this.prisma.user.findUnique({
+          where: { id: userId },
+        })
+      : null;
 
     if (dto.idempotencyKey) {
       // `findFirst` y no `findUnique`: la busqueda tiene que estar acotada por
       // `userId`. Buscando solo por la clave, quien posea el UUID de otro
       // usuario receive su orden completa con nombre, telefono, direccion y
-      // notas. La idempotencia es por cliente, no global.
+      // notas. La idempotencia es por cliente, no global (con `userId: null`
+      // la clave queda acotada a los pedidos de invitado).
       const existing = await this.prisma.order.findFirst({
         where: { idempotencyKey: dto.idempotencyKey, userId },
         include: { items: true },
@@ -91,24 +114,11 @@ export class OrdersService {
       }
     }
 
-    const cart = await this.prisma.cart.findUnique({
-      where: { userId },
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
-    });
-
-    if (!cart || cart.items.length === 0) {
-      throw new BadRequestException('Tu carrito está vacío');
-    }
+    const { items, serverCartId } = await this.loadCheckoutItems(userId, dto);
 
     const customerEmail = dto.shippingEmail || user?.email || null;
 
-    const dropiCartItems = cart.items.filter((i) => i.product.dropiProductId);
+    const dropiCartItems = items.filter((i) => i.product.dropiProductId);
     if (dropiCartItems.length > 0) {
       // Re-sincroniza el stock local con el de Dropi justo antes de comprar:
       // asi el stock que valida (y descuenta) la transaccion de abajo es el
@@ -145,14 +155,14 @@ export class OrdersService {
     let order;
     try {
       order = await this.prisma.$transaction(async (tx) => {
-        const productIds = cart.items.map((i) => i.productId);
+        const productIds = items.map((i) => i.productId);
         const products = await tx.product.findMany({
           where: { id: { in: productIds } },
         });
 
         const productMap = new Map(products.map((p) => [p.id, p]));
 
-        const total = cart.items.reduce((sum, item) => {
+        const total = items.reduce((sum, item) => {
           const product = productMap.get(item.productId);
 
           if (!product || !product.active) {
@@ -189,7 +199,7 @@ export class OrdersService {
             notes: dto.notes || null,
 
             items: {
-              create: cart.items.map((item) => ({
+              create: items.map((item) => ({
                 productId: item.productId,
                 quantity: item.quantity,
                 price: item.product.price,
@@ -206,7 +216,7 @@ export class OrdersService {
           },
         });
 
-        for (const item of cart.items) {
+        for (const item of items) {
           const updated = await tx.product.updateMany({
             where: {
               id: item.productId,
@@ -226,11 +236,15 @@ export class OrdersService {
           }
         }
 
-        await tx.cartItem.deleteMany({
-          where: {
-            cartId: cart.id,
-          },
-        });
+        // Solo el usuario registrado tiene carrito que vaciar aqui; el
+        // invitado limpia el suyo (localStorage) desde el frontend.
+        if (serverCartId) {
+          await tx.cartItem.deleteMany({
+            where: {
+              cartId: serverCartId,
+            },
+          });
+        }
 
         return created;
       });
@@ -249,7 +263,7 @@ export class OrdersService {
       throw err;
     }
 
-    const dropiItems = cart.items.filter((i) => i.product.dropiProductId);
+    const dropiItems = items.filter((i) => i.product.dropiProductId);
 
     let dropiResult: DropiResult;
 
@@ -362,7 +376,7 @@ export class OrdersService {
         customerEmail,
         user?.name || dto.shippingName || 'Cliente',
         order.id,
-        cart.items.map((item) => ({
+        items.map((item) => ({
           name: item.product.name,
           quantity: item.quantity,
           price: Number(item.product.price),
@@ -422,7 +436,7 @@ export class OrdersService {
         user?.name || dto.shippingName,
         customerEmail || null,
         order.id,
-        cart.items.map((item) => ({
+        items.map((item) => ({
           name: item.product.name,
           quantity: item.quantity,
           price: Number(item.product.price),
@@ -478,6 +492,82 @@ export class OrdersService {
         admin: adminEmail ? 'queued' : 'skipped',
       },
     };
+  }
+
+  /**
+   * Resuelve las lineas del pedido y el id del carrito del servidor
+   * (`null` cuando no hay: el invitado no tiene carrito en la base de datos).
+   *
+   * Con sesion no cambia nada respecto a antes: la fuente de verdad sigue
+   * siendo el carrito del servidor. Sin sesion las lineas vienen en el cuerpo,
+   * pero el precio, el stock y la presentacion se validan aqui contra el
+   * producto real: lo unico que el cliente puede decidir es que, cuanto y con
+   * que presentacion compra.
+   */
+  private async loadCheckoutItems(
+    userId: string | null,
+    dto: CheckoutDto,
+  ): Promise<{ items: CheckoutLine[]; serverCartId: string | null }> {
+    if (userId) {
+      const cart = await this.prisma.cart.findUnique({
+        where: { userId },
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
+          },
+        },
+      });
+
+      if (!cart || cart.items.length === 0) {
+        throw new BadRequestException('Tu carrito está vacío');
+      }
+
+      return { items: cart.items, serverCartId: cart.id };
+    }
+
+    const guestItems = dto.items ?? [];
+    if (guestItems.length === 0) {
+      throw new BadRequestException('Tu carrito está vacío');
+    }
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: guestItems.map((i) => i.productId) } },
+    });
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
+    const items: CheckoutLine[] = guestItems.map((line) => {
+      const product = productMap.get(line.productId);
+      if (!product) {
+        throw new BadRequestException(
+          'Un producto de tu carrito ya no está disponible',
+        );
+      }
+      if (!product.active) {
+        throw new BadRequestException(
+          `El producto ${product.name} no está disponible`,
+        );
+      }
+
+      const variationId = line.variationId ?? 0;
+      const variation = findProductVariation(product.variations, variationId);
+      if (variationId > 0 && !variation) {
+        // Misma regla que al agregar al carrito: una presentacion inexistente
+        // solo llegaria a Dropi para que la rechazaran alla.
+        throw new BadRequestException('La presentación seleccionada no existe');
+      }
+
+      return {
+        productId: product.id,
+        quantity: line.quantity,
+        variationId,
+        variationName: variation ? variation.name : null,
+        product,
+      };
+    });
+
+    return { items, serverCartId: null };
   }
 
   /** Invalida la cache del catalogo tras cambiar stock, sin propagar fallos. */

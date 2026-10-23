@@ -278,16 +278,18 @@ export default function AdminOrdersPage() {
                         Orden #{order.id.slice(0, 8)}
                       </p>
                       <p className="truncate text-base font-bold text-slate-900">
-                        {order.user?.name || 'Usuario desconocido'}
+                        {/* En pedidos de invitado no hay cuenta: manda el
+                            nombre de envío del propio pedido. */}
+                        {order.user?.name || order.shippingName || 'Invitado'}
                       </p>
                       <p className="truncate text-xs text-slate-500 md:hidden">
-                        {order.user?.email}
+                        {order.user?.email || order.shippingEmail}
                       </p>
                     </div>
                     <div className="hidden md:block">
                       <p className="text-xs text-slate-400">Email</p>
                       <p className="max-w-[200px] truncate text-sm font-medium text-slate-700">
-                        {order.user?.email}
+                        {order.user?.email || order.shippingEmail}
                       </p>
                     </div>
                     <div className="hidden sm:block">

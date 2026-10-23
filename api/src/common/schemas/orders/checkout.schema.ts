@@ -20,6 +20,30 @@ const MAX_EMAIL = 254; // RFC 5321, limite Practico de la especificacion.
 const MAX_DOC = 40;
 const MAX_NOTES = 1000;
 
+/**
+ * Items que manda el cliente en un checkout de invitado.
+ *
+ * El invitado no tiene carrito en el servidor (el suyo vive en
+ * `localStorage`), asi que la linea de pedido viaja en el cuerpo. El precio
+ * NUNCA viene de aqui: el servidor lo lee del producto en base de datos, igual
+ * que en el camino con sesion. `variationName` tampoco se acepta: el nombre de
+ * la presentacion se resuelve contra `product.variations` para no guardar
+ * texto inventado ni mandar una variante inexistente a Dropi.
+ */
+const guestItemSchema = z.object({
+  productId: z.string().min(1, 'El ID del producto es requerido'),
+  quantity: z
+    .number()
+    .int()
+    .min(1, 'La cantidad debe ser al menos 1')
+    .max(999, 'La cantidad no puede pasar de 999'),
+  variationId: z
+    .number()
+    .int('La presentación debe ser un número entero')
+    .min(0, 'Presentación inválida')
+    .optional(),
+});
+
 export const checkoutSchema = z.object({
   idempotencyKey: z
     .string()
@@ -64,5 +88,14 @@ export const checkoutSchema = z.object({
   notes: z
     .string()
     .max(MAX_NOTES, `Las notas no pueden pasar de ${MAX_NOTES} caracteres`)
+    .optional(),
+  /**
+   * Solo lo manda el invitado. Sin min(1): si llega vacio el servicio responde
+   * "Tu carrito esta vacio", el mismo mensaje que ve un usuario registrado sin
+   * carrito (el validador de Zod no reemplaza esa regla de negocio).
+   */
+  items: z
+    .array(guestItemSchema)
+    .max(100, 'El carrito es demasiado grande')
     .optional(),
 });

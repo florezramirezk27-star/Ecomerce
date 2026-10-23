@@ -206,8 +206,9 @@ model Order {
   // Dropi/WooCommerce requiere IDs de pedido numéricos enteros
   numericId Int          @unique @default(autoincrement())
 
-  userId    String
-  user      User         @relation(fields: [userId], references: [id])
+  // Pedido de invitado (checkout sin sesión): sin cuenta asociada.
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
 
   total     Decimal      @db.Decimal(10,2)
   status    OrderStatus  @default(PENDING)

@@ -1,4 +1,10 @@
-import { IsString, IsOptional, MinLength, IsEmail } from 'class-validator';
+import {
+  IsArray,
+  IsString,
+  IsOptional,
+  MinLength,
+  IsEmail,
+} from 'class-validator';
 
 export class CheckoutDto {
   @IsString()
@@ -44,4 +50,18 @@ export class CheckoutDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  /**
+   * Items del carrito del INVITADO (checkout sin sesión). El ZodValidationPipe
+   * del controlador hace la validación real; aquí solo se declara para que el
+   * `whitelist` del ValidationPipe global no la elimine antes de llegar a Zod.
+   * El usuario registrado no los envía: su carrito vive en el servidor.
+   */
+  @IsOptional()
+  @IsArray()
+  items?: Array<{
+    productId: string;
+    quantity: number;
+    variationId?: number;
+  }>;
 }

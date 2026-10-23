@@ -20,3 +20,10 @@ export interface AuthUser {
  * campos (`req.user.id`, `req.user.role`, ...).
  */
 export type AuthenticatedRequest = Request & { user: AuthUser };
+
+/**
+ * Petición con `OptionalJwtAuthGuard`: `user` es `null` cuando no hay sesión
+ * (invitado) o cuando el token ya no es valido. El controlador es el que
+ * decide que hacer en cada caso.
+ */
+export type OptionalAuthRequest = Request & { user: AuthUser | null };

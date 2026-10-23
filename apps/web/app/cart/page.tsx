@@ -7,7 +7,7 @@ import { getUser, isAuthenticated } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import ProductImage from "@/components/ProductImage";
 import AddressMap from "@/components/AddressMap";
-import { getGuestCart, removeFromGuestCart, updateGuestCartQuantity, type GuestCartItem } from "@/lib/guest-cart";
+import { clearGuestCart, getGuestCart, removeFromGuestCart, updateGuestCartQuantity, type GuestCartItem } from "@/lib/guest-cart";
 import { mergeGuestCartIntoServer } from "@/lib/cart-merge";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
 import { DEPARTMENTS, MUNICIPALITIES } from "@/lib/colombia";
@@ -355,10 +355,8 @@ export default function CartPage() {
   };
 
   const handleOpenCheckout = () => {
-    if (!isAuthenticated()) {
-      setMessage({ type: "error", text: "Debes iniciar sesión" });
-      return;
-    }
+    // Comprar no exige cuenta: el invitado llena sus datos de envio y el
+    // backend recibe sus lineas de carrito en el cuerpo de la peticion.
     setShippingForm({
       shippingName: "",
       shippingPhone: "",
@@ -387,7 +385,7 @@ export default function CartPage() {
   };
 
   const handleCheckoutSubmit = async () => {
-    if (!isAuthenticated()) return;
+    const registrado = isAuthenticated();
 
     if (
       !shippingForm.shippingName ||
@@ -401,14 +399,39 @@ export default function CartPage() {
       return;
     }
 
+    // Sin cuenta no hay pedido en "mis pedidos" ni correo de respaldo en la
+    // cuenta: la factura y las novedades van al correo del formulario, asi que
+    // para el invitado es obligatorio.
+    if (!registrado && !shippingForm.shippingEmail) {
+      setMessage({
+        type: "error",
+        text: "Para comprar sin cuenta necesitas un correo: ahí recibirás la factura y las novedades del pedido.",
+      });
+      return;
+    }
+
     setCheckoutLoading(true);
     try {
       if (!idempotencyRef.current) {
         idempotencyRef.current = crypto.randomUUID();
       }
+      // El invitado no tiene carrito en el servidor (el suyo vive en este
+      // navegador), asi que manda sus lineas en el cuerpo. Precios, stock y
+      // presentaciones los valida y calcula el backend, nunca el cliente.
+      const guestItems = registrado
+        ? undefined
+        : getGuestCart().map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            variationId: item.variationId ?? 0,
+          }));
       const res = await apiFetch("/orders/checkout", {
         method: "POST",
-        body: JSON.stringify({ ...shippingForm, idempotencyKey: idempotencyRef.current }),
+        body: JSON.stringify({
+          ...shippingForm,
+          idempotencyKey: idempotencyRef.current,
+          ...(guestItems ? { items: guestItems } : {}),
+        }),
       });
       idempotencyRef.current = null;
 
@@ -449,7 +472,13 @@ export default function CartPage() {
           : "✓ Pedido realizado con éxito. Pagarás contra entrega.",
       });
       setItems([]);
-      window.dispatchEvent(new Event("cart-change"));
+      if (registrado) {
+        window.dispatchEvent(new Event("cart-change"));
+      } else {
+        // El carrito del invitado vive en localStorage: hay que vaciarlo ahi
+        // (tambien dispara `cart-change` para el contador de la cabecera).
+        clearGuestCart();
+      }
       void trackMetaEvent("Purchase", {
         value: items.reduce(
           (acc, item) =>
@@ -555,16 +584,14 @@ export default function CartPage() {
         )}
 
         {!isAuthenticated() && items.length > 0 && (
-          <div className="mb-8 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl text-center">
-            <p className="text-blue-800 font-semibold">Inicia sesión para finalizar tu compra</p>
-            <div className="flex gap-3 justify-center mt-3">
-              <Link href="/login" className="text-sm bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition font-medium">
-                Iniciar sesión
-              </Link>
-              <Link href="/register" className="text-sm bg-white text-blue-600 border border-blue-600 px-5 py-2 rounded-lg hover:bg-blue-50 transition font-medium">
-                Registrarse
-              </Link>
-            </div>
+          <div className="mb-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl text-center">
+            <p className="text-blue-800 text-sm">
+              Compra sin cuenta o{" "}
+              <Link href="/login" className="font-semibold underline">
+                inicia sesión
+              </Link>{" "}
+              para ver tus pedidos en tu perfil.
+            </p>
           </div>
         )}
 
@@ -879,39 +906,27 @@ export default function CartPage() {
                 </p>
               </div>
 
-              {/* Para un invitado el boton de finalizar compra no puede
-                  funcionar (el checkout pide sesion). En vez de un boton
-                  que no hace nada se ofrece entrar a la cuenta: el aviso
-                  de arriba queda lejos al desplazarse y el cliente no
-                  entendia por que no avanzaba. */}
-              {isAuthenticated() ? (
-                <button
-                  type="button"
-                  onClick={handleOpenCheckout}
-                  disabled={checkoutLoading}
-                  className={`flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white transition active:scale-[0.99] ${
-                    checkoutLoading
-                      ? "bg-gray-300 cursor-not-allowed"
-                      : "bg-gray-900 shadow-lg shadow-gray-900/20"
-                  }`}
-                >
-                  {checkoutLoading ? (
-                    <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  ) : (
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                  Finalizar compra
-                </button>
-              ) : (
-                <Link
-                  href="/login"
-                  className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 text-sm font-semibold text-white shadow-lg shadow-gray-900/20 transition active:scale-[0.99]"
-                >
-                  Iniciar sesión
-                </Link>
-              )}
+              {/* El invitado también compra: el checkout acepta sesión
+                  opcional, así que el botón se muestra igual para todos. */}
+              <button
+                type="button"
+                onClick={handleOpenCheckout}
+                disabled={checkoutLoading}
+                className={`flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white transition active:scale-[0.99] ${
+                  checkoutLoading
+                    ? "bg-gray-300 cursor-not-allowed"
+                    : "bg-gray-900 shadow-lg shadow-gray-900/20"
+                }`}
+              >
+                {checkoutLoading ? (
+                  <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                ) : (
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                Finalizar compra
+              </button>
             </div>
           </div>
         )}
@@ -1016,7 +1031,9 @@ export default function CartPage() {
                     </div>
                   </div>
                   <div className="mt-4">
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Correo electrónico</label>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                      Correo electrónico{!isAuthenticated() && " *"}
+                    </label>
                     <input
                       type="email"
                       value={shippingForm.shippingEmail}
@@ -1025,7 +1042,9 @@ export default function CartPage() {
                       placeholder="cliente@correo.com"
                     />
                     <p className="mt-1.5 text-xs text-gray-400">
-                      Si no lo llenas, la factura llega a tu correo registrado.
+                      {isAuthenticated()
+                        ? "Si no lo llenas, la factura llega a tu correo registrado."
+                        : "Sin cuenta, aquí recibirás la factura y las novedades del pedido."}
                     </p>
                   </div>
                 </section>
