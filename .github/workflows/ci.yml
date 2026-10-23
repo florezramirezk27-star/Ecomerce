@@ -25,7 +25,7 @@ jobs:
       - name: Validate Prisma schema
         run: pnpm prisma validate
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ecommerce_ci?schema=public
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - run: pnpm --dir api build
       - run: pnpm --dir api exec jest --runInBand
 
