@@ -47,6 +47,11 @@ export interface DropiSupplierWarehouseContext {
   variationId?: number | null;
   salePrice: number;
   suggestedPrice: number;
+  /**
+   * Peso que Dropi reporta para el producto. La cotizacion de envio lo exige;
+   * si el catalogo no lo trae se usa 1 como valor minimo.
+   */
+  weight: number;
 }
 
 /**
@@ -63,6 +68,7 @@ export interface DropiProduct {
   description?: string | null;
   sale_price?: number | string | null;
   suggested_price?: number | string | null;
+  weight?: number | string | null;
   user?: { id?: number | string };
   warehouse_product?: DropiWarehouseProduct[];
   variations?: DropiVariation[];
@@ -315,7 +321,13 @@ export class DropiProductsService {
       variationId,
       salePrice: Number(product.sale_price) || 0,
       suggestedPrice: Number(product.suggested_price) || 0,
+      weight: this.positiveNumber(product.weight) || 1,
     };
+  }
+
+  private positiveNumber(value: unknown): number | null {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : null;
   }
 
   /**

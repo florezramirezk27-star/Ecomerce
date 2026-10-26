@@ -58,6 +58,9 @@ const EXISTENCIAS_ERROR = httpResponse(400, {
 interface PostedOrderBody {
   warehouses_selected_id?: number;
   products?: Array<{ id?: number; variation_id?: number | null }>;
+  distributionCompany?: { id?: number; name?: string };
+  shipping_amount?: number;
+  type_service?: string;
 }
 
 /**
@@ -118,6 +121,9 @@ describe('DropiOrdersService: eleccion y reintento de bodega', () => {
     process.env.DROPI_WAREHOUSE_ID = '3577';
     process.env.DROPI_DISTRIBUTION_COMPANY_ID = '3';
     process.env.DROPI_SHIPPING_AMOUNT = '41295';
+    // La seleccion automatica tiene su propio describe; aca se prueba el
+    // comportamiento de bodegas con el carrier fijo, sin llamadas extra.
+    process.env.DROPI_CARRIER_AUTO_SELECT = 'false';
   });
 
   afterAll(() => {
@@ -288,6 +294,7 @@ describe('DropiOrdersService: rechazo de negocio vs fallo tecnico', () => {
     process.env.DROPI_WAREHOUSE_ID = '3577';
     process.env.DROPI_DISTRIBUTION_COMPANY_ID = '3';
     process.env.DROPI_SHIPPING_AMOUNT = '41295';
+    process.env.DROPI_CARRIER_AUTO_SELECT = 'false';
   });
 
   afterAll(() => {
@@ -380,5 +387,331 @@ describe('DropiOrdersService: rechazo de negocio vs fallo tecnico', () => {
 
     expect(result.success).toBe(true);
     expect(result.rechazo).toBe(false);
+  });
+});
+
+describe('DropiOrdersService: seleccion automatica de transportadora', () => {
+  const OLD_ENV = { ...process.env };
+
+  beforeEach(() => {
+    process.env.DROPI_USER_ID = '660824';
+    process.env.DROPI_SUPPLIER_ID = '29151';
+    process.env.DROPI_WAREHOUSE_ID = '3577';
+    process.env.DROPI_DISTRIBUTION_COMPANY_ID = '3';
+    process.env.DROPI_DISTRIBUTION_COMPANY_NAME = 'FIJA';
+    process.env.DROPI_SHIPPING_AMOUNT = '41295';
+    process.env.DROPI_CARRIER_AUTO_SELECT = 'true';
+    process.env.DROPI_CARRIER_TIMEOUT_MS = '2000';
+    process.env.DROPI_RATE_TYPE = 'CON RECAUDO';
+  });
+
+  afterAll(() => {
+    process.env = OLD_ENV;
+  });
+
+  it('usa la cotizacion de mejor precio-calidad y su bodega', async () => {
+    const requests: Array<{ path: string; body?: PostedOrderBody | any }> = [];
+
+    const request = jest.fn(
+      (path: string, _method: string, body?: PostedOrderBody | any) => {
+        requests.push({ path, body });
+
+        if (path.includes('/department')) {
+          return Promise.resolve(
+            httpResponse(200, {
+              is_successful: true,
+              status_code: 200,
+              data: { objects: [{ id: 1, name: 'SANTANDER' }] },
+            }),
+          );
+        }
+
+        if (path.includes('/trajectory/bycity')) {
+          return Promise.resolve(
+            httpResponse(200, {
+              is_successful: true,
+              status_code: 200,
+              data: {
+                objects: [{ id: 99, name: 'Bucaramanga', cod_dane: '68001' }],
+              },
+            }),
+          );
+        }
+
+        if (path.includes('/getOriginCityForCalculateShipping')) {
+          return Promise.resolve(
+            httpResponse(200, {
+              is_successful: true,
+              status_code: 200,
+              data: {
+                objects: {
+                  city_dropi: { id: 5, name: 'Bogota', cod_dane: '11001' },
+                  warehouse: { id: 777 },
+                },
+              },
+            }),
+          );
+        }
+
+        if (path === '/bff/orders/quote') {
+          return Promise.resolve(
+            httpResponse(200, {
+              is_successful: true,
+              status_code: 200,
+              data: {
+                objects: [
+                  {
+                    distributionCompany: { id: 10, name: 'INTERRAPIDISIMO' },
+                    incidence_solution_method: 'GUIA',
+                    procesar_notificaciones: true,
+                    objects: {
+                      precioEnvio: 10900,
+                      trayecto: '2 dias',
+                      transportadora_service: 'normal',
+                    },
+                  },
+                  {
+                    id: 20,
+                    name: 'VELOCES',
+                    objects: {
+                      precioEnvio: 10000,
+                      trayecto: '8 dias',
+                      transportadora_service: 'normal',
+                    },
+                  },
+                ],
+              },
+            }),
+          );
+        }
+
+        if (path === '/bff/orders') {
+          return Promise.resolve(CREATED);
+        }
+
+        return Promise.reject(new Error(`request inesperado: ${path}`));
+      },
+    );
+
+    const client = { request } as unknown as DropiClient;
+    const auth = {
+      getToken: jest.fn().mockResolvedValue('tok'),
+      invalidateToken: jest.fn(),
+    } as unknown as DropiAuthService;
+    const products = {
+      resolveDropshipperContext: jest.fn().mockResolvedValue({
+        supplierId: 12108,
+        warehouseId: 2015,
+        warehouseIds: [2015],
+        variationId: null,
+        salePrice: 175900,
+        suggestedPrice: 0,
+        weight: 1,
+      }),
+    } as unknown as DropiProductsService;
+
+    const service = new DropiOrdersService(client, auth, products);
+    const result = await service.createOrder({
+      items: [ITEM],
+      shipping: SHIPPING,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.results[0].carrier).toBe('INTERRAPIDISIMO');
+
+    const quote = requests.find((r) => r.path === '/bff/orders/quote');
+    expect(quote?.body).toMatchObject({
+      ciudad_remitente: { name: 'Bogota' },
+      ciudad_destino: { name: 'Bucaramanga' },
+      peso: 1,
+      warehouse: { id: 777 },
+      products: [{ id: ITEM.dropiProductId, variation_id: null }],
+    });
+    expect(quote?.body.Peso).toBeUndefined();
+
+    const order = requests.find((r) => r.path === '/bff/orders');
+    expect(order?.body).toMatchObject({
+      distributionCompany: { id: 10, name: 'INTERRAPIDISIMO' },
+      shipping_amount: 10900,
+      type_service: 'normal',
+      warehouses_selected_id: 777,
+    });
+  });
+
+  it('reintenta la cotizacion con dimensiones en mayuscula si el BFF rechaza el formato principal', async () => {
+    const quoteBodies: Array<PostedOrderBody | any> = [];
+
+    const request = jest.fn(
+      (path: string, _method: string, body?: PostedOrderBody | any) => {
+        if (path.includes('/department')) {
+          return Promise.resolve(
+            httpResponse(200, {
+              is_successful: true,
+              status_code: 200,
+              data: { objects: [{ id: 1, name: 'SANTANDER' }] },
+            }),
+          );
+        }
+
+        if (path.includes('/trajectory/bycity')) {
+          return Promise.resolve(
+            httpResponse(200, {
+              is_successful: true,
+              status_code: 200,
+              data: {
+                objects: [{ id: 99, name: 'Bucaramanga', cod_dane: '68001' }],
+              },
+            }),
+          );
+        }
+
+        if (path.includes('/getOriginCityForCalculateShipping')) {
+          return Promise.resolve(
+            httpResponse(200, {
+              is_successful: true,
+              status_code: 200,
+              data: {
+                objects: {
+                  city_dropi: { id: 5, name: 'Bogota', cod_dane: '11001' },
+                  warehouse: { id: 777 },
+                },
+              },
+            }),
+          );
+        }
+
+        if (path === '/bff/orders/quote') {
+          quoteBodies.push(body);
+          if (body?.peso !== undefined) {
+            return Promise.resolve(
+              httpResponse(400, {
+                is_successful: false,
+                status_code: 400,
+                status_reason: 'peso is required',
+                data: null,
+              }),
+            );
+          }
+          return Promise.resolve(
+            httpResponse(200, {
+              is_successful: true,
+              status_code: 200,
+              data: {
+                objects: [
+                  {
+                    distributionCompany: {
+                      id: 10,
+                      name: 'INTERRAPIDISIMO',
+                    },
+                    objects: {
+                      precioEnvio: 10900,
+                      trayecto: '2 dias',
+                      transportadora_service: 'normal',
+                    },
+                  },
+                ],
+              },
+            }),
+          );
+        }
+
+        if (path === '/bff/orders') {
+          return Promise.resolve(CREATED);
+        }
+
+        return Promise.reject(new Error(`request inesperado: ${path}`));
+      },
+    );
+
+    const client = { request } as unknown as DropiClient;
+    const auth = {
+      getToken: jest.fn().mockResolvedValue('tok'),
+      invalidateToken: jest.fn(),
+    } as unknown as DropiAuthService;
+    const products = {
+      resolveDropshipperContext: jest.fn().mockResolvedValue({
+        supplierId: 12108,
+        warehouseId: 2015,
+        warehouseIds: [2015],
+        variationId: null,
+        salePrice: 175900,
+        suggestedPrice: 0,
+        weight: 1,
+      }),
+    } as unknown as DropiProductsService;
+
+    const service = new DropiOrdersService(client, auth, products);
+    const result = await service.createOrder({
+      items: [ITEM],
+      shipping: SHIPPING,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.results[0].carrier).toBe('INTERRAPIDISIMO');
+    expect(quoteBodies).toHaveLength(2);
+    expect(quoteBodies[0]).toMatchObject({ peso: 1 });
+    expect(quoteBodies[0].Peso).toBeUndefined();
+    expect(quoteBodies[1]).toMatchObject({ Peso: 1 });
+    expect(quoteBodies[1].peso).toBeUndefined();
+  });
+
+  it('si el cotizador falla, crea la orden con el carrier configurado', async () => {
+    const posted: PostedOrderBody[] = [];
+    const request = jest.fn(
+      (path: string, _method: string, body?: PostedOrderBody) => {
+        if (path.includes('/getOriginCityForCalculateShipping')) {
+          return Promise.resolve(
+            httpResponse(200, {
+              is_successful: true,
+              status_code: 200,
+              data: {
+                objects: {
+                  city_dropi: { id: 5, name: 'Bogota' },
+                  warehouse: { id: 777 },
+                },
+              },
+            }),
+          );
+        }
+        if (path.includes('/department')) {
+          return Promise.resolve(httpResponse(500, {}));
+        }
+        if (path === '/bff/orders') {
+          posted.push(body as PostedOrderBody);
+          return Promise.resolve(CREATED);
+        }
+        return Promise.reject(new Error(`request inesperado: ${path}`));
+      },
+    );
+
+    const client = { request } as unknown as DropiClient;
+    const auth = {
+      getToken: jest.fn().mockResolvedValue('tok'),
+      invalidateToken: jest.fn(),
+    } as unknown as DropiAuthService;
+    const products = {
+      resolveDropshipperContext: jest.fn().mockResolvedValue({
+        supplierId: 12108,
+        warehouseId: 2015,
+        warehouseIds: [2015],
+        variationId: null,
+        salePrice: 175900,
+        suggestedPrice: 0,
+        weight: 1,
+      }),
+    } as unknown as DropiProductsService;
+
+    const service = new DropiOrdersService(client, auth, products);
+    const result = await service.createOrder({
+      items: [ITEM],
+      shipping: SHIPPING,
+    });
+
+    expect(result.success).toBe(true);
+    expect(posted).toHaveLength(1);
+    expect(posted[0]).toMatchObject({
+      distributionCompany: { id: 3, name: 'FIJA' },
+      shipping_amount: 41295,
+    });
   });
 });

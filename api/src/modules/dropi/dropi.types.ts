@@ -98,6 +98,8 @@ export interface DropiShippingInfo {
   docNumber?: string;
   distributionCompanyId?: number;
   distributionCompanyName?: string;
+  /** Tipo de servicio de la cotizacion (normal, express, etc.). */
+  typeService?: string;
   rateType?: 'CON RECAUDO' | 'SIN RECAUDO';
   shippingAmount?: number;
   insurance?: boolean;
@@ -259,6 +261,15 @@ export interface DropiCancelResult {
 }
 
 export interface DropiQuoteParams {
+  /*
+   * El BFF recibe ambos formatos segun el flujo del frontend de Dropi. La
+   * seleccion automatica intenta primero minuscula (flujo principal) y
+   * reintenta con mayuscula; `quoteShipping` envia el payload tal cual.
+   */
+  Peso?: number;
+  Largo?: number;
+  Ancho?: number;
+  Alto?: number;
   peso?: number;
   largo?: number;
   ancho?: number;
@@ -280,6 +291,7 @@ export interface DropiQuoteParams {
   dir?: string | null;
   destination_name?: string | null;
   destination_phone?: string | null;
+  insurance?: boolean;
 }
 
 export interface DropiQuoteResult {
