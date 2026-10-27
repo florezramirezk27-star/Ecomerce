@@ -673,11 +673,15 @@ export default function CartPage() {
         return;
       }
 
+      const dropiOrderId = res?.dropi?.orderId ?? null;
+
       setShowCheckout(false);
       setMessage({
         type: "success",
         text: warnings.length > 0
-          ? `✓ Pedido realizado. Pagarás contra entrega. Atención: ${warnings.join(" ")}`
+          ? `✓ Pedido realizado. Pagarás contra entrega. ${dropiOrderId ? `Orden #${dropiOrderId}.` : ""} ${warnings.join(" ")}`
+          : dropiOrderId
+          ? "✓ Pedido realizado con éxito. Pagarás contra entrega. Orden #" + dropiOrderId
           : "✓ Pedido realizado con éxito. Pagarás contra entrega.",
       });
       setItems([]);
