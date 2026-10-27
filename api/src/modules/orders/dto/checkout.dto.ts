@@ -1,10 +1,4 @@
-import {
-  IsArray,
-  IsString,
-  IsOptional,
-  MinLength,
-  IsEmail,
-} from 'class-validator';
+import { IsArray, IsString, IsOptional, MinLength } from 'class-validator';
 
 export class CheckoutDto {
   @IsString()
@@ -35,7 +29,9 @@ export class CheckoutDto {
   @IsOptional()
   shippingZip?: string;
 
-  @IsEmail()
+  // El formato lo valida `checkoutSchema` (Zod). No se usa `@IsEmail` aqui
+  // porque el campo es opcional y class-validator rechaza el string vacio.
+  @IsString()
   @IsOptional()
   shippingEmail?: string;
 

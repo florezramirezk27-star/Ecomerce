@@ -9,6 +9,43 @@ export interface Paginated<T> {
   totalPages: number;
 }
 
+/** Detalle de un campo rechazado por el API (por ejemplo, el checkout). */
+export interface ApiErrorDetail {
+  field?: string;
+  message: string;
+}
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly errors: ApiErrorDetail[];
+
+  constructor(message: string, status: number, errors: ApiErrorDetail[] = []) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.errors = errors;
+  }
+}
+
+function parseApiErrorDetails(value: unknown): ApiErrorDetail[] {
+  if (!Array.isArray(value)) return [];
+
+  const details: ApiErrorDetail[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+
+    const record = item as Record<string, unknown>;
+    if (typeof record.message !== 'string') continue;
+
+    details.push({
+      message: record.message,
+      ...(typeof record.field === 'string' ? { field: record.field } : {}),
+    });
+  }
+
+  return details;
+}
+
 export const API_URL = isServer
   ? (process.env.API_URL || 'http://localhost:3001')
   : (process.env.NEXT_PUBLIC_API_URL || '/api/proxy');
@@ -208,9 +245,20 @@ export async function apiFetch(
   }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(
-      error.message || `Error en API (${response.status})`,
+    const error: unknown = await response.json().catch(() => ({}));
+    const body =
+      error && typeof error === 'object'
+        ? (error as Record<string, unknown>)
+        : {};
+    const message =
+      typeof body.message === 'string'
+        ? body.message
+        : `Error en API (${response.status})`;
+
+    throw new ApiError(
+      message,
+      response.status,
+      parseApiErrorDetails(body.errors),
     );
   }
 

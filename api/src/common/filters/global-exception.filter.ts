@@ -17,15 +17,22 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Error interno del servidor';
+    let message: unknown = 'Error interno del servidor';
+    let errors: unknown;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const res = exception.getResponse();
-      message =
-        typeof res === 'string'
-          ? res
-          : ((res as Record<string, unknown>)?.message as string) || message;
+      const body =
+        res && typeof res === 'object'
+          ? (res as Record<string, unknown>)
+          : undefined;
+
+      message = typeof res === 'string' ? res : body?.message || message;
+
+      // `ZodValidationPipe` adjunta el detalle por campo en `errors`. Antes se
+      // perdia aqui y el frontend solo podia mostrar un mensaje generico.
+      if (Array.isArray(body?.errors)) errors = body.errors;
     } else {
       this.logger.error(
         'Error no manejado',
@@ -33,9 +40,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       );
     }
 
-    response.status(status).json({
+    const payload: Record<string, unknown> = {
       statusCode: status,
       message: (Array.isArray(message) ? message[0] : message) as string,
-    });
+    };
+    if (errors) payload.errors = errors;
+
+    response.status(status).json(payload);
   }
 }

@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, isAuthenticated } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import ProductImage from "@/components/ProductImage";
 import AddressMap from "@/components/AddressMap";
 import { clearGuestCart, getGuestCart, removeFromGuestCart, updateGuestCartQuantity, type GuestCartItem } from "@/lib/guest-cart";
@@ -12,6 +12,24 @@ import { mergeGuestCartIntoServer } from "@/lib/cart-merge";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
 import { DEPARTMENTS, MUNICIPALITIES } from "@/lib/colombia";
 import { lookupPostalCode } from "@/lib/postal-code";
+import {
+  CHECKOUT_FIELD_ORDER,
+  DOCUMENT_TYPE_OPTIONS,
+  canonicalDocType,
+  canonicalizeCheckoutForm,
+  documentTypeMeta,
+  firstCheckoutErrorField,
+  mapCheckoutApiErrors,
+  resolveMunicipality,
+  sanitizeDocNumberTyping,
+  sanitizePhoneTyping,
+  sanitizeZipTyping,
+  validateCheckoutField,
+  validateCheckoutForm,
+  type CheckoutField,
+  type CheckoutFormErrors,
+  type CheckoutFormValues,
+} from "@/lib/checkout-validation";
 
 interface CartItem {
   id: string;
@@ -98,6 +116,53 @@ function formatPrice(n: string | number) {
   return Number(n).toLocaleString("es-CO") + " COP";
 }
 
+const CHECKOUT_INPUT_BASE =
+  "w-full rounded-xl border px-4 py-2.5 text-base sm:text-sm text-gray-900 outline-none transition focus:ring-4";
+const CHECKOUT_INPUT_NORMAL =
+  "border-gray-200 bg-gray-50/50 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:ring-blue-500/10";
+const CHECKOUT_INPUT_ERROR =
+  "border-red-400 bg-red-50/40 placeholder-red-300 focus:border-red-500 focus:bg-white focus:ring-red-500/10";
+
+function checkoutInputClass(hasError: boolean, extra = "") {
+  return `${CHECKOUT_INPUT_BASE} ${
+    hasError ? CHECKOUT_INPUT_ERROR : CHECKOUT_INPUT_NORMAL
+  } ${extra}`;
+}
+
+function CheckoutFieldError({
+  id,
+  message,
+}: {
+  id: string;
+  message?: string;
+}) {
+  if (!message) return null;
+
+  return (
+    <p
+      id={id}
+      role="alert"
+      className="mt-1.5 flex items-start gap-1.5 text-xs font-medium leading-5 text-red-600"
+    >
+      <svg
+        className="mt-0.5 h-3.5 w-3.5 shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 9v4m0 4h.01M10.29 3.86l-7.5 13A1 1 0 003.66 18h16.68a1 1 0 00.87-1.5l-7.5-13a1 1 0 00-1.74 0z"
+        />
+      </svg>
+      <span>{message}</span>
+    </p>
+  );
+}
+
 export default function CartPage() {
   const router = useRouter();
   const [items, setItems] = useState<CartItem[]>([]);
@@ -108,7 +173,7 @@ export default function CartPage() {
 
   const [showCheckout, setShowCheckout] = useState(false);
   const idempotencyRef = useRef<string | null>(null);
-  const [shippingForm, setShippingForm] = useState({
+  const [shippingForm, setShippingForm] = useState<CheckoutFormValues>({
     shippingName: "",
     shippingPhone: "",
     shippingEmail: "",
@@ -120,6 +185,11 @@ export default function CartPage() {
     shippingZip: "",
     notes: "",
   });
+  const [shippingErrors, setShippingErrors] = useState<CheckoutFormErrors>({});
+  const [shippingTouched, setShippingTouched] = useState<
+    Partial<Record<CheckoutField, boolean>>
+  >({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   useEffect(() => {
     loadCart();
@@ -354,6 +424,141 @@ export default function CartPage() {
     setMessage({ type: "error", text: "Función disponible solo para usuarios registrados" });
   };
 
+  const checkoutFieldId = (field: CheckoutField) => `checkout-${field}`;
+
+  function focusFirstCheckoutError(errors: CheckoutFormErrors) {
+    const field = firstCheckoutErrorField(errors);
+    if (!field) return;
+
+    // El error ya quedo en el estado, pero el elemento con el id siempre esta
+    // montado. `requestAnimationFrame` deja que el navegador pinte el borde
+    // rojo antes de mover el foco.
+    requestAnimationFrame(() => {
+      document.getElementById(checkoutFieldId(field))?.focus();
+    });
+  }
+
+  function markAllCheckoutFieldsTouched() {
+    const touched: Partial<Record<CheckoutField, boolean>> = {};
+    for (const field of CHECKOUT_FIELD_ORDER) touched[field] = true;
+    setShippingTouched(touched);
+  }
+
+  /**
+   * Guarda el formulario y revalida solo los campos que ya fueron tocados (o
+   * todos, si ya se intento enviar). Asi el cliente no ve errores rojos antes
+   * de escribir, pero cuando corrige un dato ve el resultado de inmediato.
+   */
+  function commitCheckoutForm(
+    nextForm: CheckoutFormValues,
+    fieldsToValidate: CheckoutField[],
+    fieldsToClear: CheckoutField[] = [],
+  ) {
+    const options = { isGuest: !isAuthenticated() };
+
+    setShippingForm(nextForm);
+    setShippingErrors((prev) => {
+      const next = { ...prev };
+      for (const field of fieldsToClear) delete next[field];
+
+      for (const field of fieldsToValidate) {
+        if (!submitAttempted && !shippingTouched[field]) continue;
+        const error = validateCheckoutField(field, nextForm, options);
+        if (error) next[field] = error;
+        else delete next[field];
+      }
+
+      return next;
+    });
+  }
+
+  function handleShippingChange(field: CheckoutField, rawValue: string) {
+    if (field === "shippingState") {
+      // Cambiar de departamento invalida la ciudad y el codigo postal que se
+      // habian elegido para el anterior.
+      const next: CheckoutFormValues = {
+        ...shippingForm,
+        shippingState: rawValue,
+        shippingCity: "",
+        shippingZip: "",
+      };
+      zipTouchedRef.current = false;
+      commitCheckoutForm(
+        next,
+        ["shippingState", "shippingCity"],
+        ["shippingZip"],
+      );
+      return;
+    }
+
+    if (field === "shippingDocType") {
+      const nextType = canonicalDocType(rawValue);
+      const next: CheckoutFormValues = {
+        ...shippingForm,
+        shippingDocType: nextType,
+        // Al cambiar de pasaporte a cedula (o al contrario) se descartan los
+        // caracteres que ya no aplican.
+        shippingDocNumber: sanitizeDocNumberTyping(
+          shippingForm.shippingDocNumber,
+          nextType,
+        ),
+      };
+      commitCheckoutForm(next, ["shippingDocType", "shippingDocNumber"]);
+      return;
+    }
+
+    let value = rawValue;
+    if (field === "shippingPhone") value = sanitizePhoneTyping(rawValue);
+    if (field === "shippingDocNumber") {
+      value = sanitizeDocNumberTyping(rawValue, shippingForm.shippingDocType);
+    }
+    if (field === "shippingZip") {
+      value = sanitizeZipTyping(rawValue);
+      zipTouchedRef.current = value.length > 0;
+    }
+
+    const next: CheckoutFormValues = { ...shippingForm, [field]: value };
+    commitCheckoutForm(next, [field]);
+  }
+
+  function handleShippingBlur(field: CheckoutField) {
+    setShippingTouched((prev) => ({ ...prev, [field]: true }));
+
+    let nextForm = shippingForm;
+
+    // La lista de municipios es la que entiende Dropi. Si el cliente escribio
+    // "Medellin" o "San Jose de Cucuta", se guarda el nombre canonico.
+    if (field === "shippingCity") {
+      const canonical = resolveMunicipality(
+        shippingForm.shippingState,
+        shippingForm.shippingCity,
+      );
+      if (canonical && canonical !== shippingForm.shippingCity) {
+        nextForm = { ...shippingForm, shippingCity: canonical };
+        setShippingForm(nextForm);
+        zipTouchedRef.current = false;
+      }
+    }
+
+    const error = validateCheckoutField(field, nextForm, {
+      isGuest: !isAuthenticated(),
+    });
+    setShippingErrors((prev) => {
+      const next = { ...prev };
+      if (error) next[field] = error;
+      else delete next[field];
+      return next;
+    });
+  }
+
+  function handleCloseCheckout() {
+    setShowCheckout(false);
+    setShippingErrors({});
+    setShippingTouched({});
+    setSubmitAttempted(false);
+    setMessage(null);
+  }
+
   const handleOpenCheckout = () => {
     // Comprar no exige cuenta: el invitado llena sus datos de envio y el
     // backend recibe sus lineas de carrito en el cuerpo de la peticion.
@@ -371,6 +576,9 @@ export default function CartPage() {
     });
     // El formulario arranca de cero: el codigo postal vuelve a ser automatico.
     zipTouchedRef.current = false;
+    setShippingErrors({});
+    setShippingTouched({});
+    setSubmitAttempted(false);
     setMessage(null);
     void trackMetaEvent("InitiateCheckout", {
       num_items: items.reduce((acc, item) => acc + item.quantity, 0),
@@ -384,31 +592,33 @@ export default function CartPage() {
     setShowCheckout(true);
   };
 
-  const handleCheckoutSubmit = async () => {
+  const handleCheckoutSubmit = async (
+    event?: FormEvent<HTMLFormElement>,
+  ) => {
+    event?.preventDefault();
     const registrado = isAuthenticated();
+    const errors = validateCheckoutForm(shippingForm, {
+      isGuest: !registrado,
+    });
 
-    if (
-      !shippingForm.shippingName ||
-      !shippingForm.shippingPhone ||
-      !shippingForm.shippingDocNumber ||
-      !shippingForm.shippingAddress ||
-      !shippingForm.shippingCity ||
-      !shippingForm.shippingState
-    ) {
-      setMessage({ type: "error", text: "Completa todos los campos obligatorios" });
-      return;
-    }
-
-    // Sin cuenta no hay pedido en "mis pedidos" ni correo de respaldo en la
-    // cuenta: la factura y las novedades van al correo del formulario, asi que
-    // para el invitado es obligatorio.
-    if (!registrado && !shippingForm.shippingEmail) {
+    if (Object.keys(errors).length > 0) {
+      setShippingErrors(errors);
+      markAllCheckoutFieldsTouched();
+      setSubmitAttempted(true);
       setMessage({
         type: "error",
-        text: "Para comprar sin cuenta necesitas un correo: ahí recibirás la factura y las novedades del pedido.",
+        text: "Revisa los campos marcados: hay datos que faltan o no son válidos.",
       });
+      focusFirstCheckoutError(errors);
       return;
     }
+
+    // Normalizacion final: telefono en 10 digitos, tipo de documento que
+    // entiende Dropi, ciudad canonica del catalogo, etc.
+    const cleanForm = canonicalizeCheckoutForm(shippingForm);
+    setShippingForm(cleanForm);
+    setShippingErrors({});
+    setSubmitAttempted(true);
 
     setCheckoutLoading(true);
     try {
@@ -428,14 +638,12 @@ export default function CartPage() {
       const res = await apiFetch("/orders/checkout", {
         method: "POST",
         body: JSON.stringify({
-          ...shippingForm,
+          ...cleanForm,
           idempotencyKey: idempotencyRef.current,
           ...(guestItems ? { items: guestItems } : {}),
         }),
       });
       idempotencyRef.current = null;
-
-      setShowCheckout(false);
 
       const dropiStatus = res?.dropi?.success;
       const rechazado = dropiStatus === false && res?.dropi?.rechazo === true;
@@ -465,6 +673,7 @@ export default function CartPage() {
         return;
       }
 
+      setShowCheckout(false);
       setMessage({
         type: "success",
         text: warnings.length > 0
@@ -491,11 +700,35 @@ export default function CartPage() {
           0,
         ),
         content_ids: items.map((item) => item.product.id),
-        email: shippingForm.shippingEmail || getUser()?.email || undefined,
-        phone: shippingForm.shippingPhone || undefined,
+        email: cleanForm.shippingEmail || getUser()?.email || undefined,
+        phone: cleanForm.shippingPhone || undefined,
       });
       await loadOrders();
     } catch (err: unknown) {
+      // El API devuelve `errors` por campo cuando el esquema rechaza un dato.
+      // Se pintan en el formulario para que el cliente sepa exactamente que
+      // corregir, en vez de leer un mensaje generico.
+      if (err instanceof ApiError && err.errors.length > 0) {
+        const fieldErrors = mapCheckoutApiErrors(err.errors);
+        if (Object.keys(fieldErrors).length > 0) {
+          setShippingErrors((prev) => ({ ...prev, ...fieldErrors }));
+          setSubmitAttempted(true);
+          setShippingTouched((prev) => {
+            const next = { ...prev };
+            for (const field of Object.keys(fieldErrors)) {
+              next[field as CheckoutField] = true;
+            }
+            return next;
+          });
+          setMessage({
+            type: "error",
+            text: "Revisa los campos marcados: el servidor encontró datos que no son válidos.",
+          });
+          focusFirstCheckoutError(fieldErrors);
+          return;
+        }
+      }
+
       setMessage({
         type: "error",
         text: err instanceof Error ? err.message : "Error al procesar compra",
@@ -907,7 +1140,11 @@ export default function CartPage() {
                 del plugin `tailwindcss-animate`: ese plugin no esta
                 instalado, asi que esas dos clases no existian y el modal
                 aparecia de golpe, sin ningun efecto. */}
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-modal-in">
+            <form
+              onSubmit={handleCheckoutSubmit}
+              noValidate
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-modal-in"
+            >
               {/* Header */}
               <div className="relative bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 px-6 sm:px-8 py-6 text-white overflow-hidden">
                 <div className="absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10" />
@@ -923,7 +1160,8 @@ export default function CartPage() {
                     </p>
                   </div>
                   <button
-                    onClick={() => setShowCheckout(false)}
+                    type="button"
+                    onClick={handleCloseCheckout}
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/20 active:bg-white/30"
                     aria-label="Cerrar"
                   >
@@ -946,11 +1184,15 @@ export default function CartPage() {
               </div>
 
               {message && (
-                <div className={`mx-6 mt-5 mb-0 p-4 rounded-xl text-sm font-medium flex items-center gap-3 ${
-                  message.type === "success"
-                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    : "bg-red-50 text-red-700 border border-red-200"
-                }`}>
+                <div
+                  role={message.type === "error" ? "alert" : "status"}
+                  aria-live="polite"
+                  className={`mx-6 mt-5 mb-0 p-4 rounded-xl text-sm font-medium flex items-center gap-3 ${
+                    message.type === "success"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-red-50 text-red-700 border border-red-200"
+                  }`}
+                >
                   <span className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
                     message.type === "success" ? "bg-emerald-200" : "bg-red-200"
                   }`}>
@@ -979,38 +1221,112 @@ export default function CartPage() {
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-gray-700">Nombre completo *</label>
+                      <label
+                        htmlFor="checkout-shippingName"
+                        className="mb-1.5 block text-sm font-medium text-gray-700"
+                      >
+                        Nombre completo *
+                      </label>
                       <input
+                        id="checkout-shippingName"
                         type="text"
+                        autoComplete="name"
+                        maxLength={100}
                         value={shippingForm.shippingName}
-                        onChange={(e) => setShippingForm({ ...shippingForm, shippingName: e.target.value })}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                        onChange={(e) =>
+                          handleShippingChange("shippingName", e.target.value)
+                        }
+                        onBlur={() => handleShippingBlur("shippingName")}
+                        aria-invalid={Boolean(shippingErrors.shippingName)}
+                        aria-describedby={
+                          shippingErrors.shippingName
+                            ? "checkout-shippingName-error"
+                            : undefined
+                        }
+                        aria-required="true"
+                        className={checkoutInputClass(
+                          Boolean(shippingErrors.shippingName),
+                        )}
                         placeholder="Juan Pérez"
+                      />
+                      <CheckoutFieldError
+                        id="checkout-shippingName-error"
+                        message={shippingErrors.shippingName}
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-gray-700">Teléfono *</label>
+                      <label
+                        htmlFor="checkout-shippingPhone"
+                        className="mb-1.5 block text-sm font-medium text-gray-700"
+                      >
+                        Teléfono *
+                      </label>
                       <input
+                        id="checkout-shippingPhone"
                         type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        maxLength={20}
                         value={shippingForm.shippingPhone}
-                        onChange={(e) => setShippingForm({ ...shippingForm, shippingPhone: e.target.value })}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                        onChange={(e) =>
+                          handleShippingChange("shippingPhone", e.target.value)
+                        }
+                        onBlur={() => handleShippingBlur("shippingPhone")}
+                        aria-invalid={Boolean(shippingErrors.shippingPhone)}
+                        aria-describedby={
+                          shippingErrors.shippingPhone
+                            ? "checkout-shippingPhone-error"
+                            : undefined
+                        }
+                        aria-required="true"
+                        className={checkoutInputClass(
+                          Boolean(shippingErrors.shippingPhone),
+                        )}
                         placeholder="300 123 4567"
+                      />
+                      <CheckoutFieldError
+                        id="checkout-shippingPhone-error"
+                        message={shippingErrors.shippingPhone}
                       />
                     </div>
                   </div>
                   <div className="mt-4">
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    <label
+                      htmlFor="checkout-shippingEmail"
+                      className="mb-1.5 block text-sm font-medium text-gray-700"
+                    >
                       Correo electrónico{!isAuthenticated() && " *"}
                     </label>
                     <input
+                      id="checkout-shippingEmail"
                       type="email"
+                      autoComplete="email"
+                      maxLength={254}
                       value={shippingForm.shippingEmail}
-                      onChange={(e) => setShippingForm({ ...shippingForm, shippingEmail: e.target.value })}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      onChange={(e) =>
+                        handleShippingChange("shippingEmail", e.target.value)
+                      }
+                      onBlur={() => handleShippingBlur("shippingEmail")}
+                      aria-invalid={Boolean(shippingErrors.shippingEmail)}
+                      aria-describedby={
+                        shippingErrors.shippingEmail
+                          ? "checkout-shippingEmail-error checkout-shippingEmail-help"
+                          : "checkout-shippingEmail-help"
+                      }
+                      aria-required={!isAuthenticated()}
+                      className={checkoutInputClass(
+                        Boolean(shippingErrors.shippingEmail),
+                      )}
                       placeholder="cliente@correo.com"
                     />
-                    <p className="mt-1.5 text-xs text-gray-400">
+                    <CheckoutFieldError
+                      id="checkout-shippingEmail-error"
+                      message={shippingErrors.shippingEmail}
+                    />
+                    <p
+                      id="checkout-shippingEmail-help"
+                      className="mt-1.5 text-xs text-gray-400"
+                    >
                       {isAuthenticated()
                         ? "Si no lo llenas, la factura llega a tu correo registrado."
                         : "Sin cuenta, aquí recibirás la factura y las novedades del pedido."}
@@ -1028,32 +1344,98 @@ export default function CartPage() {
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-gray-700">Tipo de documento *</label>
-                      <select
-                        value={shippingForm.shippingDocType}
-                        onChange={(e) => setShippingForm({ ...shippingForm, shippingDocType: e.target.value })}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      <label
+                        htmlFor="checkout-shippingDocType"
+                        className="mb-1.5 block text-sm font-medium text-gray-700"
                       >
-                        <option value="CC">Cédula de ciudadanía</option>
-                        <option value="CE">Cédula de extranjería</option>
-                        <option value="NIT">NIT</option>
-                        <option value="PASSPORT">Pasaporte</option>
+                        Tipo de documento *
+                      </label>
+                      <select
+                        id="checkout-shippingDocType"
+                        value={shippingForm.shippingDocType}
+                        onChange={(e) =>
+                          handleShippingChange(
+                            "shippingDocType",
+                            e.target.value,
+                          )
+                        }
+                        onBlur={() => handleShippingBlur("shippingDocType")}
+                        aria-invalid={Boolean(shippingErrors.shippingDocType)}
+                        aria-describedby={
+                          shippingErrors.shippingDocType
+                            ? "checkout-shippingDocType-error"
+                            : undefined
+                        }
+                        aria-required="true"
+                        className={checkoutInputClass(
+                          Boolean(shippingErrors.shippingDocType),
+                        )}
+                      >
+                        {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
                       </select>
+                      <CheckoutFieldError
+                        id="checkout-shippingDocType-error"
+                        message={shippingErrors.shippingDocType}
+                      />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-gray-700">Número de documento *</label>
+                      <label
+                        htmlFor="checkout-shippingDocNumber"
+                        className="mb-1.5 block text-sm font-medium text-gray-700"
+                      >
+                        Número de documento *
+                      </label>
                       <input
+                        id="checkout-shippingDocNumber"
                         type="text"
-                        inputMode="numeric"
+                        inputMode={
+                          documentTypeMeta(shippingForm.shippingDocType)
+                            .inputMode
+                        }
+                        maxLength={
+                          documentTypeMeta(shippingForm.shippingDocType)
+                            .maxLength
+                        }
                         value={shippingForm.shippingDocNumber}
-                        onChange={(e) => setShippingForm({ ...shippingForm, shippingDocNumber: e.target.value.replace(/[^0-9]/g, "") })}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
-                        placeholder="1012345678"
+                        onChange={(e) =>
+                          handleShippingChange(
+                            "shippingDocNumber",
+                            e.target.value,
+                          )
+                        }
+                        onBlur={() => handleShippingBlur("shippingDocNumber")}
+                        aria-invalid={Boolean(shippingErrors.shippingDocNumber)}
+                        aria-describedby={
+                          shippingErrors.shippingDocNumber
+                            ? "checkout-shippingDocNumber-error checkout-shippingDocNumber-help"
+                            : "checkout-shippingDocNumber-help"
+                        }
+                        aria-required="true"
+                        className={checkoutInputClass(
+                          Boolean(shippingErrors.shippingDocNumber),
+                        )}
+                        placeholder={
+                          documentTypeMeta(shippingForm.shippingDocType)
+                            .placeholder
+                        }
+                      />
+                      <CheckoutFieldError
+                        id="checkout-shippingDocNumber-error"
+                        message={shippingErrors.shippingDocNumber}
                       />
                     </div>
                   </div>
-                  <p className="mt-2 text-xs text-gray-400">
-                    Lo piden las transportadoras para la entrega y el cobro contra entrega.
+                  <p
+                    id="checkout-shippingDocNumber-help"
+                    className="mt-2 text-xs text-gray-400"
+                  >
+                    {documentTypeMeta(shippingForm.shippingDocType).help} Lo
+                    piden las transportadoras para la entrega y el cobro contra
+                    entrega.
                   </p>
                 </section>
 
@@ -1067,24 +1449,67 @@ export default function CartPage() {
                     Dirección de entrega
                   </h3>
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Dirección *</label>
+                    <label
+                      htmlFor="checkout-shippingAddress"
+                      className="mb-1.5 block text-sm font-medium text-gray-700"
+                    >
+                      Dirección *
+                    </label>
                     <input
+                      id="checkout-shippingAddress"
                       type="text"
+                      autoComplete="street-address"
+                      maxLength={300}
                       value={shippingForm.shippingAddress}
-                      onChange={(e) => setShippingForm({ ...shippingForm, shippingAddress: e.target.value })}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      onChange={(e) =>
+                        handleShippingChange("shippingAddress", e.target.value)
+                      }
+                      onBlur={() => handleShippingBlur("shippingAddress")}
+                      aria-invalid={Boolean(shippingErrors.shippingAddress)}
+                      aria-describedby={
+                        shippingErrors.shippingAddress
+                          ? "checkout-shippingAddress-error"
+                          : undefined
+                      }
+                      aria-required="true"
+                      className={checkoutInputClass(
+                        Boolean(shippingErrors.shippingAddress),
+                      )}
                       placeholder="Calle 123 # 45-67, casa / apto 3"
+                    />
+                    <CheckoutFieldError
+                      id="checkout-shippingAddress-error"
+                      message={shippingErrors.shippingAddress}
                     />
                   </div>
                   <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-gray-700">Departamento *</label>
+                      <label
+                        htmlFor="checkout-shippingState"
+                        className="mb-1.5 block text-sm font-medium text-gray-700"
+                      >
+                        Departamento *
+                      </label>
                       <select
+                        id="checkout-shippingState"
                         value={shippingForm.shippingState}
                         onChange={(e) =>
-                          setShippingForm({ ...shippingForm, shippingState: e.target.value, shippingCity: "" })
+                          handleShippingChange(
+                            "shippingState",
+                            e.target.value,
+                          )
                         }
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                        onBlur={() => handleShippingBlur("shippingState")}
+                        aria-invalid={Boolean(shippingErrors.shippingState)}
+                        aria-describedby={
+                          shippingErrors.shippingState
+                            ? "checkout-shippingState-error"
+                            : undefined
+                        }
+                        aria-required="true"
+                        className={checkoutInputClass(
+                          Boolean(shippingErrors.shippingState),
+                        )}
                       >
                         <option value="">Selecciona un departamento</option>
                         {DEPARTMENTS.map((d) => (
@@ -1093,22 +1518,57 @@ export default function CartPage() {
                           </option>
                         ))}
                       </select>
+                      <CheckoutFieldError
+                        id="checkout-shippingState-error"
+                        message={shippingErrors.shippingState}
+                      />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-gray-700">Ciudad / municipio *</label>
+                      <label
+                        htmlFor="checkout-shippingCity"
+                        className="mb-1.5 block text-sm font-medium text-gray-700"
+                      >
+                        Ciudad / municipio *
+                      </label>
                       <input
+                        id="checkout-shippingCity"
                         type="text"
                         list="ciudades-colombia"
+                        autoComplete="address-level2"
+                        maxLength={120}
                         value={shippingForm.shippingCity}
-                        onChange={(e) => setShippingForm({ ...shippingForm, shippingCity: e.target.value })}
+                        onChange={(e) =>
+                          handleShippingChange("shippingCity", e.target.value)
+                        }
+                        onBlur={() => handleShippingBlur("shippingCity")}
                         disabled={!shippingForm.shippingState}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
-                        placeholder={shippingForm.shippingState ? "Ej: Medellín" : "Primero elige el departamento"}
+                        aria-invalid={Boolean(shippingErrors.shippingCity)}
+                        aria-describedby={
+                          shippingErrors.shippingCity
+                            ? "checkout-shippingCity-error"
+                            : undefined
+                        }
+                        aria-required="true"
+                        className={checkoutInputClass(
+                          Boolean(shippingErrors.shippingCity),
+                          "disabled:cursor-not-allowed disabled:opacity-60",
+                        )}
+                        placeholder={
+                          shippingForm.shippingState
+                            ? "Ej: Medellín"
+                            : "Primero elige el departamento"
+                        }
+                      />
+                      <CheckoutFieldError
+                        id="checkout-shippingCity-error"
+                        message={shippingErrors.shippingCity}
                       />
                       <datalist id="ciudades-colombia">
-                        {(MUNICIPALITIES[shippingForm.shippingState] ?? []).map((c) => (
-                          <option key={c} value={c} />
-                        ))}
+                        {(MUNICIPALITIES[shippingForm.shippingState] ?? []).map(
+                          (c) => (
+                            <option key={c} value={c} />
+                          ),
+                        )}
                       </datalist>
                     </div>
                   </div>
@@ -1118,37 +1578,89 @@ export default function CartPage() {
                     state={shippingForm.shippingState}
                   />
                   <div className="mt-4">
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                      C&oacute;digo postal <span className="font-normal text-gray-400">(opcional)</span>
+                    <label
+                      htmlFor="checkout-shippingZip"
+                      className="mb-1.5 block text-sm font-medium text-gray-700"
+                    >
+                      C&oacute;digo postal{" "}
+                      <span className="font-normal text-gray-400">
+                        (opcional)
+                      </span>
                     </label>
                     <input
+                      id="checkout-shippingZip"
                       type="text"
                       inputMode="numeric"
+                      autoComplete="postal-code"
+                      maxLength={6}
                       value={shippingForm.shippingZip}
-                      onChange={(e) => {
-                        const zip = e.target.value.replace(/[^0-9]/g, "");
-                        // Escribir apaga el relleno automatico; borrarlo lo
-                        // vuelve a encender en la proxima direccion.
-                        zipTouchedRef.current = zip !== "";
-                        setShippingForm({ ...shippingForm, shippingZip: zip });
-                      }}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      onChange={(e) =>
+                        handleShippingChange("shippingZip", e.target.value)
+                      }
+                      onBlur={() => handleShippingBlur("shippingZip")}
+                      aria-invalid={Boolean(shippingErrors.shippingZip)}
+                      aria-describedby={
+                        [
+                          shippingErrors.shippingZip
+                            ? "checkout-shippingZip-error"
+                            : null,
+                          !shippingForm.shippingZip
+                            ? "checkout-shippingZip-help"
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ") || undefined
+                      }
+                      className={checkoutInputClass(
+                        Boolean(shippingErrors.shippingZip),
+                      )}
                       placeholder="110111"
                     />
+                    <CheckoutFieldError
+                      id="checkout-shippingZip-error"
+                      message={shippingErrors.shippingZip}
+                    />
                     {!shippingForm.shippingZip && (
-                      <p className="mt-1.5 text-xs text-gray-400">
-                        Se completa solo con la direcci&oacute;n; ed&iacute;talo si no coincide.
+                      <p
+                        id="checkout-shippingZip-help"
+                        className="mt-1.5 text-xs text-gray-400"
+                      >
+                        Se completa solo con la direcci&oacute;n;
+                        ed&iacute;talo si no coincide.
                       </p>
                     )}
                   </div>
                   <div className="mt-4">
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Notas del pedido</label>
+                    <label
+                      htmlFor="checkout-notes"
+                      className="mb-1.5 block text-sm font-medium text-gray-700"
+                    >
+                      Notas del pedido
+                    </label>
                     <textarea
+                      id="checkout-notes"
+                      maxLength={1000}
                       value={shippingForm.notes}
-                      onChange={(e) => setShippingForm({ ...shippingForm, notes: e.target.value })}
+                      onChange={(e) =>
+                        handleShippingChange("notes", e.target.value)
+                      }
+                      onBlur={() => handleShippingBlur("notes")}
+                      aria-invalid={Boolean(shippingErrors.notes)}
+                      aria-describedby={
+                        shippingErrors.notes
+                          ? "checkout-notes-error"
+                          : undefined
+                      }
                       rows={2}
-                      className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      className={checkoutInputClass(
+                        Boolean(shippingErrors.notes),
+                        "resize-none",
+                      )}
                       placeholder="Indicaciones adicionales para la entrega..."
+                    />
+                    <CheckoutFieldError
+                      id="checkout-notes-error"
+                      message={shippingErrors.notes}
                     />
                   </div>
                 </section>
@@ -1174,7 +1686,7 @@ export default function CartPage() {
                   <p className="text-2xl font-bold text-gray-900">{totalFormatted}</p>
                 </div>
                 <button
-                  onClick={handleCheckoutSubmit}
+                  type="submit"
                   disabled={checkoutLoading}
                   className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-white transition flex items-center justify-center gap-2 shadow-lg ${
                     checkoutLoading
@@ -1197,7 +1709,7 @@ export default function CartPage() {
                   )}
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         )}
       </div>
