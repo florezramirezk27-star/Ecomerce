@@ -608,7 +608,23 @@ export class DropiProductsService {
       }
       return out;
     }
-    const keys = ['gallery', 'images', 'photos', 'media', 'files', 'pictures', 'imageList', 'productImages'];
+    const keys = [
+      'gallery',
+      'images',
+      'photos',
+      'media',
+      'files',
+      'pictures',
+      'imageList',
+      'productImages',
+      'product_gallery',
+      'galeria',
+      'imagenes',
+      'image_list',
+      'allImages',
+      'slider',
+      'thumbnails',
+    ];
     for (const key of keys) {
       if (Array.isArray(obj[key])) {
         const urls = this.collectMedia(obj[key]);
@@ -617,7 +633,18 @@ export class DropiProductsService {
         }
       }
     }
-    const direct = this.mediaUrl(obj.url || obj.urlS3 || obj.src || obj.image || obj.imageUrl);
+    const direct = this.mediaUrl(
+      obj.url ||
+        obj.urlS3 ||
+        obj.src ||
+        obj.image ||
+        obj.imageUrl ||
+        obj.photo ||
+        obj.file ||
+        obj.path ||
+        obj.link ||
+        obj.img,
+    );
     if (direct && !out.includes(direct)) out.push(direct);
     for (const value of Object.values(obj)) {
       if (value && typeof value === 'object') {
@@ -633,73 +660,58 @@ export class DropiProductsService {
 
     const videos: string[] = [];
 
-    try {
-      const { statusCode, data } = await this.client.request(
-        '/api/product/video/list',
-        'POST',
-        { id: dropiProductId },
-        token,
-        DROPI_API_HOST,
-      );
+    const endpoints = [
+      { method: 'POST' as const, path: '/api/product/video/list', body: { id: dropiProductId } },
+      { method: 'POST' as const, path: '/api/product/videos', body: { id: dropiProductId } },
+      { method: 'GET' as const, path: `/api/product/${dropiProductId}/videos` },
+      { method: 'GET' as const, path: `/api/products/v2/${dropiProductId}/videos` },
+    ];
 
-      if (statusCode === 200) {
-        const parsed = this.tryParseMedia(data);
-        if (parsed) {
-          const objects =
-            (parsed.objects as any[]) ??
-            (parsed.data?.objects as any[]) ??
-            (parsed.data as any)?.videos ??
-            (parsed as any)?.videos ??
-            [];
-          const collected = this.collectMedia(objects);
-          for (const u of collected) {
-            if (u && !videos.includes(u)) videos.push(u);
-          }
-          // También buscar recursivamente
-          const extracted = this.extractAllImages(parsed).filter(
-            (u) =>
-              u.includes('.mp4') ||
-              u.includes('.webm') ||
-              u.includes('.mov') ||
-              u.includes('video'),
-          );
-          for (const u of extracted) {
-            if (u && !videos.includes(u)) videos.push(u);
-          }
-        }
-      }
-    } catch (err) {
-      this.logger.warn(`Dropi: error obteniendo videos para ${dropiProductId}`);
-    }
-
-    // Intentar desde /api/product
-    if (videos.length === 0) {
+    for (const ep of endpoints) {
       try {
         const { statusCode, data } = await this.client.request(
-          `/api/product/${dropiProductId}`,
-          'GET',
-          undefined,
+          ep.path,
+          ep.method,
+          ep.body,
           token,
           DROPI_API_HOST,
         );
-
-        if (statusCode === 200) {
-          const parsed = this.tryParseMedia(data);
-          if (parsed) {
-            const extracted = this.extractAllImages(parsed).filter(
-              (u) =>
-                u.includes('.mp4') ||
-                u.includes('.webm') ||
-                u.includes('.mov') ||
-                u.includes('video'),
-            );
-            for (const u of extracted) {
-              if (u && !videos.includes(u)) videos.push(u);
-            }
-          }
+        if (statusCode !== 200) continue;
+        const parsed = this.tryParseMedia(data);
+        if (!parsed) continue;
+        const extracted = this.extractAllImages(parsed).filter(
+          (u) =>
+            typeof u === 'string' &&
+            (u.includes('.mp4') ||
+              u.includes('.webm') ||
+              u.includes('.mov') ||
+              u.includes('.m3u8') ||
+              u.includes('video')),
+        );
+        for (const u of extracted) {
+          if (u && !videos.includes(u)) videos.push(u);
+        }
+        const objects =
+          (parsed.objects as any[]) ??
+          (parsed.data?.objects as any[]) ??
+          (parsed.data as any)?.videos ??
+          (parsed as any)?.videos ??
+          [];
+        const collected = this.collectMedia(objects);
+        for (const u of collected) {
+          if (
+            u &&
+            !videos.includes(u) &&
+            (u.includes('.mp4') ||
+              u.includes('.webm') ||
+              u.includes('.mov') ||
+              u.includes('.m3u8') ||
+              u.includes('video'))
+          )
+            videos.push(u);
         }
       } catch (err) {
-        // ignore
+        // continuar
       }
     }
 
@@ -712,76 +724,35 @@ export class DropiProductsService {
 
     const images: string[] = [];
 
-    // Intentar endpoint v2
-    try {
-      const { statusCode, data } = await this.client.request(
-        `/api/products/v2/${dropiProductId}`,
-        'GET',
-        undefined,
-        token,
-        DROPI_API_HOST,
-      );
+    const endpoints = [
+      { method: 'GET' as const, path: `/api/products/v2/${dropiProductId}`, host: DROPI_API_HOST },
+      { method: 'GET' as const, path: `/api/product/${dropiProductId}`, host: DROPI_API_HOST },
+      { method: 'GET' as const, path: `/api/product/v2/${dropiProductId}`, host: DROPI_API_HOST },
+      { method: 'GET' as const, path: `/api/product/detail/${dropiProductId}`, host: DROPI_API_HOST },
+      { method: 'POST' as const, path: '/api/product/gallery', host: DROPI_API_HOST, body: { id: dropiProductId, productId: dropiProductId } },
+      { method: 'POST' as const, path: '/api/product/images', host: DROPI_API_HOST, body: { id: dropiProductId } },
+      { method: 'POST' as const, path: '/api/gallery/list', host: DROPI_API_HOST, body: { product_id: dropiProductId } },
+      { method: 'POST' as const, path: '/api/product/video/list', host: DROPI_API_HOST, body: { id: dropiProductId } },
+    ];
 
-      if (statusCode === 200) {
+    for (const ep of endpoints) {
+      try {
+        const { statusCode, data } = await this.client.request(
+          ep.path,
+          ep.method,
+          ep.body,
+          token,
+          ep.host,
+        );
+        if (statusCode !== 200) continue;
         const parsed = this.tryParseMedia(data);
-        if (parsed) {
-          const extracted = this.extractAllImages(parsed);
-          for (const u of extracted) {
-            if (u && !images.includes(u)) images.push(u);
-          }
-        }
-      }
-    } catch (err) {
-      this.logger.warn(`Dropi: error obteniendo media v2 para ${dropiProductId}`);
-    }
-
-    // Intentar endpoint alternativo /api/product
-    if (images.length === 0) {
-      try {
-        const { statusCode, data } = await this.client.request(
-          `/api/product/${dropiProductId}`,
-          'GET',
-          undefined,
-          token,
-          DROPI_API_HOST,
-        );
-
-        if (statusCode === 200) {
-          const parsed = this.tryParseMedia(data);
-          if (parsed) {
-            const extracted = this.extractAllImages(parsed);
-            for (const u of extracted) {
-              if (u && !images.includes(u)) images.push(u);
-            }
-          }
+        if (!parsed) continue;
+        const extracted = this.extractAllImages(parsed);
+        for (const u of extracted) {
+          if (u && !images.includes(u)) images.push(u);
         }
       } catch (err) {
-        this.logger.warn(`Dropi: error obteniendo media /api/product para ${dropiProductId}`);
-      }
-    }
-
-    // Intentar listar videos que también puede traer info
-    if (images.length === 0) {
-      try {
-        const { statusCode, data } = await this.client.request(
-          '/api/product/video/list',
-          'POST',
-          { id: dropiProductId },
-          token,
-          DROPI_API_HOST,
-        );
-
-        if (statusCode === 200) {
-          const parsed = this.tryParseMedia(data);
-          if (parsed) {
-            const extracted = this.extractAllImages(parsed);
-            for (const u of extracted) {
-              if (u && !images.includes(u)) images.push(u);
-            }
-          }
-        }
-      } catch (err) {
-        this.logger.warn(`Dropi: error obteniendo video/list para ${dropiProductId}`);
+        // continuar con siguiente
       }
     }
 
