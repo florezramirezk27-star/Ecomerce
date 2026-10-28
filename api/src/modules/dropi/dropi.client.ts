@@ -6,7 +6,7 @@ import { DropiHttpResponse } from './dropi.types';
 export class DropiClient {
   private readonly logger = new Logger(DropiClient.name);
   private readonly HOST = 'api.dropi.co';
-  private readonly TIMEOUT = 15000;
+  private readonly TIMEOUT = Number(process.env.DROPI_HTTP_TIMEOUT_MS) || 60000;
 
   async request(
     path: string,
@@ -57,6 +57,9 @@ export class DropiClient {
         },
       );
 
+      req.on('timeout', () => {
+        req.destroy(new Error(`Dropi request timeout after ${this.TIMEOUT}ms`));
+      });
       req.on('error', reject);
       if (hasBody) req.write(bodyStr);
       req.end();
