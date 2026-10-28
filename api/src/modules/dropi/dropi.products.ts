@@ -792,7 +792,16 @@ export class DropiProductsService {
       throw new Error(`Producto ${dropiProductId} no encontrado en Dropi.`);
     }
 
-    const dropiProduct = result.objects[0] as DropiProduct;
+    let dropiProduct = result.objects[0] as DropiProduct;
+    // Obtener objeto completo por si el catálogo trae solo datos resumidos
+    try {
+      const full = await this.getProductById(dropiProductId);
+      if (full) {
+        dropiProduct = { ...dropiProduct, ...full };
+      }
+    } catch (e) {
+      this.logger.warn(`Dropi import: no se pudo obtener detalle completo para ${dropiProductId}`);
+    }
     const name = dropiProduct.name;
 
     let slug = name
