@@ -838,10 +838,14 @@ export class DropiProductsService {
     };
 
     const allFromProduct = this.extractAllImages(dropiProduct);
-    const catalogGallery = (dropiProduct.gallery || [])
+    const catalogGallery = [
+      ...(dropiProduct.gallery || []),
+      ...(dropiProduct.images || []),
+      ...(dropiProduct.photos || []),
+    ]
       .map((g: any) => toAbsolute(g))
       .filter(Boolean) as string[];
-    const mergedCatalog = [...new Set([...allFromProduct, ...catalogGallery])];
+    const mergedCatalog = [...new Set([...allFromProduct, ...catalogGallery])].filter(Boolean);
 
     const mainGalleryUrl = mergedCatalog[0];
     const image = mainGalleryUrl;
