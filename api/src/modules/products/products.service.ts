@@ -236,23 +236,17 @@ export class ProductsService {
 
   async remove(id: string) {
     const result = await this.prisma.$transaction(async (tx) => {
+      // Borrar items del carrito y embeddings primero
       await tx.cartItem.deleteMany({ where: { productId: id } });
       await tx.productEmbedding.deleteMany({ where: { productId: id } });
 
-      const referencedInOrder = await tx.orderItem.findFirst({
-        where: { productId: id },
-        select: { id: true },
-      });
-
-      if (referencedInOrder) {
-        const product = await tx.product.update({
-          where: { id },
-          data: { active: false },
-        });
-        return { ...product, archived: true };
-      }
-
-      return tx.product.delete({ where: { id } });
+      // Eliminar definitivamente el producto (hard delete)
+      // Si el producto tiene orderItems asociados, la base de datos
+      // lanzará un error de restricción de clave externa y el transaction
+      // se rollbackeará, protegiendo la integridad de los datos.
+      // El producto solo se puede borrar si no tiene pedidos asociados.
+      const product = await tx.product.delete({ where: { id } });
+      return product;
     });
 
     await this.cache.invalidate('products');
