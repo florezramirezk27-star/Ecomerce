@@ -535,8 +535,11 @@ export class DropiProductsService {
 
   private mediaUrl(raw?: string | null): string | null {
     if (!raw) return null;
+    if (typeof raw !== 'string') return null;
     if (/^https?:\/\//.test(raw)) return raw;
-    return `${DROPI_CDN}${raw}`;
+    // Algunos CDN usan rutas relativas
+    if (raw.startsWith('//')) return `https:${raw}`;
+    return `${DROPI_CDN}${raw.replace(/^\/+/, '')}`;
   }
 
   private tryParseMedia(data: string): DropiMediaEnvelope | null {
@@ -547,70 +550,241 @@ export class DropiProductsService {
     }
   }
 
-  private collectMedia(items: DropiMediaItem[] | null | undefined): string[] {
+  private collectMedia(items: any[] | null | undefined): string[] {
     if (!Array.isArray(items)) return [];
     const urls: string[] = [];
     for (const it of items) {
-      const mediaObject = it;
-      const u = this.mediaUrl(mediaObject.url || mediaObject.urlS3);
-      if (u && !urls.includes(u)) urls.push(u);
+      if (!it) continue;
+      if (typeof it === 'string') {
+        const u = this.mediaUrl(it);
+        if (u && !urls.includes(u)) urls.push(u);
+        continue;
+      }
+      if (typeof it !== 'object') continue;
+      const mediaObject = it as any;
+      const candidates = [
+        mediaObject.url,
+        mediaObject.urlS3,
+        mediaObject.src,
+        mediaObject.image,
+        mediaObject.imageUrl,
+        mediaObject.photo,
+        mediaObject.file,
+        mediaObject.path,
+        mediaObject.link,
+      ];
+      for (const c of candidates) {
+        const u = this.mediaUrl(c);
+        if (u && !urls.includes(u)) urls.push(u);
+      }
+      // Buscar galerías anidadas
+      if (Array.isArray(mediaObject.gallery)) {
+        urls.push(...this.collectMedia(mediaObject.gallery));
+      }
+      if (Array.isArray(mediaObject.images)) {
+        urls.push(...this.collectMedia(mediaObject.images));
+      }
+      if (Array.isArray(mediaObject.photos)) {
+        urls.push(...this.collectMedia(mediaObject.photos));
+      }
+      if (Array.isArray(mediaObject.media)) {
+        urls.push(...this.collectMedia(mediaObject.media));
+      }
+      if (Array.isArray(mediaObject.files)) {
+        urls.push(...this.collectMedia(mediaObject.files));
+      }
+      if (Array.isArray(mediaObject.pictures)) {
+        urls.push(...this.collectMedia(mediaObject.pictures));
+      }
     }
     return urls;
+  }
+
+  private extractAllImages(obj: any, out: string[] = []): string[] {
+    if (!obj || typeof obj !== 'object') return out;
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        this.extractAllImages(item, out);
+      }
+      return out;
+    }
+    const keys = ['gallery', 'images', 'photos', 'media', 'files', 'pictures', 'imageList', 'productImages'];
+    for (const key of keys) {
+      if (Array.isArray(obj[key])) {
+        const urls = this.collectMedia(obj[key]);
+        for (const u of urls) {
+          if (u && !out.includes(u)) out.push(u);
+        }
+      }
+    }
+    const direct = this.mediaUrl(obj.url || obj.urlS3 || obj.src || obj.image || obj.imageUrl);
+    if (direct && !out.includes(direct)) out.push(direct);
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === 'object') {
+        this.extractAllImages(value, out);
+      }
+    }
+    return out;
   }
 
   async fetchProductVideos(dropiProductId: number): Promise<string[]> {
     const token = this.auth.getOfficialToken();
     if (!token) return [];
 
-    const { statusCode, data } = await this.client.request(
-      '/api/product/video/list',
-      'POST',
-      { id: dropiProductId },
-      token,
-      DROPI_API_HOST,
-    );
+    const videos: string[] = [];
 
-    if (statusCode !== 200) return [];
+    try {
+      const { statusCode, data } = await this.client.request(
+        '/api/product/video/list',
+        'POST',
+        { id: dropiProductId },
+        token,
+        DROPI_API_HOST,
+      );
 
-    const parsed = this.tryParseMedia(data);
-    if (!parsed) return [];
+      if (statusCode === 200) {
+        const parsed = this.tryParseMedia(data);
+        if (parsed) {
+          const objects =
+            (parsed.objects as any[]) ??
+            (parsed.data?.objects as any[]) ??
+            (parsed.data as any)?.videos ??
+            (parsed as any)?.videos ??
+            [];
+          const collected = this.collectMedia(objects);
+          for (const u of collected) {
+            if (u && !videos.includes(u)) videos.push(u);
+          }
+          // También buscar recursivamente
+          const extracted = this.extractAllImages(parsed).filter(
+            (u) =>
+              u.includes('.mp4') ||
+              u.includes('.webm') ||
+              u.includes('.mov') ||
+              u.includes('video'),
+          );
+          for (const u of extracted) {
+            if (u && !videos.includes(u)) videos.push(u);
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Dropi: error obteniendo videos para ${dropiProductId}`);
+    }
 
-    const objects =
-      parsed.objects ?? parsed.data?.objects ?? parsed.data?.objects ?? [];
-    return this.collectMedia(objects as DropiMediaItem[]);
+    // Intentar desde /api/product
+    if (videos.length === 0) {
+      try {
+        const { statusCode, data } = await this.client.request(
+          `/api/product/${dropiProductId}`,
+          'GET',
+          undefined,
+          token,
+          DROPI_API_HOST,
+        );
+
+        if (statusCode === 200) {
+          const parsed = this.tryParseMedia(data);
+          if (parsed) {
+            const extracted = this.extractAllImages(parsed).filter(
+              (u) =>
+                u.includes('.mp4') ||
+                u.includes('.webm') ||
+                u.includes('.mov') ||
+                u.includes('video'),
+            );
+            for (const u of extracted) {
+              if (u && !videos.includes(u)) videos.push(u);
+            }
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    return [...new Set(videos)];
   }
 
   async fetchFullProductMedia(dropiProductId: number): Promise<string[]> {
     const token = this.auth.getOfficialToken();
     if (!token) return [];
 
-    const { statusCode, data } = await this.client.request(
-      `/api/products/v2/${dropiProductId}`,
-      'GET',
-      undefined,
-      token,
-      DROPI_API_HOST,
-    );
-
-    if (statusCode !== 200) return [];
-
-    const parsed = this.tryParseMedia(data);
-    if (!parsed) return [];
-
-    const candidates: DropiMediaItem[] = [];
-    if (Array.isArray(parsed.objects)) {
-      candidates.push(...(parsed.objects as DropiMediaItem[]));
-    }
-    if (Array.isArray(parsed.objects) === false) {
-      candidates.push(parsed);
-    }
-
     const images: string[] = [];
-    for (const c of candidates) {
-      const own = this.mediaUrl(c.url || c.urlS3);
-      if (own) images.push(own);
-      images.push(...this.collectMedia(c.gallery));
+
+    // Intentar endpoint v2
+    try {
+      const { statusCode, data } = await this.client.request(
+        `/api/products/v2/${dropiProductId}`,
+        'GET',
+        undefined,
+        token,
+        DROPI_API_HOST,
+      );
+
+      if (statusCode === 200) {
+        const parsed = this.tryParseMedia(data);
+        if (parsed) {
+          const extracted = this.extractAllImages(parsed);
+          for (const u of extracted) {
+            if (u && !images.includes(u)) images.push(u);
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Dropi: error obteniendo media v2 para ${dropiProductId}`);
     }
+
+    // Intentar endpoint alternativo /api/product
+    if (images.length === 0) {
+      try {
+        const { statusCode, data } = await this.client.request(
+          `/api/product/${dropiProductId}`,
+          'GET',
+          undefined,
+          token,
+          DROPI_API_HOST,
+        );
+
+        if (statusCode === 200) {
+          const parsed = this.tryParseMedia(data);
+          if (parsed) {
+            const extracted = this.extractAllImages(parsed);
+            for (const u of extracted) {
+              if (u && !images.includes(u)) images.push(u);
+            }
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`Dropi: error obteniendo media /api/product para ${dropiProductId}`);
+      }
+    }
+
+    // Intentar listar videos que también puede traer info
+    if (images.length === 0) {
+      try {
+        const { statusCode, data } = await this.client.request(
+          '/api/product/video/list',
+          'POST',
+          { id: dropiProductId },
+          token,
+          DROPI_API_HOST,
+        );
+
+        if (statusCode === 200) {
+          const parsed = this.tryParseMedia(data);
+          if (parsed) {
+            const extracted = this.extractAllImages(parsed);
+            for (const u of extracted) {
+              if (u && !images.includes(u)) images.push(u);
+            }
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`Dropi: error obteniendo video/list para ${dropiProductId}`);
+      }
+    }
+
     return [...new Set(images)];
   }
 
@@ -683,21 +857,24 @@ export class DropiProductsService {
     // ficha deje elegir la variante y para mandar su `variation_id` a Dropi.
     const variations = this.buildVariations(dropiProduct);
 
-    const mainGallery =
-      dropiProduct.gallery?.find((g: DropiGalleryItem) => g.main) ||
-      dropiProduct.gallery?.[0];
-    const toAbsolute = (g?: DropiGalleryItem): string | undefined => {
-      const u = g?.url || g?.urlS3;
-      if (!u) return undefined;
+    const toAbsolute = (g?: any): string | undefined => {
+      if (!g) return undefined;
+      const u = typeof g === 'string' ? g : g?.url || g?.urlS3 || g?.src || g?.image || g?.imageUrl;
+      if (!u || typeof u !== 'string') return undefined;
       if (/^https?:\/\//.test(u)) return u;
-      return `${DROPI_CDN}${u}`;
+      if (u.startsWith('//')) return `https:${u}`;
+      return `${DROPI_CDN}${u.replace(/^\/+/, '')}`;
     };
 
-    const image = toAbsolute(mainGallery);
-    const gallery = (dropiProduct.gallery || [])
-      .filter((g: DropiGalleryItem) => g !== mainGallery)
-      .map(toAbsolute)
+    const allFromProduct = this.extractAllImages(dropiProduct);
+    const catalogGallery = (dropiProduct.gallery || [])
+      .map((g: any) => toAbsolute(g))
       .filter(Boolean) as string[];
+    const mergedCatalog = [...new Set([...allFromProduct, ...catalogGallery])];
+
+    const mainGalleryUrl = mergedCatalog[0];
+    const image = mainGalleryUrl;
+    const gallery = mergedCatalog.slice(1);
 
     const suggested = Number(dropiProduct.suggested_price) || 0;
     const cost = Number(dropiProduct.sale_price) || 0;
@@ -773,34 +950,29 @@ export class DropiProductsService {
       this.fetchProductVideos(dropiProductId),
     ]);
 
-    const mergedGallery = [...gallery];
-    for (const u of fullImages) {
-      if (u && !mergedGallery.includes(u)) mergedGallery.push(u);
-    }
-
+    const mergedGallery = [...new Set([...mergedCatalog, ...fullImages])];
     const videos = [...new Set(videoUrls.filter(Boolean))];
 
-    if (mergedGallery.length !== gallery.length || videos.length > 0) {
+    if (mergedGallery.length > 0 || videos.length > 0) {
       const updated = await this.prisma.product.update({
         where: { id: product.id },
         data: {
-          gallery: mergedGallery,
+          image: mergedGallery[0] || image || undefined,
+          gallery: mergedGallery.slice(1),
           videos,
           video: videos[0] ?? undefined,
         },
       });
-      mergedGallery.forEach((u, i) => {
-        product.gallery[i] = u;
-      });
+      product.image = updated.image || mergedGallery[0] || product.image;
+      product.gallery = mergedGallery.slice(1);
       product.videos = videos;
       if (videos[0]) product.video = videos[0];
-      if (updated.image) product.image = updated.image;
       this.logger.log(
         `Dropi import: ${dropiProductId} -> ${mergedGallery.length} imágenes, ${videos.length} videos`,
       );
     } else {
       this.logger.log(
-        `Dropi import: ${dropiProductId} -> sin media adicional (${gallery.length} imágenes, 0 videos)`,
+        `Dropi import: ${dropiProductId} -> sin media adicional (${mergedCatalog.length} imágenes, 0 videos)`,
       );
     }
 
