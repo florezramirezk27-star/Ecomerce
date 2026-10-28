@@ -765,14 +765,46 @@ export default function CartPage() {
     return (
       <main className="min-h-dvh bg-gradient-to-b from-orange-50 to-white">
         <div className="max-w-4xl mx-auto px-6 py-20">
+          {message && (
+            <div
+              className={`mb-6 p-4 rounded-xl text-sm font-medium flex items-center gap-3 ${
+                message.type === "success"
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}
+            >
+              <span
+                className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                  message.type === "success" ? "bg-emerald-200" : "bg-red-200"
+                }`}
+              >
+                {message.type === "success" ? (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </span>
+              {message.text}
+            </div>
+          )}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16 text-center">
             <div className="w-20 h-20 mx-auto mb-6 bg-orange-100 rounded-full flex items-center justify-center">
               <svg className="w-10 h-10 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Tu carrito está vacío</h2>
-            <p className="text-gray-500 mb-8 max-w-md mx-auto">Agrega productos para comenzar a comprar. Tenemos todo lo que necesitas.</p>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              {message?.type === "success" ? "¡Compra realizada!" : "Tu carrito está vacío"}
+            </h2>
+            <p className="text-gray-500 mb-8 max-w-md mx-auto">
+              {message?.type === "success"
+                ? "Gracias por tu compra. Te enviaremos un correo con los detalles de tu pedido."
+                : "Agrega productos para comenzar a comprar. Tenemos todo lo que necesitas."}
+            </p>
             <Link
               href="/products"
               className="inline-flex items-center gap-2 bg-gray-900 text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-gray-800 transition-all hover:-translate-y-0.5 shadow-lg shadow-gray-900/20"
