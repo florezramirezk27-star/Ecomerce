@@ -925,7 +925,12 @@ export class DropiProductsService {
       this.fetchProductVideos(dropiProductId),
     ]);
 
-    const mergedGallery = [...new Set([...mergedCatalog, ...fullImages])];
+    let mergedGallery = [...new Set([...mergedCatalog, ...fullImages])].filter(Boolean);
+    // Si aún solo hay 1, intentar extraer de nuevo con más agresividad
+    if (mergedGallery.length <= 1) {
+      const extra = this.extractAllImages({ product: dropiProduct, data: dropiProduct, objects: [dropiProduct] });
+      mergedGallery = [...new Set([...mergedGallery, ...extra])].filter(Boolean);
+    }
     const videos = [...new Set(videoUrls.filter(Boolean))];
 
     if (mergedGallery.length > 0 || videos.length > 0) {
