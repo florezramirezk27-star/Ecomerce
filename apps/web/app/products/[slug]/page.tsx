@@ -333,7 +333,7 @@ export default function ProductPage() {
   };
 
   const handleLandingAddToCart = async (offer: LandingAddToCart) => {
-    if (!product) return;
+    if (!product || cartLoading) return false;
 
     const requestedQuantity = Number(offer.quantity);
     if (
@@ -342,7 +342,7 @@ export default function ProductPage() {
       requestedQuantity > 3
     ) {
       mostrarAviso("error", "Selecciona una promoción válida.");
-      return;
+      return false;
     }
 
     if (requestedQuantity > product.stock) {
@@ -350,11 +350,12 @@ export default function ProductPage() {
         "error",
         `Solo hay ${product.stock} unidades disponibles para esta promoción.`,
       );
-      return;
+      return false;
     }
 
     const added = await handleAddToCart(requestedQuantity);
     if (added) router.push("/cart");
+    return added;
   };
 
   if (loading) {

@@ -130,7 +130,6 @@ const RESIZE_SCRIPT = `<script>(function(){
       var d = e && e.data;
       if (d && d.type === '${HEIGHT_MESSAGE}-request') send();
     });
-    setInterval(send, 800);
   }
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
     setTimeout(start, 0);

@@ -4,10 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Oftalmiel - Fórmula Apícola Lubricante Ocular | Alivio Natural</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <!-- Tailwind se carga sin bloquear el analisis ni los botones de la landing. -->
     <script>
-        tailwind.config = {
+        window.tailwind = window.tailwind || {};
+        window.tailwind.config = {
             theme: {
                 extend: {
                     colors: {
@@ -35,10 +39,11 @@
             }
         }
     </script>
+    <script src="https://cdn.tailwindcss.com" defer></script>
     <!-- Google Fonts Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <!-- FontAwesome for Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
     <style>
         body { font-family: 'Inter', sans-serif; }
         .pulse-btn {
@@ -942,7 +947,7 @@
                         </div>
                     </div>
                 </div>
-                <button type="button" onclick="requestStoreCheckout()" class="w-full bg-gradient-to-r from-softOrange-500 to-softOrange-600 hover:from-softOrange-600 hover:to-softOrange-700 text-white font-bold text-lg py-4 rounded-2xl shadow-lg pulse-btn transition-all flex items-center justify-center gap-2">
+                <button type="button" id="store-checkout-btn" onclick="requestStoreCheckout()" class="w-full bg-gradient-to-r from-softOrange-500 to-softOrange-600 hover:from-softOrange-600 hover:to-softOrange-700 text-white font-bold text-lg py-4 rounded-2xl shadow-lg pulse-btn transition-all flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-75">
                     <span>Continuar al checkout seguro</span>
                     <i class="fa-solid fa-arrow-right"></i>
                 </button>
@@ -1016,11 +1021,43 @@
         }
 
         function requestStoreCheckout() {
+            if (checkoutPending) return;
+            checkoutPending = true;
+            updateCheckoutButton('loading');
             window.parent.postMessage({
                 type: 'kronio-add-to-cart',
                 quantity: currentOfferId
             }, '*');
         }
+
+        let checkoutPending = false;
+
+        function updateCheckoutButton(status) {
+            const button = document.getElementById('store-checkout-btn');
+            if (!button) return;
+            const label = button.querySelector('span');
+            button.disabled = status === 'loading' || status === 'success';
+
+            if (status === 'loading') {
+                if (label) label.textContent = 'Agregando al carrito...';
+                return;
+            }
+            if (status === 'success') {
+                if (label) label.textContent = 'Redirigiendo al checkout...';
+                return;
+            }
+            checkoutPending = false;
+            button.disabled = false;
+            if (label) label.textContent = 'Intentar de nuevo';
+        }
+
+        window.addEventListener('message', (event) => {
+            if (event.source !== window.parent) return;
+            const data = event.data;
+            if (data && data.type === 'kronio-checkout-status') {
+                updateCheckoutButton(data.status);
+            }
+        });
     </script>
 </body>
 </html>

@@ -41,7 +41,7 @@ interface LandingFrameProps {
    * puede tocar el carrito ni las cookies de la tienda por si misma: solo puede
    * mandar un mensaje. El padre —que si tiene la sesion— decide que hacer.
    */
-  onAddToCart?: (payload: LandingAddToCart) => void;
+  onAddToCart?: (payload: LandingAddToCart) => boolean | Promise<boolean>;
   /**
    * Hora de fin (milisegundos) de la oferta, para que el contador de la landing
    * marque el mismo tiempo que el aviso "¡Compra ya!" de la ficha. La landing no
@@ -135,7 +135,6 @@ const RESIZE_SCRIPT = `<script>(function(){
       var d = e && e.data;
       if (d && d.type === '${HEIGHT_MESSAGE}-request') send();
     });
-    setInterval(send, 800);
   }
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
     setTimeout(start, 0);
@@ -219,6 +218,17 @@ export default function LandingFrame({
       }
     }
 
+    function sendCheckoutStatus(status: "loading" | "success" | "error") {
+      try {
+        frameRef.current?.contentWindow?.postMessage(
+          { type: "kronio-checkout-status", status },
+          "*",
+        );
+      } catch {
+        // Si el iframe ya se desmonto, no hace falta notificarle.
+      }
+    }
+
     function onMessage(event: MessageEvent) {
       if (event.source !== frameRef.current?.contentWindow) return;
       const data = event.data as
@@ -231,12 +241,16 @@ export default function LandingFrame({
       // el callback, que es quien tiene la sesion y la logica del carrito.
       if (data.type === ADD_TO_CART_MESSAGE) {
         const payload = data as LandingAddToCart;
-        onAddToCartRef.current?.({
+        sendCheckoutStatus("loading");
+        const addResult = onAddToCartRef.current?.({
           productSlug: payload.productSlug,
           comboName: payload.comboName,
           comboPrice: Number(payload.comboPrice) || undefined,
           quantity: Number(payload.quantity) || 1,
         });
+        Promise.resolve(addResult)
+          .then((added) => sendCheckoutStatus(added ? "success" : "error"))
+          .catch(() => sendCheckoutStatus("error"));
         return;
       }
 
