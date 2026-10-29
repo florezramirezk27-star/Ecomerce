@@ -153,7 +153,7 @@ const RESIZE_SCRIPT = `<script>(function(){
  * que suele traer `body { background-color: ... }`, siga ganando cuando cargue.
  */
 const BASE_STYLE =
-  "<style>html{background-color:#fff;}body{background-color:#fff;}</style>";
+  "<style>html{background-color:#fff;overflow-x:hidden;}body{margin:0;width:100%;background-color:#fff;}</style>";
 
 /**
  * Preconnect a los CDNs tipicos de una landing.

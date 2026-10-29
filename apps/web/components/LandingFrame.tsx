@@ -189,7 +189,6 @@ export default function LandingFrame({
   // porque ahora el aspecto lo controla el contenedor).
   const wrapperClass = [
     "relative w-full overflow-hidden bg-white",
-    src ? "rounded-xl border border-gray-200" : "",
     className ?? "",
   ]
     .filter(Boolean)
@@ -287,7 +286,10 @@ export default function LandingFrame({
   }, []);
 
   return (
-    <div className={wrapperClass} style={{ minHeight: initialHeight }}>
+    <div
+      className={wrapperClass}
+      style={{ minHeight: src ? undefined : initialHeight }}
+    >
       {/* Aviso de carga. La landing vive en un iframe y tarda en pintar (su
           CSS y, sobre todo, su fuente de Google son render-blocking). Sin esto
           el usuario ve un hueco del color de la tienda y cree que no cargo; con

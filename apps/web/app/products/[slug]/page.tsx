@@ -393,6 +393,9 @@ export default function ProductPage() {
   }
 
   const variations = product.variations ?? [];
+  const hasLanding =
+    Boolean(product.landingCode?.trim()) ||
+    /oftalmiel/i.test(`${product.name} ${product.slug}`);
   const hasVariations = variations.length > 0;
   const selectedVariation =
     variations.find((v) => v.id === selectedVariationId) ?? null;
@@ -530,7 +533,11 @@ const isVideo = selectedMedia?.kind === "video";
 
       {/* `pb-28` en movil deja aire para la barra de compra fija de abajo,
           que si no taparia el ultimo bloque de la ficha. */}
-      <div className="max-w-7xl mx-auto px-6 py-12 pb-28 md:pb-12">
+      <div
+        className={`max-w-7xl mx-auto px-6 pt-12 ${
+          hasLanding ? "pb-0" : "pb-28 md:pb-12"
+        }`}
+      >
         <button
           onClick={() => router.back()}
           className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 mb-6 transition-colors"
@@ -950,9 +957,8 @@ const isVideo = selectedMedia?.kind === "video";
         </div>
       </div>
 
-      {(product.landingCode?.trim() ||
-        /oftalmiel/i.test(`${product.name} ${product.slug}`)) && (
-        <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6">
+      {hasLanding && (
+        <section className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden">
           <LandingFrame
             src={`/landing/${encodeURIComponent(product.slug)}`}
             title={`Landing de ${product.name}`}
