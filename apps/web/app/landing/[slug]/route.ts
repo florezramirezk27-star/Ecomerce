@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 /**
  * Sirve la landing larga de un producto (HTML/CSS/JS pegado por el admin) como
@@ -235,8 +237,28 @@ export async function GET(
       return emptyDocument("Landing no disponible.");
     }
 
-    const product = (await res.json()) as { landingCode?: string | null };
-    const code = product?.landingCode?.trim();
+    const product = (await res.json()) as {
+      name?: string;
+      slug?: string;
+      landingCode?: string | null;
+    };
+    const isOftalmiel = `${product?.name ?? ""} ${product?.slug ?? ""}`
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .includes("oftalmiel");
+    const code = isOftalmiel
+      ? await readFile(
+          path.join(
+            process.cwd(),
+            "public",
+            "landing",
+            "oftalmiel",
+            "index.html",
+          ),
+          "utf8",
+        )
+      : product?.landingCode?.trim();
 
     if (!code) {
       return emptyDocument("Landing no disponible.");

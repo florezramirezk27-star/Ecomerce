@@ -16,6 +16,7 @@ import {
   effectiveStock,
   findProductVariation,
 } from '../../common/utils/product-variations';
+import { getProductUnitPrice } from '../../common/utils/product-promotion';
 import type { Product } from '@prisma/client';
 
 /**
@@ -179,7 +180,7 @@ export class OrdersService {
             );
           }
 
-          return sum + Number(item.product.price) * item.quantity;
+          return sum + getProductUnitPrice(product, item.quantity) * item.quantity;
         }, 0);
 
         const created = await tx.order.create({
@@ -202,7 +203,10 @@ export class OrdersService {
               create: items.map((item) => ({
                 productId: item.productId,
                 quantity: item.quantity,
-                price: item.product.price,
+                price: getProductUnitPrice(
+                  productMap.get(item.productId)!,
+                  item.quantity,
+                ),
                 // Presentacion enviada a Dropi: queda registrada en el pedido
                 // (0 = producto simple, para no arrastrar variante inventada).
                 variationId: item.variationId || 0,
@@ -274,7 +278,7 @@ export class OrdersService {
             items: dropiItems.map((i) => ({
               dropiProductId: i.product.dropiProductId!,
               quantity: i.quantity,
-              price: Number(i.product.price),
+              price: getProductUnitPrice(i.product, i.quantity),
               name: i.product.name,
               // Solo se manda la presentacion elegida; si no hay (producto
               // simple) se omite y Dropi resuelve el producto normal.
@@ -379,7 +383,7 @@ export class OrdersService {
         items.map((item) => ({
           name: item.product.name,
           quantity: item.quantity,
-          price: Number(item.product.price),
+          price: getProductUnitPrice(item.product, item.quantity),
           variationName: item.variationName,
         })),
         Number(order.total),
@@ -439,7 +443,7 @@ export class OrdersService {
         items.map((item) => ({
           name: item.product.name,
           quantity: item.quantity,
-          price: Number(item.product.price),
+          price: getProductUnitPrice(item.product, item.quantity),
           variationName: item.variationName,
         })),
         Number(order.total),

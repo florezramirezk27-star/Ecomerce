@@ -12,6 +12,7 @@ import { mergeGuestCartIntoServer } from "@/lib/cart-merge";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
 import { DEPARTMENTS, MUNICIPALITIES } from "@/lib/colombia";
 import { lookupPostalCode } from "@/lib/postal-code";
+import { getProductUnitPrice } from "@/lib/product-promotion";
 import {
   CHECKOUT_FIELD_ORDER,
   DOCUMENT_TYPE_OPTIONS,
@@ -114,6 +115,17 @@ const STATUS_COLORS: Record<string, string> = {
 
 function formatPrice(n: string | number) {
   return Number(n).toLocaleString("es-CO") + " COP";
+}
+
+function cartItemUnitPrice(item: CartItem) {
+  return getProductUnitPrice(
+    {
+      name: item.product.name,
+      slug: item.product.slug,
+      price: item.product.price,
+    },
+    item.quantity,
+  );
 }
 
 const CHECKOUT_INPUT_BASE =
@@ -584,7 +596,7 @@ export default function CartPage() {
       num_items: items.reduce((acc, item) => acc + item.quantity, 0),
       value: items.reduce(
         (acc, item) =>
-          acc + Number(item.product.price) * item.quantity,
+          acc + cartItemUnitPrice(item) * item.quantity,
         0,
       ),
       currency: "COP",
@@ -695,7 +707,7 @@ export default function CartPage() {
       void trackMetaEvent("Purchase", {
         value: items.reduce(
           (acc, item) =>
-            acc + Number(item.product.price) * item.quantity,
+            acc + cartItemUnitPrice(item) * item.quantity,
           0,
         ),
         currency: "COP",
@@ -742,7 +754,10 @@ export default function CartPage() {
     }
   };
 
-  const total = items.reduce((acc, item) => acc + Number(item.product.price) * item.quantity, 0);
+  const total = items.reduce(
+    (acc, item) => acc + cartItemUnitPrice(item) * item.quantity,
+    0,
+  );
 
   const totalFormatted = total.toLocaleString("es-CO", {
     style: "currency",
@@ -899,7 +914,7 @@ export default function CartPage() {
                           Presentación: {item.variationName}
                         </p>
                       )}
-                      <p className="text-xs sm:text-sm text-gray-400 mt-0.5">{formatPrice(item.product.price)} c/u</p>
+                      <p className="text-xs sm:text-sm text-gray-400 mt-0.5">{formatPrice(cartItemUnitPrice(item))} c/u</p>
                       <div className="flex items-center gap-2 mt-1.5">
                         {/* 40x40 en vez de 28x28: con 28px el dedo tapa el
                             boton y casi siempre se falla el primer toque.
@@ -926,7 +941,7 @@ export default function CartPage() {
 
                     <div className="flex flex-col items-end justify-center gap-1 shrink-0">
                       <p className="font-bold text-sm sm:text-base text-gray-900 whitespace-nowrap">
-                        {formatPrice(Number(item.product.price) * item.quantity)}
+                        {formatPrice(cartItemUnitPrice(item) * item.quantity)}
                       </p>
                       <button
                         onClick={() => handleRemoveItem(item.id)}

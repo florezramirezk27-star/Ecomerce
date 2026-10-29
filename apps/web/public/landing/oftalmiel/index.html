@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oftalmiel - Fórmula Apícola Lubricante Ocular | Alivio Natural</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        amberCustom: {
+                            50: '#fffbeb',
+                            100: '#fef3c7',
+                            200: '#fde68a',
+                            500: '#f59e0b',
+                            600: '#d97706',
+                            700: '#b45309',
+                            800: '#92400e',
+                        },
+                        softOrange: {
+                            50: '#fff7ed',
+                            100: '#ffedd5',
+                            500: '#f97316',
+                            600: '#ea580c',
+                            700: '#c2410c',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .pulse-btn {
+            animation: pulseGlow 2s infinite;
+        }
+        @keyframes pulseGlow {
+            0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.5); }
+            70% { box-shadow: 0 0 0 15px rgba(249, 115, 22, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
+        }
+        /* Olas animadas (Waves) - HECHAS MÁS RÁPIDAS PARA QUE SE NOTEN */
+        .parallax > use {
+            animation: move-forever 12s cubic-bezier(.55,.5,.45,.5) infinite;
+        }
+        .parallax > use:nth-child(1) { animation-delay: -2s; animation-duration: 5s; }
+        .parallax > use:nth-child(2) { animation-delay: -3s; animation-duration: 7s; }
+        .parallax > use:nth-child(3) { animation-delay: -4s; animation-duration: 10s; }
+        .parallax > use:nth-child(4) { animation-delay: -5s; animation-duration: 14s; }
+        @keyframes move-forever {
+            0% { transform: translate3d(-90px,0,0); }
+            100% { transform: translate3d(85px,0,0); }
+        }
+        /* Carrusel infinito de reseñas */
+        .marquee-container {
+            overflow: hidden;
+            display: flex;
+            width: 100%;
+            -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+            mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+        }
+        .marquee-track {
+            display: flex;
+            gap: 1.5rem;
+            animation: scroll 40s linear infinite;
+            width: max-content;
+        }
+        .marquee-track:hover {
+            animation-play-state: paused;
+        }
+        @keyframes scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(calc(-50% - 0.75rem)); }
+        }
+        @media (max-width: 639px) {
+            .marquee-container {
+                overflow-x: auto;
+                -webkit-mask-image: none;
+                mask-image: none;
+                scrollbar-width: none;
+            }
+            .marquee-container::-webkit-scrollbar {
+                display: none;
+            }
+            .marquee-track {
+                animation: none;
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-amberCustom-50 text-gray-800 antialiased selection:bg-softOrange-500 selection:text-white">
+
+    <!-- 1. BARRA SUPERIOR DE ANUNCIOS -->
+    <div class="bg-gradient-to-r from-amber-700 via-softOrange-600 to-amber-700 text-white text-[10px] sm:text-sm font-medium py-2 sm:py-2.5 px-3 sm:px-4 text-center sticky top-0 z-50 shadow-md">
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2">
+            <span><i class="fa-solid fa-truck-fast mr-1"></i> <strong>ENVÍO GRATIS</strong> A TODA COLOMBIA</span>
+            <span class="hidden sm:inline">|</span>
+            <span><i class="fa-solid fa-hand-holding-dollar mr-1"></i> <strong>PAGO CONTRA ENTREGA:</strong> Paga al recibir en casa 🇨🇴</span>
+        </div>
+    </div>
+
+    <!-- HEADER / LOGO BAR -->
+    <header class="bg-white/90 backdrop-blur-md border-b border-amber-100 py-2.5 sm:py-3 px-3 sm:px-4 sticky top-12 sm:top-9 z-40 shadow-xs">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="w-9 h-9 rounded-full bg-amberCustom-100 border border-amberCustom-500 flex items-center justify-center text-amberCustom-700 font-bold text-lg">
+                    🐝
+                </div>
+                <div>
+                    <span class="text-xl font-extrabold tracking-tight text-gray-900">OFTAL<span class="text-softOrange-600">MIEL</span></span>
+                    <span class="block text-[10px] text-gray-500 font-medium tracking-wider uppercase">Fórmula Apícola Lubricante</span>
+                </div>
+            </div>
+            <a href="#ofertas" class="min-h-11 bg-softOrange-600 hover:bg-softOrange-700 text-white font-semibold text-xs sm:text-sm px-3 sm:px-4 py-2 rounded-xl shadow-sm transition-all transform hover:scale-105">
+                Pedir Ahora <i class="fa-solid fa-arrow-right ml-1"></i>
+            </a>
+        </div>
+    </header>
+
+    <!-- 2. SECCIÓN HERO -->
+    <section class="relative overflow-hidden pt-8 pb-20 sm:pt-12 sm:pb-24 lg:pt-20 lg:pb-32 px-4 bg-gradient-to-b from-amberCustom-50 via-white to-amberCustom-50">
+        <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-7 sm:gap-10 items-center relative z-20">
+
+            <!-- Columna de Texto Hero -->
+            <div class="lg:col-span-7 space-y-4 sm:space-y-6 text-center lg:text-left">
+                <div class="inline-flex items-center gap-2 bg-amberCustom-100 text-amberCustom-800 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider border border-amberCustom-200">
+                    <i class="fa-solid fa-shield-heart text-softOrange-600"></i> Cuidado Oftálmico 100% Natural
+                </div>
+
+                <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 leading-tight">
+                    Tus ojos trabajan todo el día. <br>
+                    <span class="text-softOrange-600 underline decoration-amberCustom-300">¡Ese ardor constante no es normal!</span>
+                </h1>
+
+                <p class="text-sm sm:text-lg text-gray-600 max-w-xl mx-auto lg:mx-0">
+                    Regálales el respiro natural que necesitan. Nuestra fórmula apícola especial con miel pura, uchuva y rosas combate la sequedad, el enrojecimiento y la fatiga visual.
+                </p>
+
+                <!-- Beneficios rápidos -->
+                <div class="grid grid-cols-2 gap-2 sm:gap-3 pt-1 sm:pt-2 max-w-md mx-auto lg:mx-0 text-left text-xs sm:text-sm font-medium text-gray-700">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-circle-check text-green-600"></i> Alivia la sequedad
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-circle-check text-green-600"></i> Reduce fatiga digital
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-circle-check text-green-600"></i> Hidratación activa
+                    </div>
+                    <div class="hidden sm:flex items-center gap-2">
+                        <i class="fa-solid fa-circle-check text-green-600"></i> Cero químicos agresivos
+                    </div>
+                </div>
+
+                <!-- Botón CTA principal -->
+                <div class="pt-2 sm:pt-4">
+                    <a href="#ofertas" class="min-h-14 inline-flex items-center justify-center w-full sm:w-auto bg-gradient-to-r from-softOrange-500 to-softOrange-600 hover:from-softOrange-600 hover:to-softOrange-700 text-white font-bold text-base sm:text-lg px-5 sm:px-8 py-4 rounded-2xl shadow-lg pulse-btn transition-all transform hover:-translate-y-0.5">
+                        <span>¡Quiero cortar el ardor ahora!</span>
+                        <i class="fa-solid fa-bolt ml-2"></i>
+                    </a>
+                    <p class="text-xs text-gray-500 mt-2"><i class="fa-solid fa-lock text-green-600"></i> Pago contra entrega disponible en todo el país</p>
+                </div>
+            </div>
+
+            <!-- Columna Multimedia / Video principal de productos top ventas -->
+            <div class="lg:col-span-5 flex justify-center">
+                <div class="relative w-full max-w-sm bg-white p-3 rounded-3xl shadow-xl border border-amberCustom-200">
+                    <div class="absolute -top-3 -right-3 bg-amber-500 text-white font-bold text-xs px-3 py-1.5 rounded-full shadow-md z-10 flex items-center gap-1">
+                        <i class="fa-solid fa-star text-yellow-200"></i> Producto Top Ventas
+                    </div>
+
+                    <div class="relative rounded-2xl overflow-hidden bg-black aspect-[4/5] shadow-lg border border-amberCustom-200">
+                        <video controls playsinline preload="metadata" class="w-full h-full object-cover">
+                            <source src="/landing/oftalmiel/videos/video 12.mp4" type="video/mp4">
+                            Tu navegador no soporta el elemento de video.
+                        </video>
+                    </div>
+
+                    <div class="text-center mt-3 text-xs text-gray-500 font-medium">
+                        Frasco gotero de 20 ml • Ingredientes 100% naturales
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Ola 1 (Transición hacia Blanco) - MÁS ALTA Y VISIBLE -->
+        <div class="absolute bottom-0 left-0 right-0 w-full overflow-hidden leading-[0] z-10">
+            <svg class="relative block w-full h-[100px] sm:h-[160px]" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+                <defs>
+                    <path id="gentle-wave-1" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" />
+                </defs>
+                <g class="parallax">
+                    <use xlink:href="#gentle-wave-1" x="48" y="0" fill="rgba(255, 237, 213, 0.7)" /> <!-- Soft Orange 100 -->
+                    <use xlink:href="#gentle-wave-1" x="48" y="3" fill="rgba(249, 115, 22, 0.15)" /> <!-- Soft Orange hint -->
+                    <use xlink:href="#gentle-wave-1" x="48" y="5" fill="rgba(255, 255, 255, 0.5)" />
+                    <use xlink:href="#gentle-wave-1" x="48" y="7" fill="#ffffff" />
+                </g>
+            </svg>
+        </div>
+    </section>
+
+    <!-- 3. IDENTIFICACIÓN DEL PROBLEMA -->
+    <section class="relative py-14 pb-24 px-4 bg-white">
+        <div class="max-w-5xl mx-auto text-center space-y-10 relative z-20">
+                </div>
+                <!-- Tarjeta Problema 2 -->
+                <div class="bg-amberCustom-50/60 p-5 rounded-2xl border border-amberCustom-200 hover:shadow-md transition-shadow">
+                    <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-lg mb-3">
+                        <i class="fa-solid fa-fire-flame-curved"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-900 mb-1">Ardor y Picor Constante</h3>
+                    <p class="text-xs text-gray-600 leading-relaxed">Sensación molesta de arenilla o quemazón al terminar tus actividades del día.</p>
+                </div>
+                <!-- Tarjeta Problema 3 -->
+                <div class="bg-amberCustom-50/60 p-5 rounded-2xl border border-amberCustom-200 hover:shadow-md transition-shadow">
+                    <div class="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center text-lg mb-3">
+                        <i class="fa-solid fa-wind"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-900 mb-1">Viento, Polvo y Clima</h3>
+                    <p class="text-xs text-gray-600 leading-relaxed">Ambientes con aire acondicionado o polución irritan y enrojecen la superficie ocular.</p>
+                </div>
+                <!-- Tarjeta Problema 4 -->
+                <div class="bg-amberCustom-50/60 p-5 rounded-2xl border border-amberCustom-200 hover:shadow-md transition-shadow">
+                    <div class="w-10 h-10 rounded-xl bg-yellow-100 text-yellow-700 flex items-center justify-center text-lg mb-3">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-900 mb-1">Fatiga y Lagrimeos</h3>
+                    <p class="text-xs text-gray-600 leading-relaxed">Esfuerzo excesivo que apaga la nitidez de tu mirada y genera cansancio prematuro.</p>
+                </div>
+            </div>
+
+            <!-- Banner Alerta Solución -->
+            <div class="bg-gradient-to-r from-amber-500 to-softOrange-600 rounded-2xl p-6 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+                <div class="text-center sm:text-left">
+                    <h4 class="text-lg font-bold">¡No tienes que seguir soportando esta incomodidad!</h4>
+                    <p class="text-xs sm:text-sm text-amberCustom-100">Oftalmiel devuelve la hidratación y frescura natural en segundos.</p>
+                </div>
+                <a href="#ofertas" class="bg-white text-softOrange-700 font-bold px-6 py-3 rounded-xl shadow hover:bg-amberCustom-50 transition-colors whitespace-nowrap">
+                    Pedir con Descuento
+                </a>
+            </div>
+        </div>
+
+        <!-- Ola 2 (Transición hacia ámbar claro #fffbeb) - MÁS ALTA -->
+        <div class="absolute bottom-0 left-0 right-0 w-full overflow-hidden leading-[0] z-10">
+            <svg class="relative block w-full h-[100px] sm:h-[160px]" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+                <defs>
+                    <path id="gentle-wave-2" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" />
+                </defs>
+                <g class="parallax">
+                    <use xlink:href="#gentle-wave-2" x="48" y="0" fill="rgba(249, 115, 22, 0.1)" /> <!-- Soft orange transparent -->
+                    <use xlink:href="#gentle-wave-2" x="48" y="3" fill="rgba(255,251,235,0.5)" />
+                    <use xlink:href="#gentle-wave-2" x="48" y="5" fill="rgba(253, 230, 138, 0.3)" />
+                    <use xlink:href="#gentle-wave-2" x="48" y="7" fill="#fffbeb" />
+                </g>
+            </svg>
+        </div>
+    </section>
+
+    <!-- 4. INGREDIENTES Y BENEFICIOS -->
+    <section class="relative py-16 pb-28 px-4 bg-amberCustom-50">
+        <div class="max-w-6xl mx-auto relative z-20">
+                        Actúa como un lubricante biológico superior, creando una capa protectora e hidratante duradera sobre la superficie ocular.
+                    </p>
+                </div>
+
+                <!-- Ingrediente 2 (Centro - Producto destacado) -->
+                <div class="bg-gradient-to-b from-white to-amberCustom-100 p-8 rounded-3xl shadow-xl border-2 border-softOrange-500 text-center space-y-4 relative">
+                    <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-softOrange-600 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">
+                        100% Natural
+                    </div>
+                    <div class="w-20 h-20 mx-auto rounded-full bg-amberCustom-200 border-4 border-white flex items-center justify-center text-3xl shadow-md">
+                        🐝
+                    </div>
+                    <h3 class="text-xl font-extrabold text-gray-900">Oftalmiel 20 ml</h3>
+                    <p class="text-xs text-gray-700 leading-relaxed">
+                        Fórmula oftálmica libre de químicos agresivos diseñada para humectar profundamente, reducir el enrojecimiento y restaurar la mirada cansada.
+                    </p>
+                    <div class="pt-2">
+                        <span class="inline-block bg-amberCustom-200 text-amberCustom-800 text-xs font-semibold px-3 py-1 rounded-full">
+                            ✨ Alivio Inmediato Garantizado
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Ingrediente 3 -->
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-amberCustom-200 text-center space-y-4 hover:border-softOrange-500 transition-colors">
+                    <div class="w-16 h-16 mx-auto rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center text-2xl shadow-inner">
+                        🌸
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-900">Flores de Uchuva y Rosas</h3>
+                    <p class="text-xs text-gray-600 leading-relaxed">
+                        Extractos florales tradicionales que aportan un suave efecto calmante, refrescando los ojos irritados por el polvo y la fatiga.
+                    </p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- SECCIÓN COMBINADA: VIDEOS EN ACCIÓN -->
+    <section class="py-10 sm:py-16 px-4 bg-white border-t border-amberCustom-200">
+        <div class="max-w-6xl mx-auto space-y-7 sm:space-y-10">
+            <div class="text-center">
+                <span class="text-softOrange-600 font-bold text-xs uppercase tracking-widest bg-softOrange-50 px-3 py-1 rounded-full border border-softOrange-100">Fácil y Efectivo</span>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-2">Conoce más sobre Oftalmiel</h2>
+                <p class="text-gray-600 text-sm mt-2 max-w-2xl mx-auto">Aprende a usarlo fácilmente y descubre por qué miles de personas ya confían en nuestra fórmula apícola para el alivio diario.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-8 items-start">
+                <!-- Video 1 -->
+                <div class="space-y-3 sm:space-y-4 text-center bg-amberCustom-50/50 p-4 sm:p-6 rounded-3xl border border-amberCustom-100 hover:shadow-md transition-shadow">
+                    <h3 class="text-lg font-bold text-gray-900">¿Cómo usarlo en tu día a día?</h3>
+                    <div class="relative w-full max-w-[18rem] sm:max-w-sm mx-auto rounded-2xl overflow-hidden shadow-lg border-2 border-white bg-black">
+                        <video controls playsinline preload="metadata" class="w-full h-auto aspect-[9/16] object-cover">
+                            <source src="/landing/oftalmiel/videos/video 13.mp4" type="video/mp4">
+                            Tu navegador no soporta el elemento de video.
+                        </video>
+                    </div>
+                    <p class="text-sm text-gray-600 font-medium">Tan simple como aplicar 1 a 2 gotas cuando sientas fatiga o resequedad visual.</p>
+                </div>
+
+                <!-- Video 2 -->
+                <div class="space-y-3 sm:space-y-4 text-center bg-amberCustom-50/50 p-4 sm:p-6 rounded-3xl border border-amberCustom-100 hover:shadow-md transition-shadow">
+                    <h3 class="text-lg font-bold text-gray-900">Resultados reales que sientes</h3>
+                    <div class="relative w-full max-w-[18rem] sm:max-w-sm mx-auto rounded-2xl overflow-hidden shadow-lg border-2 border-white bg-black">
+                        <video controls playsinline preload="metadata" class="w-full h-auto aspect-[9/16] object-cover">
+                            <source src="/landing/oftalmiel/videos/video 14.mp4" type="video/mp4">
+                            Tu navegador no soporta el elemento de video.
+                        </video>
+                    </div>
+                    <ul class="text-xs font-medium text-gray-700 space-y-1 text-left inline-block mt-2">
+                        <li><i class="fa-solid fa-circle-check text-softOrange-500 mr-1"></i> Visión clara y confortable</li>
+                        <li><i class="fa-solid fa-circle-check text-softOrange-500 mr-1"></i> Menos lagrimeo e irritación</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ola 3 (Transición hacia Blanco/Prueba Social) - REAJUSTADA -->
+        <div class="relative w-full overflow-hidden leading-[0] z-10 mt-10 -mb-16">
+            <svg class="relative block w-full h-[100px] sm:h-[160px]" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+                <defs>
+                    <path id="gentle-wave-3" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" />
+                </defs>
+                <g class="parallax">
+                    <use xlink:href="#gentle-wave-3" x="48" y="0" fill="rgba(255, 237, 213, 0.6)" />
+                    <use xlink:href="#gentle-wave-3" x="48" y="3" fill="rgba(255, 255, 255, 0.4)" />
+                    <use xlink:href="#gentle-wave-3" x="48" y="5" fill="rgba(249, 115, 22, 0.05)" />
+                    <use xlink:href="#gentle-wave-3" x="48" y="7" fill="#ffffff" />
+                </g>
+            </svg>
+        </div>
+    </section>
+
+    <!-- 5. PRUEBA SOCIAL Y FOTOS REALES -->
+    <section class="py-14 px-4 bg-white">
+        <div class="max-w-6xl mx-auto space-y-10 overflow-hidden">
+            <div class="text-center">
+                <span class="text-softOrange-600 font-bold text-xs uppercase tracking-widest bg-softOrange-50 px-3 py-1 rounded-full border border-softOrange-100">Confianza Real</span>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-2">Lo que dicen nuestros clientes en Colombia</h2>
+                <p class="text-gray-600 text-sm mt-1">Miles de frascos despachados con satisfacción total.</p>
+            </div>
+
+            <!-- Carrusel Infinito de Reseñas -->
+            <div class="marquee-container py-4">
+                <div class="marquee-track">
+                    <!-- Grupo original de 8 reseñas -->
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Trabajo todo el día frente al computador y en las tardes ya no aguantaba el ardor. Desde que uso Oftalmiel siento mis ojos frescos todo el día."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">CM</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Carlos Morales</h4>
+                                <p class="text-[10px] text-gray-500">Bogotá D.C. • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Me encantó que es 100% natural. Sufro de resequedad por el aire acondicionado de la oficina y este gotero de 20ml me salvó la vida."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">MR</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Marcela Restrepo</h4>
+                                <p class="text-[10px] text-gray-500">Medellín • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Llegó súper rápido. El empaque es original y con instrucciones claras. La fórmula apícola se siente muy suave al aplicar."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">AP</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Alberto Pérez</h4>
+                                <p class="text-[10px] text-gray-500">Cali • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Lo probé por recomendación y ha sido una maravilla. El clima cálido me resecaba mucho la vista, ahora siento frescura total."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">SV</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Sandra Vargas</h4>
+                                <p class="text-[10px] text-gray-500">Bucaramanga • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Excelente calidad. La miel de abeja se nota que es pura, me quitó el ardor que sentía al final de mi turno de trabajo."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">DO</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Diego Osorio</h4>
+                                <p class="text-[10px] text-gray-500">Manizales • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"El envío gratis funcionó súper bien. En cuanto a las gotas, son muy refrescantes, las uso cada vez que estoy en el celular."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">LV</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Laura Valencia</h4>
+                                <p class="text-[10px] text-gray-500">Pereira • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Con el aire acondicionado a toda hora aquí en la costa, los ojos se me ponían rojos. Oftalmiel me alivió ese problema por completo."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">JM</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Juan Mendoza</h4>
+                                <p class="text-[10px] text-gray-500">Barranquilla • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Súper recomendado. Pagas cuando te llega y el empaque es excelente. Una gota y sientes de una cómo hidrata y limpia la visión."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">CG</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Carmen Gómez</h4>
+                                <p class="text-[10px] text-gray-500">Cartagena • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Duplicado exacto de las 8 reseñas para el efecto infinito continuo -->
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Trabajo todo el día frente al computador y en las tardes ya no aguantaba el ardor. Desde que uso Oftalmiel siento mis ojos frescos todo el día."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">CM</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Carlos Morales</h4>
+                                <p class="text-[10px] text-gray-500">Bogotá D.C. • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Me encantó que es 100% natural. Sufro de resequedad por el aire acondicionado de la oficina y este gotero de 20ml me salvó la vida."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">MR</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Marcela Restrepo</h4>
+                                <p class="text-[10px] text-gray-500">Medellín • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Llegó súper rápido. El empaque es original y con instrucciones claras. La fórmula apícola se siente muy suave al aplicar."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">AP</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Alberto Pérez</h4>
+                                <p class="text-[10px] text-gray-500">Cali • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Lo probé por recomendación y ha sido una maravilla. El clima cálido me resecaba mucho la vista, ahora siento frescura total."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">SV</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Sandra Vargas</h4>
+                                <p class="text-[10px] text-gray-500">Bucaramanga • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Excelente calidad. La miel de abeja se nota que es pura, me quitó el ardor que sentía al final de mi turno de trabajo."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">DO</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Diego Osorio</h4>
+                                <p class="text-[10px] text-gray-500">Manizales • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"El envío gratis funcionó súper bien. En cuanto a las gotas, son muy refrescantes, las uso cada vez que estoy en el celular."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">LV</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Laura Valencia</h4>
+                                <p class="text-[10px] text-gray-500">Pereira • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Con el aire acondicionado a toda hora aquí en la costa, los ojos se me ponían rojos. Oftalmiel me alivió ese problema por completo."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">JM</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Juan Mendoza</h4>
+                                <p class="text-[10px] text-gray-500">Barranquilla • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-80 flex-shrink-0 bg-amberCustom-50/50 p-6 rounded-2xl border border-amberCustom-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div>
+                            <div class="flex text-yellow-500 text-sm mb-3">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm text-gray-700 italic">"Súper recomendado. Pagas cuando te llega y el empaque es excelente. Una gota y sientes de una cómo hidrata y limpia la visión."</p>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-amberCustom-200">
+                            <div class="w-9 h-9 rounded-full bg-amberCustom-200 flex items-center justify-center font-bold text-amberCustom-800 text-xs">CG</div>
+                            <div>
+                                <h4 class="font-bold text-xs text-gray-900">Carmen Gómez</h4>
+                                <p class="text-[10px] text-gray-500">Cartagena • Verificado</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Galería de imágenes reales simulada -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4">
+                <div class="rounded-xl overflow-hidden shadow-xs border border-amberCustom-200 aspect-square bg-amberCustom-100">
+                    <img src="/landing/oftalmiel/img/1b9fc5b3-8906-4785-8ac7-276c3b585760.png" alt="Oftalmiel Caja" class="w-full h-full object-cover hover:scale-105 transition-transform">
+                </div>
+                <div class="rounded-xl overflow-hidden shadow-xs border border-amberCustom-200 aspect-square bg-amberCustom-100">
+                    <img src="/landing/oftalmiel/img/dropkiller-29039672882294208_edited.png" alt="Gotero Oftalmiel" class="w-full h-full object-cover hover:scale-105 transition-transform">
+                </div>
+                <div class="rounded-xl overflow-hidden shadow-xs border border-amberCustom-200 aspect-square bg-amberCustom-100">
+                    <img src="/landing/oftalmiel/img/IMAGEN PUBLICITARIA 3.png" alt="Aplicación Gotas" class="w-full h-full object-cover hover:scale-105 transition-transform">
+                </div>
+                <div class="rounded-xl overflow-hidden shadow-xs border border-amberCustom-200 aspect-square bg-amberCustom-100">
+                    <img src="/landing/oftalmiel/img/WhatsApp Image 2026-03-27 at 2.56.42 PM (1).jpeg" alt="Bienestar Ocular" class="w-full h-full object-cover hover:scale-105 transition-transform">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. SELECTOR DE OFERTAS IRRESISTIBLES -->
+    <section id="ofertas" class="scroll-mt-24 py-10 sm:py-16 px-4 bg-gradient-to-b from-amberCustom-50 to-white">
+        <div class="max-w-4xl mx-auto space-y-6 sm:space-y-8">
+            <div class="text-center">
+                <span class="bg-softOrange-100 text-softOrange-700 font-bold text-xs uppercase tracking-widest px-3 py-1 rounded-full border border-softOrange-200">¡Selecciona Tu Promoción!</span>
+                <h2 class="text-2xl sm:text-4xl font-extrabold text-gray-900 mt-2">Aprovecha nuestros descuentos por tiempo limitado</h2>
+                <p class="text-gray-600 text-sm mt-1">Elige la cantidad ideal para ti o tu familia. <strong class="text-softOrange-600">¡Envío Gratis Incluido!</strong></p>
+            </div>
+
+            <!-- Tarjetas de Ofertas Interactivas -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+
+                <!-- Oferta 1 -->
+                <div onclick="selectOffer(1, 64900, '1 Frasco Oftalmiel')" id="offer-card-1" class="offer-card cursor-pointer bg-white rounded-3xl p-5 sm:p-6 border-2 border-amberCustom-300 shadow-sm relative transition-all hover:shadow-md hover:border-softOrange-500">
+                    <div class="absolute top-4 right-4 radio-indicator w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center">
+                        <div class="inner-dot w-3 h-3 rounded-full bg-transparent"></div>
+                    </div>
+                    <span class="text-xs font-bold text-gray-500 uppercase">Prueba Individual</span>
+                    <h3 class="text-lg font-bold text-gray-900 mt-1">1 Frasco de 20 ml</h3>
+                    <div class="my-4">
+                        <span class="text-3xl font-extrabold text-gray-900">$64.900</span>
+                        <span class="text-xs text-gray-500 block">COP</span>
+                    </div>
+                    <ul class="text-xs text-gray-600 space-y-2 pt-2 border-t border-gray-100">
+                        <li><i class="fa-solid fa-check text-green-600 mr-1"></i> 1 Mes de alivio</li>
+                        <li><i class="fa-solid fa-check text-green-600 mr-1"></i> Envío estándar</li>
+                        <li><i class="fa-solid fa-check text-green-600 mr-1"></i> Pago contra entrega</li>
+                    </ul>
+                </div>
+
+                <!-- Oferta 2 (Más Popular / Destacada) -->
+                <div onclick="selectOffer(2, 99900, '2 Frascos Oftalmiel (¡Más Vendido!)')" id="offer-card-2" class="offer-card cursor-pointer bg-gradient-to-b from-amberCustom-50 to-white rounded-3xl p-5 sm:p-6 border-2 border-softOrange-500 shadow-lg relative transition-all transform md:-translate-y-2">
+                    <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-softOrange-600 text-white font-bold text-[10px] uppercase tracking-widest px-3 py-1 rounded-full shadow">
+                        🔥 ¡Más Popular & Ahorro!
+                    </div>
+                    <div class="absolute top-4 right-4 radio-indicator w-6 h-6 rounded-full border-2 border-softOrange-600 flex items-center justify-center bg-softOrange-50">
+                        <div class="inner-dot w-3 h-3 rounded-full bg-softOrange-600"></div>
+                    </div>
+                    <span class="text-xs font-bold text-softOrange-600 uppercase">Tratamiento Doble</span>
+                    <h3 class="text-lg font-bold text-gray-900 mt-1">Lleva 2 Frascos</h3>
+                    <div class="my-4">
+                        <span class="text-3xl font-extrabold text-softOrange-600">$99.900</span>
+                        <span class="text-xs text-gray-500 block"><del>$129.800</del> • Ahorras $30.000</span>
+                    </div>
+                    <ul class="text-xs text-gray-600 space-y-2 pt-2 border-t border-amberCustom-200">
+                        <li><i class="fa-solid fa-check text-green-600 mr-1"></i> <strong>Envío Gratis</strong> prioritario</li>
+                        <li><i class="fa-solid fa-check text-green-600 mr-1"></i> 2 Meses de protección</li>
+                        <li><i class="fa-solid fa-check text-green-600 mr-1"></i> Pago contra entrega</li>
+                    </ul>
+                </div>
+
+                <!-- Oferta 3 -->
+                <div onclick="selectOffer(3, 129900, '3 Frascos Oftalmiel (Tratamiento Completo)')" id="offer-card-3" class="offer-card cursor-pointer bg-white rounded-3xl p-5 sm:p-6 border-2 border-amberCustom-300 shadow-sm relative transition-all hover:shadow-md hover:border-softOrange-500">
+                    <div class="absolute top-4 right-4 radio-indicator w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center">
+                        <div class="inner-dot w-3 h-3 rounded-full bg-transparent"></div>
+                    </div>
+                    <span class="text-xs font-bold text-gray-500 uppercase">Tratamiento Familiar</span>
+                    <h3 class="text-lg font-bold text-gray-900 mt-1">Lleva 3 Frascos</h3>
+                    <div class="my-4">
+                        <span class="text-3xl font-extrabold text-gray-900">$129.900</span>
+                        <span class="text-xs text-gray-500 block"><del>$194.700</del> • ¡Paga 2 y lleva 3!</span>
+                    </div>
+                    <ul class="text-xs text-gray-600 space-y-2 pt-2 border-t border-gray-100">
+                        <li><i class="fa-solid fa-check text-green-600 mr-1"></i> <strong>Envío Gratis</strong> express</li>
+                        <li><i class="fa-solid fa-check text-green-600 mr-1"></i> Máximo ahorro económico</li>
+                        <li><i class="fa-solid fa-check text-green-600 mr-1"></i> Pago contra entrega</li>
+                    </ul>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- 7. FORMULARIO INTERACTIVO DE PAGO CONTRA ENTREGA -->
+    <section class="py-10 sm:py-14 px-3 sm:px-4 bg-amberCustom-100/60 border-t border-amberCustom-200">
+        <div class="max-w-xl mx-auto bg-white rounded-3xl shadow-xl p-4 sm:p-8 border border-amberCustom-200">
+
+            <div class="text-center mb-6">
+                <div class="inline-block bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full mb-2">
+                    <i class="fa-solid fa-shield-halved mr-1"></i> Pedido 100% Seguro sin Tarjeta de Crédito
+                </div>
+                <h3 class="text-2xl font-extrabold text-gray-900">Completa tus datos para enviar</h3>
+                <p class="text-xs text-gray-600 mt-1">Pagas únicamente al recibir el producto en la puerta de tu casa.</p>
+            </div>
+
+            <!-- Formulario HTML Actualizado y Estructurado -->
+            <form id="checkout-form" onsubmit="handleCheckout(event)" class="hidden" aria-hidden="true" hidden>
+
+                <!-- SECCIÓN: Datos de contacto -->
+                <div class="bg-gray-50/50 p-4 sm:p-5 rounded-2xl border border-gray-100">
+                    <h4 class="text-sm font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4 uppercase tracking-wider text-softOrange-700">1. Datos de contacto</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Nombre completo *</label>
+                            <input type="text" required placeholder="Ej. Carlos Pérez" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-softOrange-500 transition-colors shadow-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Teléfono *</label>
+                            <input type="tel" required placeholder="Ej. 3001234567" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-softOrange-500 transition-colors shadow-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Correo electrónico</label>
+                            <input type="email" placeholder="ejemplo@correo.com" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-softOrange-500 transition-colors shadow-sm">
+                            <p class="text-[10px] text-gray-500 mt-1 italic">Si no lo llenas, la factura llega a tu correo registrado.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECCIÓN: Documento de identidad -->
+                <div class="bg-gray-50/50 p-4 sm:p-5 rounded-2xl border border-gray-100">
+                    <h4 class="text-sm font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4 uppercase tracking-wider text-softOrange-700">2. Documento de identidad</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Tipo de documento *</label>
+                            <select required class="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-softOrange-500 transition-colors shadow-sm appearance-none cursor-pointer">
+                                <option value="" disabled selected>Selecciona un documento</option>
+                                <option value="cc">Cédula de ciudadanía</option>
+                                <option value="ce">Cédula de extranjería</option>
+                                <option value="nit">NIT</option>
+                                <option value="pasaporte">Pasaporte</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Número de documento *</label>
+                            <input type="text" required pattern="[0-9]{6,10}" title="Entre 6 y 10 dígitos numéricos" placeholder="Ej. 10203040" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-softOrange-500 transition-colors shadow-sm">
+                            <p class="text-[10px] text-gray-500 mt-1">Solo números, entre 6 y 10 dígitos. Lo piden las transportadoras para la entrega y el cobro contra entrega.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECCIÓN: Dirección de entrega -->
+                <div class="bg-gray-50/50 p-4 sm:p-5 rounded-2xl border border-gray-100">
+                    <h4 class="text-sm font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4 uppercase tracking-wider text-softOrange-700">3. Dirección de entrega</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Dirección *</label>
+                            <input type="text" required placeholder="Ej. Calle 45 # 20-10, Apto 302" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-softOrange-500 transition-colors shadow-sm">
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">Departamento *</label>
+                                <select required class="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-softOrange-500 transition-colors shadow-sm appearance-none cursor-pointer">
+                                    <option value="" disabled selected>Selecciona un departamento</option>
+                                    <option value="Amazonas">Amazonas</option>
+                                    <option value="Antioquia">Antioquia</option>
+                                    <option value="Arauca">Arauca</option>
+                                    <option value="Atlántico">Atlántico</option>
+                                    <option value="Bogotá D.C.">Bogotá D.C.</option>
+                                    <option value="Bolívar">Bolívar</option>
+                                    <option value="Boyacá">Boyacá</option>
+                                    <option value="Caldas">Caldas</option>
+                                    <option value="Caquetá">Caquetá</option>
+                                    <option value="Casanare">Casanare</option>
+                                    <option value="Cauca">Cauca</option>
+                                    <option value="Cesar">Cesar</option>
+                                    <option value="Chocó">Chocó</option>
+                                    <option value="Córdoba">Córdoba</option>
+                                    <option value="Cundinamarca">Cundinamarca</option>
+                                    <option value="Guainía">Guainía</option>
+                                    <option value="Guaviare">Guaviare</option>
+                                    <option value="Huila">Huila</option>
+                                    <option value="La Guajira">La Guajira</option>
+                                    <option value="Magdalena">Magdalena</option>
+                                    <option value="Meta">Meta</option>
+                                    <option value="Nariño">Nariño</option>
+                                    <option value="Norte de Santander">Norte de Santander</option>
+                                    <option value="Putumayo">Putumayo</option>
+                                    <option value="Quindío">Quindío</option>
+                                    <option value="Risaralda">Risaralda</option>
+                                    <option value="San Andrés y Providencia">San Andrés y Providencia</option>
+                                    <option value="Santander">Santander</option>
+                                    <option value="Sucre">Sucre</option>
+                                    <option value="Tolima">Tolima</option>
+                                    <option value="Valle del Cauca">Valle del Cauca</option>
+                                    <option value="Vaupés">Vaupés</option>
+                                    <option value="Vichada">Vichada</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">Ciudad / municipio *</label>
+                                <input type="text" required placeholder="Ej. Bucaramanga" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-softOrange-500 transition-colors shadow-sm">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Código postal (opcional)</label>
+                            <input type="text" placeholder="Ej. 110111" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-softOrange-500 transition-colors shadow-sm">
+                            <p class="text-[10px] text-gray-500 mt-1">Se completa solo con la dirección; edítalo si no coincide.</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Notas del pedido (opcional)</label>
+                            <textarea rows="2" placeholder="Ej. Dejar en portería, casa fachada blanca..." class="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-softOrange-500 transition-colors shadow-sm resize-none"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECCIÓN: Pago y Confirmación -->
+                <div class="bg-amberCustom-50 border border-softOrange-200 rounded-2xl p-4 sm:p-5 mb-6 shadow-inner">
+                    <h4 class="text-sm font-bold text-gray-900 border-b border-softOrange-200 pb-2 mb-4 uppercase tracking-wider text-softOrange-700">4. Pago contra entrega</h4>
+
+                    <div class="flex items-start gap-3 mb-4">
+                        <div class="text-softOrange-600 mt-1"><i class="fa-solid fa-money-bill-wave text-xl"></i></div>
+                        <div>
+                            <p class="text-sm font-bold text-gray-900">Pagas en efectivo cuando recibas el producto</p>
+                            <p class="text-xs text-gray-600">No necesitas tarjeta de crédito hoy.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl p-4 flex justify-between items-center border border-amberCustom-200">
+                        <div>
+                            <span class="text-xs uppercase font-bold text-gray-500 block" id="legacy-selected-offer-title">2 Frascos Oftalmiel</span>
+                            <span class="text-[10px] text-green-600 font-bold">Envío Gratis Incluido</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] uppercase font-bold text-gray-500 block">Total a pagar (contra entrega)</span>
+                            <span id="legacy-checkout-total-price" class="text-2xl font-extrabold text-softOrange-600">$ 99.900</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" id="submit-btn" class="w-full bg-gradient-to-r from-softOrange-500 to-softOrange-600 hover:from-softOrange-600 hover:to-softOrange-700 text-white font-bold text-lg py-4 rounded-2xl shadow-lg pulse-btn transition-all flex items-center justify-center gap-2">
+                        <span>Confirmar pedido</span>
+                        <i class="fa-solid fa-check-circle"></i>
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-center gap-4 pt-3 text-[11px] text-gray-500 font-medium text-center">
+                    <span><i class="fa-solid fa-truck text-softOrange-600 mr-1"></i> Envío Rápido</span>
+                    <span>•</span>
+                    <span><i class="fa-solid fa-handshake text-softOrange-600 mr-1"></i> Pago al Recibir</span>
+                    <span>•</span>
+                    <span><i class="fa-solid fa-lock text-softOrange-600 mr-1"></i> Datos Protegidos</span>
+                </div>
+            </form>
+
+            <div class="space-y-5">
+                <div class="bg-amberCustom-50 border border-softOrange-200 rounded-2xl p-4 sm:p-5 shadow-inner">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <span class="text-xs uppercase font-bold text-gray-500 block" id="selected-offer-title">2 Frascos Oftalmiel</span>
+                            <span class="text-[10px] text-green-600 font-bold">Pago contra entrega · envío gratis</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] uppercase font-bold text-gray-500 block">Total de la promoción</span>
+                            <span id="checkout-total-price" class="text-2xl font-extrabold text-softOrange-600">$ 99.900</span>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" onclick="requestStoreCheckout()" class="w-full bg-gradient-to-r from-softOrange-500 to-softOrange-600 hover:from-softOrange-600 hover:to-softOrange-700 text-white font-bold text-lg py-4 rounded-2xl shadow-lg pulse-btn transition-all flex items-center justify-center gap-2">
+                    <span>Continuar al checkout seguro</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+                <p class="text-center text-xs text-gray-500">Completarás tus datos en el formulario oficial de la tienda.</p>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="bg-gray-900 text-gray-400 py-10 px-4 text-xs">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-center md:text-left">
+            <div>
+                <span class="text-white font-bold text-base">OFTALMIEL</span>
+                <p class="mt-1 text-gray-500">Fórmula apícola lubricante ocular de origen natural (20 ml).</p>
+            </div>
+            <div class="text-gray-500 space-y-1">
+                <p>Modelo de comercio electrónico y pago contra entrega en Colombia.</p>
+                <p>&copy; 2026 Todos los derechos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- SCRIPT INTERACTIVO -->
+    <script>
+        let currentOfferPrice = 99900;
+        let currentOfferId = 2;
+        let currentOfferTitle = "2 Frascos Oftalmiel (¡Más Vendido!)";
+
+        function selectOffer(offerId, price, title) {
+            currentOfferId = offerId;
+            currentOfferPrice = price;
+            currentOfferTitle = title;
+
+            // Actualizar textos en el resumen del checkout
+            document.getElementById('legacy-selected-offer-title').innerText = title;
+            document.getElementById('legacy-checkout-total-price').innerText = '$ ' + price.toLocaleString('es-CO');
+            document.getElementById('selected-offer-title').innerText = title;
+            document.getElementById('checkout-total-price').innerText = '$ ' + price.toLocaleString('es-CO');
+
+            // Actualizar estilos de tarjetas
+            for (let i = 1; i <= 3; i++) {
+                const card = document.getElementById('offer-card-' + i);
+                const indicator = card.querySelector('.radio-indicator');
+                const dot = card.querySelector('.inner-dot');
+
+                if (i === offerId) {
+                    card.classList.add('border-softOrange-500', 'bg-amberCustom-50/40', 'shadow-md');
+                    card.classList.remove('border-amberCustom-300', 'bg-white');
+                    indicator.classList.add('border-softOrange-600', 'bg-softOrange-50');
+                    dot.classList.add('bg-softOrange-600');
+                    dot.classList.remove('bg-transparent');
+                } else {
+                    card.classList.remove('border-softOrange-500', 'bg-amberCustom-50/40', 'shadow-md');
+                    card.classList.add('border-amberCustom-300', 'bg-white');
+                    indicator.classList.remove('border-softOrange-600', 'bg-softOrange-50');
+                    dot.classList.remove('bg-softOrange-600');
+                    dot.classList.add('bg-transparent');
+                }
+            }
+        }
+
+        // Inicializar seleccionada la oferta 2 por defecto
+        window.addEventListener('DOMContentLoaded', () => {
+            selectOffer(2, 99900, "2 Frascos Oftalmiel (¡Más Vendido!)");
+        });
+
+        function handleCheckout(event) {
+            event.preventDefault();
+            requestStoreCheckout();
+        }
+
+        function requestStoreCheckout() {
+            window.parent.postMessage({
+                type: 'kronio-add-to-cart',
+                quantity: currentOfferId
+            }, '*');
+        }
+    </script>
+</body>
+</html>

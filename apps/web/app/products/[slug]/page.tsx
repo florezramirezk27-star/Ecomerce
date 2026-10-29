@@ -14,6 +14,8 @@ import CandleArtisanalInfographic from "@/components/CandleArtisanalInfographic"
 import CountdownTimer from "@/components/CountdownTimer";
 import { getOfferEndTime } from "@/lib/offer-countdown";
 import CartToast, { useCartToast } from "@/components/CartToast";
+import LandingFrame, { type LandingAddToCart } from "@/components/LandingFrame";
+import { getProductUnitPrice } from "@/lib/product-promotion";
 
 interface ProductVariation {
   id: number;
@@ -256,7 +258,7 @@ export default function ProductPage() {
   }, []);
 
   const handleAddToCart = async (overrideQuantity?: number) => {
-    if (!product) return;
+    if (!product) return false;
     const qty = Math.max(1, overrideQuantity ?? quantity);
     const selectedVariation =
       (product.variations ?? []).find((v) => v.id === selectedVariationId) ??
@@ -286,11 +288,11 @@ export default function ProductPage() {
         content_ids: [product.id],
         content_name: contentName,
         content_type: "product",
-        value: Number(product.price) * qty,
+        value: getProductUnitPrice(product, qty) * qty,
         currency: "COP",
       });
       mostrarAviso("success", `✓ ${unidades}`);
-      return;
+      return true;
     }
 
     setCartLoading(true);
@@ -313,19 +315,46 @@ export default function ProductPage() {
         content_ids: [product.id],
         content_name: contentName,
         content_type: "product",
-        value: Number(product.price) * qty,
+        value: getProductUnitPrice(product, qty) * qty,
         currency: "COP",
       });
 
       mostrarAviso("success", `✓ ${unidades}`);
+      return true;
     } catch (err) {
       mostrarAviso(
         "error",
         err instanceof Error ? err.message : "Error al agregar al carrito",
       );
+      return false;
     } finally {
       setCartLoading(false);
     }
+  };
+
+  const handleLandingAddToCart = async (offer: LandingAddToCart) => {
+    if (!product) return;
+
+    const requestedQuantity = Number(offer.quantity);
+    if (
+      !Number.isInteger(requestedQuantity) ||
+      requestedQuantity < 1 ||
+      requestedQuantity > 3
+    ) {
+      mostrarAviso("error", "Selecciona una promoción válida.");
+      return;
+    }
+
+    if (requestedQuantity > product.stock) {
+      mostrarAviso(
+        "error",
+        `Solo hay ${product.stock} unidades disponibles para esta promoción.`,
+      );
+      return;
+    }
+
+    const added = await handleAddToCart(requestedQuantity);
+    if (added) router.push("/cart");
   };
 
   if (loading) {
@@ -920,6 +949,19 @@ const isVideo = selectedMedia?.kind === "video";
           </div>
         </div>
       </div>
+
+      {(product.landingCode?.trim() ||
+        /oftalmiel/i.test(`${product.name} ${product.slug}`)) && (
+        <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6">
+          <LandingFrame
+            src={`/landing/${encodeURIComponent(product.slug)}`}
+            title={`Landing de ${product.name}`}
+            initialHeight={1200}
+            offerEndTime={offerEndTime}
+            onAddToCart={handleLandingAddToCart}
+          />
+        </section>
+      )}
 
       {product.similarProducts && product.similarProducts.length > 0 && (
         <div className="max-w-7xl mx-auto px-6 pb-12">
