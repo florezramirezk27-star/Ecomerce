@@ -78,6 +78,13 @@
         .marquee-track:hover {
             animation-play-state: paused;
         }
+        .announcement-marquee { overflow: hidden; white-space: nowrap; }
+        .announcement-track { display: flex; width: max-content; animation: announcement-scroll 28s linear infinite; will-change: transform; }
+        .announcement-group { display: flex; align-items: center; gap: 2.5rem; flex: none; padding-right: 2.5rem; }
+        @keyframes announcement-scroll {
+            from { transform: translateX(0); }
+            to { transform: translateX(-50%); }
+        }
         @keyframes scroll {
             0% { transform: translateX(0); }
             100% { transform: translateX(calc(-50% - 0.75rem)); }
@@ -95,6 +102,7 @@
             .marquee-track {
                 animation: none;
             }
+            .announcement-group { gap: 1.5rem; padding-right: 1.5rem; }
         }
         @media (prefers-reduced-motion: reduce) {
             *,
@@ -111,11 +119,30 @@
 <body class="bg-amberCustom-50 text-gray-800 antialiased selection:bg-softOrange-500 selection:text-white">
 
     <!-- 1. BARRA SUPERIOR DE ANUNCIOS -->
-    <div class="bg-gradient-to-r from-amber-700 via-softOrange-600 to-amber-700 text-white text-[10px] sm:text-sm font-medium py-2 sm:py-2.5 px-3 sm:px-4 text-center sticky top-0 z-50 shadow-md">
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2">
-            <span><i class="fa-solid fa-truck-fast mr-1"></i> <strong>ENVÍO GRATIS</strong> A TODA COLOMBIA</span>
-            <span class="hidden sm:inline">|</span>
-            <span><i class="fa-solid fa-hand-holding-dollar mr-1"></i> <strong>PAGO CONTRA ENTREGA:</strong> Paga al recibir en casa 🇨🇴</span>
+    <div class="bg-gradient-to-r from-amber-700 via-softOrange-600 to-amber-700 text-white text-[10px] sm:text-sm font-medium py-2 sm:py-2.5 sticky top-0 z-50 shadow-md">
+        <div class="announcement-marquee" aria-label="Informacion de envio y pago">
+            <div class="announcement-track">
+                <div class="announcement-group">
+                    <span><i class="fa-solid fa-truck-fast mr-1"></i> <strong>ENV&Iacute;O GRATIS</strong> A TODA COLOMBIA</span>
+                    <span><i class="fa-solid fa-hand-holding-dollar mr-1"></i> <strong>PAGO CONTRA ENTREGA:</strong> Paga al recibir en casa &#127464;&#127476;</span>
+                    <span><i class="fa-solid fa-shield-halved mr-1"></i> <strong>COMPRA SEGURA</strong> Y RECIBE EN LA PUERTA DE TU CASA</span>
+                    <span><i class="fa-solid fa-clock mr-1"></i> <strong>OFERTA ESPECIAL</strong> POR TIEMPO LIMITADO</span>
+                    <span><i class="fa-solid fa-truck-fast mr-1"></i> <strong>ENV&Iacute;O GRATIS</strong> A TODA COLOMBIA</span>
+                    <span><i class="fa-solid fa-hand-holding-dollar mr-1"></i> <strong>PAGO CONTRA ENTREGA:</strong> Paga al recibir en casa &#127464;&#127476;</span>
+                    <span><i class="fa-solid fa-shield-halved mr-1"></i> <strong>COMPRA SEGURA</strong> Y RECIBE EN LA PUERTA DE TU CASA</span>
+                    <span><i class="fa-solid fa-clock mr-1"></i> <strong>OFERTA ESPECIAL</strong> POR TIEMPO LIMITADO</span>
+                </div>
+                <div class="announcement-group" aria-hidden="true">
+                    <span><i class="fa-solid fa-truck-fast mr-1"></i> <strong>ENV&Iacute;O GRATIS</strong> A TODA COLOMBIA</span>
+                    <span><i class="fa-solid fa-hand-holding-dollar mr-1"></i> <strong>PAGO CONTRA ENTREGA:</strong> Paga al recibir en casa &#127464;&#127476;</span>
+                    <span><i class="fa-solid fa-shield-halved mr-1"></i> <strong>COMPRA SEGURA</strong> Y RECIBE EN LA PUERTA DE TU CASA</span>
+                    <span><i class="fa-solid fa-clock mr-1"></i> <strong>OFERTA ESPECIAL</strong> POR TIEMPO LIMITADO</span>
+                    <span><i class="fa-solid fa-truck-fast mr-1"></i> <strong>ENV&Iacute;O GRATIS</strong> A TODA COLOMBIA</span>
+                    <span><i class="fa-solid fa-hand-holding-dollar mr-1"></i> <strong>PAGO CONTRA ENTREGA:</strong> Paga al recibir en casa &#127464;&#127476;</span>
+                    <span><i class="fa-solid fa-shield-halved mr-1"></i> <strong>COMPRA SEGURA</strong> Y RECIBE EN LA PUERTA DE TU CASA</span>
+                    <span><i class="fa-solid fa-clock mr-1"></i> <strong>OFERTA ESPECIAL</strong> POR TIEMPO LIMITADO</span>
+                </div>
+            </div>
         </div>
     </div>
 
