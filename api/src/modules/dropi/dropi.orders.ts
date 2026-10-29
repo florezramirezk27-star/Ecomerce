@@ -1038,13 +1038,20 @@ export class DropiOrdersService {
       (process.env.DROPI_RATE_TYPE as 'CON RECAUDO' | 'SIN RECAUDO') ??
       'CON RECAUDO';
 
+    const dropiPhone = this.normalizePhoneForDropi(shipping.phone || '');
+    const docType = this.normalizeDocTypeForDropi(shipping.docType || '');
+    const docNumber = this.normalizeDocNumberForDropi(
+      shipping.docNumber || '',
+      docType,
+    );
+
     const missing: string[] = [];
     if (!userId) missing.push('user_id');
     if (!supplierId) missing.push('supplier_id');
     if (!warehouseId) missing.push('warehouses_selected_id');
     if (!distributionCompanyId) missing.push('distributionCompany');
     if (shippingAmount === undefined) missing.push('shipping_amount');
-    if (!shipping.phone) missing.push('phone');
+    if (dropiPhone.length < 10) missing.push('phone');
     if (!shipping.address) missing.push('dir');
     if (!shipping.city) missing.push('city');
     if (!shipping.state) missing.push('state');
@@ -1078,11 +1085,11 @@ export class DropiOrdersService {
         id: distributionCompanyId,
         name: distributionCompanyName,
       },
-      dni: shipping.docNumber || '',
-      dni_type: shipping.docType || '',
+      dni: docNumber,
+      dni_type: docType,
       insurance: shipping.insurance ?? false,
       payment_method_id: 1,
-      phone: shipping.phone,
+      phone: dropiPhone,
       products: [
         {
           id: item.dropiProductId,
@@ -1103,6 +1110,48 @@ export class DropiOrdersService {
       warehouses_selected_id: warehouseId,
       zip_code: shipping.zip ?? null,
     };
+  }
+
+  /**
+   * Dropi espera el telefono como digitos. Se quitan espacios/guiones y el
+   * prefijo +57 cuando viene incluido, para que un pedido viejo o un reintento
+   * no falle por un formato que el checkout nuevo ya normaliza.
+   */
+  private normalizePhoneForDropi(input: string): string {
+    let digits = input.replace(/\D/g, '');
+
+    if (digits.startsWith('0057')) digits = digits.slice(4);
+    else if (digits.startsWith('57') && digits.length >= 12) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+
+    return digits;
+  }
+
+  /** El catalogo de Dropi usa `PP` para pasaporte, no `PASSPORT`. */
+  private normalizeDocTypeForDropi(input: string): string {
+    const value = input
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+
+    if (['PASSPORT', 'PASAPORTE', 'PASS', 'PP'].includes(value)) return 'PP';
+    if (['CEDULA', 'CEDULA DE CIUDADANIA', 'CC'].includes(value)) return 'CC';
+    if (['CEDULA DE EXTRANJERIA', 'CE'].includes(value)) return 'CE';
+    if (value === 'NIT') return 'NIT';
+
+    return value;
+  }
+
+  private normalizeDocNumberForDropi(input: string, docType: string): string {
+    if (docType === 'PP') {
+      return input.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    }
+
+    return input.replace(/\D/g, '');
   }
 
   private normalizeDepartment(input: string): string {

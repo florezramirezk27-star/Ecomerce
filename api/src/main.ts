@@ -52,9 +52,7 @@ async function bootstrap() {
 
   app.use(helmet());
 
-  const allowedOrigins = (
-    process.env.CORS_ORIGIN || 'https://kroniomarket.com'
-  )
+  const allowedOrigins = (process.env.CORS_ORIGIN || 'https://kroniomarket.com')
     .split(',')
     .map((o) => o.trim());
 

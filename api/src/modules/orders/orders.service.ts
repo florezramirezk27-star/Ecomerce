@@ -180,7 +180,9 @@ export class OrdersService {
             );
           }
 
-          return sum + getProductUnitPrice(product, item.quantity) * item.quantity;
+          return (
+            sum + getProductUnitPrice(product, item.quantity) * item.quantity
+          );
         }, 0);
 
         const created = await tx.order.create({
@@ -1122,33 +1124,65 @@ export class OrdersService {
       const tracking = await this.prisma.orderTracking.findUnique({
         where: { orderId: id },
       });
-      const dropiOrderId = tracking?.dropiOrderId;
 
-      let dropiCancel: Awaited<ReturnType<DropiService['cancelOrder']>> | null =
-        null;
-      if (dropiOrderId) {
-        try {
-          dropiCancel = await this.dropiService.cancelOrder(
-            Number(dropiOrderId),
-          );
-        } catch (e: unknown) {
-          const dropiErr = e as { message?: string };
-          dropiCancel = {
-            success: false,
-            error: dropiErr.message || 'Error al cancelar en Dropi',
-            rawResponse: null,
-          };
+      const dropiOrderIds = new Set<string>();
+      if (tracking?.dropiOrderId) {
+        // Puede haber múltiples IDs separados por coma o espacios
+        String(tracking.dropiOrderId)
+          .split(/[,;\s]+/)
+          .map((s) => s.trim())
+          .filter((s) => s && /^\d+$/.test(s))
+          .forEach((s) => dropiOrderIds.add(s));
+      }
+
+      // También extraer desde rawResponse.results
+      const raw = tracking?.rawResponse as any;
+      if (Array.isArray(raw)) {
+        for (const r of raw) {
+          const oid = r?.dropiOrderId || r?.orderId || r?.id;
+          if (oid) {
+            const s = String(oid).trim();
+            if (/^\d+$/.test(s)) dropiOrderIds.add(s);
+          }
+        }
+      } else if (raw && typeof raw === 'object') {
+        const results = raw.results || raw.data?.results;
+        if (Array.isArray(results)) {
+          for (const r of results) {
+            const oid = r?.dropiOrderId || r?.orderId || r?.id;
+            if (oid) {
+              const s = String(oid).trim();
+              if (/^\d+$/.test(s)) dropiOrderIds.add(s);
+            }
+          }
+        }
+      }
+
+      let allDropiCancelled = true;
+      let lastDropiError: string | null = null;
+
+      if (dropiOrderIds.size > 0) {
+        for (const oid of dropiOrderIds) {
+          try {
+            const res = await this.dropiService.cancelOrder(Number(oid));
+            if (!res.success) {
+              allDropiCancelled = false;
+              lastDropiError = res.error || lastDropiError;
+            }
+          } catch (e: unknown) {
+            allDropiCancelled = false;
+            const dropiErr = e as { message?: string };
+            lastDropiError = dropiErr.message || lastDropiError;
+          }
         }
         if (tracking) {
           await this.prisma.orderTracking.update({
             where: { orderId: id },
             data: {
-              status: dropiCancel.success
-                ? 'CANCELLED'
-                : tracking.status || dropiCancel.error,
-              lastEvent: dropiCancel.success
-                ? 'Cancelada en Dropi'
-                : `Error al cancelar en Dropi: ${dropiCancel.error || ''}`,
+              status: allDropiCancelled ? 'CANCELLED' : tracking.status,
+              lastEvent: allDropiCancelled
+                ? `Cancelada en Dropi (${dropiOrderIds.size} orden(es))`
+                : `Error al cancelar en Dropi: ${lastDropiError || 'fallo parcial'}`,
               checkedAt: new Date(),
             },
           });

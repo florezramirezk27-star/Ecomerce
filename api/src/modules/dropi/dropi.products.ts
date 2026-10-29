@@ -561,7 +561,7 @@ export class DropiProductsService {
         continue;
       }
       if (typeof it !== 'object') continue;
-      const mediaObject = it as any;
+      const mediaObject = it;
       const candidates = [
         mediaObject.url,
         mediaObject.urlS3,
@@ -661,10 +661,21 @@ export class DropiProductsService {
     const videos: string[] = [];
 
     const endpoints = [
-      { method: 'POST' as const, path: '/api/product/video/list', body: { id: dropiProductId } },
-      { method: 'POST' as const, path: '/api/product/videos', body: { id: dropiProductId } },
+      {
+        method: 'POST' as const,
+        path: '/api/product/video/list',
+        body: { id: dropiProductId },
+      },
+      {
+        method: 'POST' as const,
+        path: '/api/product/videos',
+        body: { id: dropiProductId },
+      },
       { method: 'GET' as const, path: `/api/product/${dropiProductId}/videos` },
-      { method: 'GET' as const, path: `/api/products/v2/${dropiProductId}/videos` },
+      {
+        method: 'GET' as const,
+        path: `/api/products/v2/${dropiProductId}/videos`,
+      },
     ];
 
     for (const ep of endpoints) {
@@ -725,14 +736,50 @@ export class DropiProductsService {
     const images: string[] = [];
 
     const endpoints = [
-      { method: 'GET' as const, path: `/api/products/v2/${dropiProductId}`, host: DROPI_API_HOST },
-      { method: 'GET' as const, path: `/api/product/${dropiProductId}`, host: DROPI_API_HOST },
-      { method: 'GET' as const, path: `/api/product/v2/${dropiProductId}`, host: DROPI_API_HOST },
-      { method: 'GET' as const, path: `/api/product/detail/${dropiProductId}`, host: DROPI_API_HOST },
-      { method: 'POST' as const, path: '/api/product/gallery', host: DROPI_API_HOST, body: { id: dropiProductId, productId: dropiProductId } },
-      { method: 'POST' as const, path: '/api/product/images', host: DROPI_API_HOST, body: { id: dropiProductId } },
-      { method: 'POST' as const, path: '/api/gallery/list', host: DROPI_API_HOST, body: { product_id: dropiProductId } },
-      { method: 'POST' as const, path: '/api/product/video/list', host: DROPI_API_HOST, body: { id: dropiProductId } },
+      {
+        method: 'GET' as const,
+        path: `/api/products/v2/${dropiProductId}`,
+        host: DROPI_API_HOST,
+      },
+      {
+        method: 'GET' as const,
+        path: `/api/product/${dropiProductId}`,
+        host: DROPI_API_HOST,
+      },
+      {
+        method: 'GET' as const,
+        path: `/api/product/v2/${dropiProductId}`,
+        host: DROPI_API_HOST,
+      },
+      {
+        method: 'GET' as const,
+        path: `/api/product/detail/${dropiProductId}`,
+        host: DROPI_API_HOST,
+      },
+      {
+        method: 'POST' as const,
+        path: '/api/product/gallery',
+        host: DROPI_API_HOST,
+        body: { id: dropiProductId, productId: dropiProductId },
+      },
+      {
+        method: 'POST' as const,
+        path: '/api/product/images',
+        host: DROPI_API_HOST,
+        body: { id: dropiProductId },
+      },
+      {
+        method: 'POST' as const,
+        path: '/api/gallery/list',
+        host: DROPI_API_HOST,
+        body: { product_id: dropiProductId },
+      },
+      {
+        method: 'POST' as const,
+        path: '/api/product/video/list',
+        host: DROPI_API_HOST,
+        body: { id: dropiProductId },
+      },
     ];
 
     for (const ep of endpoints) {
@@ -800,7 +847,9 @@ export class DropiProductsService {
         dropiProduct = { ...dropiProduct, ...full };
       }
     } catch (e) {
-      this.logger.warn(`Dropi import: no se pudo obtener detalle completo para ${dropiProductId}`);
+      this.logger.warn(
+        `Dropi import: no se pudo obtener detalle completo para ${dropiProductId}`,
+      );
     }
     const name = dropiProduct.name;
 
@@ -839,7 +888,10 @@ export class DropiProductsService {
 
     const toAbsolute = (g?: any): string | undefined => {
       if (!g) return undefined;
-      const u = typeof g === 'string' ? g : g?.url || g?.urlS3 || g?.src || g?.image || g?.imageUrl;
+      const u =
+        typeof g === 'string'
+          ? g
+          : g?.url || g?.urlS3 || g?.src || g?.image || g?.imageUrl;
       if (!u || typeof u !== 'string') return undefined;
       if (/^https?:\/\//.test(u)) return u;
       if (u.startsWith('//')) return `https:${u}`;
@@ -847,12 +899,12 @@ export class DropiProductsService {
     };
 
     const allFromProduct = this.extractAllImages(dropiProduct);
-    const catalogGallery = [
-      ...(dropiProduct.gallery || []),
-    ]
+    const catalogGallery = [...(dropiProduct.gallery || [])]
       .map((g: any) => toAbsolute(g))
       .filter(Boolean) as string[];
-    const mergedCatalog = [...new Set([...allFromProduct, ...catalogGallery])].filter(Boolean);
+    const mergedCatalog = [
+      ...new Set([...allFromProduct, ...catalogGallery]),
+    ].filter(Boolean);
 
     const mainGalleryUrl = mergedCatalog[0];
     const image = mainGalleryUrl;
@@ -932,11 +984,19 @@ export class DropiProductsService {
       this.fetchProductVideos(dropiProductId),
     ]);
 
-    let mergedGallery = [...new Set([...mergedCatalog, ...fullImages])].filter(Boolean);
+    let mergedGallery = [...new Set([...mergedCatalog, ...fullImages])].filter(
+      Boolean,
+    );
     // Si aún solo hay 1, intentar extraer de nuevo con más agresividad
     if (mergedGallery.length <= 1) {
-      const extra = this.extractAllImages({ product: dropiProduct, data: dropiProduct, objects: [dropiProduct] });
-      mergedGallery = [...new Set([...mergedGallery, ...extra])].filter(Boolean);
+      const extra = this.extractAllImages({
+        product: dropiProduct,
+        data: dropiProduct,
+        objects: [dropiProduct],
+      });
+      mergedGallery = [...new Set([...mergedGallery, ...extra])].filter(
+        Boolean,
+      );
     }
     const videos = [...new Set(videoUrls.filter(Boolean))];
 

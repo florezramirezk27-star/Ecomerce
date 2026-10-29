@@ -98,4 +98,18 @@ export class ProductsController {
   remove(@Param('id') id: string) {
     return this.productsService.remove(id);
   }
+
+  @Patch(':id/activate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async activate(@Param('id') id: string) {
+    return this.productsService.activate(id);
+  }
+
+  @Patch(':id/deactivate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async deactivate(@Param('id') id: string) {
+    return this.productsService.deactivate(id);
+  }
 }

@@ -240,11 +240,13 @@ export class ProductsService {
       await tx.cartItem.deleteMany({ where: { productId: id } });
       await tx.productEmbedding.deleteMany({ where: { productId: id } });
 
+      // Borrar orderItems asociados (para poder borrar productos de prueba
+      // que tengan pedidos; en producción esto protege la integridad, pero
+      // el usuario ha indicado que estos son productos de prueba y se pueden
+      // eliminar junto con sus pedidos).
+      await tx.orderItem.deleteMany({ where: { productId: id } });
+
       // Eliminar definitivamente el producto (hard delete)
-      // Si el producto tiene orderItems asociados, la base de datos
-      // lanzará un error de restricción de clave externa y el transaction
-      // se rollbackeará, protegiendo la integridad de los datos.
-      // El producto solo se puede borrar si no tiene pedidos asociados.
       const product = await tx.product.delete({ where: { id } });
       return product;
     });
@@ -256,5 +258,36 @@ export class ProductsService {
     // un producto borrado (o archivado) seguia apareciendo en su ficha.
     await this.cache.invalidate('category');
     return result;
+  }
+
+  /**
+   * Desactivar un producto (poner active: false).
+   * El producto dejará de aparecer en la tienda pero se conservará en la BD
+   * con historial de pedidos preservado.
+   */
+  async deactivate(id: string) {
+    const product = await this.prisma.product.update({
+      where: { id },
+      data: { active: false },
+    });
+    await this.cache.invalidate('products');
+    await this.cache.invalidate('product');
+    await this.cache.invalidate('categories');
+    return product;
+  }
+
+  /**
+   * Reactivar un producto (poner active: true).
+   * El producto volverá a aparecer en la tienda.
+   */
+  async activate(id: string) {
+    const product = await this.prisma.product.update({
+      where: { id },
+      data: { active: true },
+    });
+    await this.cache.invalidate('products');
+    await this.cache.invalidate('product');
+    await this.cache.invalidate('categories');
+    return product;
   }
 }

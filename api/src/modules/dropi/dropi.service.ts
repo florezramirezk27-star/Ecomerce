@@ -128,9 +128,17 @@ export class DropiService {
         result.results.find((r) => r.dropiGuideId)?.dropiGuideId ||
         null;
 
+      const allDropiOrderIds = result.results
+        .map((r) => r.dropiOrderId)
+        .filter((id): id is string => !!id)
+        .join(',');
+
       await this.tracking.upsertTracking(orderId, {
         dropiOrderId:
-          firstOk?.dropiOrderId || result.results[0]?.dropiOrderId || null,
+          allDropiOrderIds ||
+          firstOk?.dropiOrderId ||
+          result.results[0]?.dropiOrderId ||
+          null,
         dropiGuideId: guideId,
         carrier: firstOk?.carrier || result.results[0]?.carrier || 'Dropi',
         status: result.message || (result.success ? 'CREATED' : 'ERROR'),

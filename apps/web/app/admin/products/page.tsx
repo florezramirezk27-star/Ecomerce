@@ -120,11 +120,7 @@ export default function AdminProductsPage() {
       const restantes = products.filter((p) => p.id !== id);
       setProducts(restantes);
       setDeleteConfirm(null);
-      setSuccess(
-        result?.archived
-          ? `"${result.name || 'Producto'}" tiene pedidos asociados, por eso no se puede borrar su historial. Quedó desactivado (lo encuentras en la pestaña "Inactivos") y ya no aparece en la tienda.`
-          : 'Producto eliminado correctamente.',
-      );
+      setSuccess('Producto eliminado correctamente.');
 
       // Si era el ultimo producto de esta pagina y no es la primera, la pagina
       // ya no existe. Retroceder carga la anterior en vez de dejar una tabla
@@ -135,6 +131,46 @@ export default function AdminProductsPage() {
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Error al eliminar producto',
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleActivate = async (id: string) => {
+    try {
+      setDeleting(true);
+      setError('');
+      setSuccess('');
+      await apiFetch(`/products/${id}/activate`, {
+        method: 'PATCH',
+      });
+      // Actualizar la lista local
+      setProducts(products.map((p) => (p.id === id ? { ...p, active: true } : p)));
+      setSuccess(`"${products.find((p) => p.id === id)?.name}": producto reactivado y vuelve a aparecer en la tienda.`);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Error al reactivar producto',
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeactivate = async (id: string) => {
+    try {
+      setDeleting(true);
+      setError('');
+      setSuccess('');
+      await apiFetch(`/products/${id}/deactivate`, {
+        method: 'PATCH',
+      });
+      // Actualizar la lista local
+      setProducts(products.map((p) => (p.id === id ? { ...p, active: false } : p)));
+      setSuccess(`"${products.find((p) => p.id === id)?.name}": producto desactivado y ya no aparecerá en la tienda.`);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Error al desactivar producto',
       );
     } finally {
       setDeleting(false);
@@ -350,6 +386,28 @@ export default function AdminProductsPage() {
                             <Trash2 className="h-3.5 w-3.5" />
                             Eliminar
                           </button>
+                          {/* Nuevos botones de activar/desactivar */}
+                          {product.active ? (
+                            <button
+                              onClick={() => handleDeactivate(product.id)}
+                              disabled={deleting}
+                              title="Desactivar producto"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-yellow-300 px-3 py-1.5 text-xs font-medium text-yellow-600 transition hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Package className="h-3.5 w-3.5" />
+                              Desactivar
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleActivate(product.id)}
+                              disabled={deleting}
+                              title="Reactivar producto"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 px-3 py-1.5 text-xs font-medium text-green-600 transition:hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Package className="h-3.5 w-3.5" />
+                              Reactivar
+                            </button>
+                          )}
                         </div>
                       </Td>
                     </TRow>
