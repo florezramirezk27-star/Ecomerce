@@ -849,8 +849,6 @@ export class DropiProductsService {
     const allFromProduct = this.extractAllImages(dropiProduct);
     const catalogGallery = [
       ...(dropiProduct.gallery || []),
-      ...(dropiProduct.images || []),
-      ...(dropiProduct.photos || []),
     ]
       .map((g: any) => toAbsolute(g))
       .filter(Boolean) as string[];
