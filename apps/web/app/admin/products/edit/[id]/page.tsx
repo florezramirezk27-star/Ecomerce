@@ -89,8 +89,8 @@ function toNumber(value: string): number {
 }
 
 /** Instantanea para detectar si hay cambios sin guardar. */
-function snapshot(form: ProductForm, gallery: string[]): string {
-  return JSON.stringify({ ...form, gallery });
+function snapshot(form: ProductForm, gallery: string[], videos: string[]): string {
+  return JSON.stringify({ ...form, gallery, videos });
 }
 
 function SectionCard({
@@ -150,6 +150,11 @@ export default function EditProductPage() {
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
   const [existingGallery, setExistingGallery] = useState<string[]>([]);
   /**
+   * Videos guardados del producto (puede haber varios). `form.video` sigue
+   * siendo el primero para quien solo sepa leer un video.
+   */
+  const [existingVideos, setExistingVideos] = useState<string[]>([]);
+  /**
    * El video se sube al elegir el archivo (no al guardar, como las imagenes):
    * un video tarda lo suyo y conviene dar su propio estado de carga en vez de
    * bloquear todo el formulario. Ya subido, su URL queda en `form.video`.
@@ -161,6 +166,7 @@ export default function EditProductPage() {
   const [original, setOriginal] = useState<{
     form: ProductForm;
     gallery: string[];
+    videos: string[];
   } | null>(null);
 
   /**
@@ -212,7 +218,22 @@ export default function EditProductPage() {
 
         setForm(loaded);
         setExistingGallery(product.gallery || []);
-        setOriginal({ form: loaded, gallery: product.gallery || [] });
+        setExistingVideos(
+          product.videos?.length
+            ? product.videos
+            : product.video
+              ? [product.video]
+              : [],
+        );
+        setOriginal({
+          form: loaded,
+          gallery: product.gallery || [],
+          videos: product.videos?.length
+            ? product.videos
+            : product.video
+              ? [product.video]
+              : [],
+        });
       } catch (err) {
         setError(
           err instanceof Error
@@ -230,14 +251,15 @@ export default function EditProductPage() {
   const dirty = useMemo(() => {
     if (loading || !original) return false;
     return (
-      snapshot(form, existingGallery) !==
-        snapshot(original.form, original.gallery) ||
+      snapshot(form, existingGallery, existingVideos) !==
+        snapshot(original.form, original.gallery, original.videos) ||
       selectedFile !== null ||
       galleryFiles.length > 0
     );
   }, [
     form,
     existingGallery,
+    existingVideos,
     original,
     selectedFile,
     galleryFiles,
@@ -251,6 +273,7 @@ export default function EditProductPage() {
     galleryPreviews.forEach(revokeObjectUrl);
     setForm(original.form);
     setExistingGallery(original.gallery);
+    setExistingVideos(original.videos);
     setSelectedFile(null);
     setPreviewUrl('');
     setGalleryFiles([]);
@@ -309,31 +332,65 @@ export default function EditProductPage() {
   }
 
   /**
-   * Sube el video del producto en cuanto se elige el archivo. Se hace aqui y no
-   * al guardar para poder mostrar un estado de carga propio: un video de 25 MB
-   * tarda, y bloquear todo el formulario mientras tanto da la sensacion de que
-   * la pagina se colgo. Al terminar, la URL publica se guarda en `form.video`.
+   * Mueve un elemento de la galeria (imagenes existentes) una posicion.
+   * El orden aqui es el orden que vera el cliente en la ficha.
+   */
+  function moveExistingGalleryImage(index: number, direction: -1 | 1) {
+    setExistingGallery((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  /** Mueve un video dentro de la lista de videos. */
+  function moveVideo(index: number, direction: -1 | 1) {
+    setExistingVideos((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function removeVideo(index: number) {
+    setExistingVideos((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  /**
+   * Sube los videos del producto en cuanto se eligen los archivos. Se hace
+   * aqui y no al guardar para poder mostrar un estado de carga propio: un
+   * video de 25 MB tarda, y bloquear todo el formulario mientras tanto da la
+   * sensacion de que la pagina se colgo. Al terminar, cada URL publica se
+   * agrega a la lista de videos.
    */
   async function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
     e.target.value = '';
-    if (!file) return;
+    if (files.length === 0) return;
 
     setVideoError('');
 
-    if (!file.type.startsWith('video/')) {
-      setVideoError('Solo se permiten videos.');
-      return;
-    }
-    if (file.size > MAX_VIDEO_BYTES) {
-      setVideoError('El video debe pesar menos de 25 MB.');
-      return;
+    for (const file of files) {
+      if (!file.type.startsWith('video/')) {
+        setVideoError('Solo se permiten videos.');
+        return;
+      }
+      if (file.size > MAX_VIDEO_BYTES) {
+        setVideoError('Cada video debe pesar menos de 25 MB.');
+        return;
+      }
     }
 
     setUploadingVideo(true);
     try {
-      const url = await uploadVideo(file);
-      update({ video: url });
+      for (const file of files) {
+        const url = await uploadVideo(file);
+        setExistingVideos((prev) => [...prev, url]);
+      }
     } catch (err) {
       setVideoError(
         err instanceof Error ? err.message : 'Error al subir el video.',
@@ -405,6 +462,9 @@ export default function EditProductPage() {
       }
 
       setProgress('Guardando cambios...');
+      // El primer video de la lista queda tambien en `video` (compatibilidad
+      // con quien solo sepa leer un video).
+      const videos = [...existingVideos];
       await apiFetch(`/products/${params.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -414,7 +474,8 @@ export default function EditProductPage() {
           price,
           stock,
           image: imageUrl,
-          video: form.video,
+          video: videos[0] || '',
+          videos,
           categoryId: form.categoryId,
           gallery: [...existingGallery, ...newGalleryUrls],
           landingCode: form.landingCode,
@@ -716,6 +777,27 @@ export default function EditProductPage() {
                         1ª foto
                       </span>
                     )}
+                    {/* Orden: la posicion aqui es el orden que se guarda. */}
+                    <div className="absolute left-1 top-1 flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moveExistingGalleryImage(i, -1)}
+                        disabled={i === 0}
+                        className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/90 text-slate-700 shadow-sm transition hover:bg-slate-900 hover:text-white disabled:opacity-30 disabled:hover:bg-white/90 disabled:hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        aria-label={`Mover imagen ${i + 1} a la izquierda`}
+                      >
+                        <span className="text-xs font-bold">←</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveExistingGalleryImage(i, 1)}
+                        disabled={i === existingGallery.length - 1}
+                        className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/90 text-slate-700 shadow-sm transition hover:bg-slate-900 hover:text-white disabled:opacity-30 disabled:hover:bg-white/90 disabled:hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        aria-label={`Mover imagen ${i + 1} a la derecha`}
+                      >
+                        <span className="text-xs font-bold">→</span>
+                      </button>
+                    </div>
                     {/* Visible siempre: con `opacity-0` hasta el hover, en
                         celular no hay hover y no habia forma de quitar nada. */}
                     <button
@@ -778,18 +860,19 @@ export default function EditProductPage() {
           <SectionCard
             icon={VideoIcon}
             tone="amber"
-            title="Video (opcional)"
-            description="Se muestra bajo las imágenes, en la misma proporción del producto."
+            title="Videos (opcional)"
+            description="Se muestran después de las imágenes, en el orden en que los acomodes aquí."
           >
             <div className="space-y-4">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
-                  Subir video desde archivo
+                  Subir videos desde archivo
                 </label>
                 <input
                   ref={videoInputRef}
                   type="file"
                   accept="video/*"
+                  multiple
                   onChange={handleVideoFile}
                   disabled={uploadingVideo}
                   className="hidden"
@@ -802,24 +885,16 @@ export default function EditProductPage() {
                     disabled={uploadingVideo}
                   >
                     <Upload className="h-4 w-4" />
-                    {uploadingVideo ? 'Subiendo...' : 'Elegir archivo'}
+                    {uploadingVideo
+                      ? 'Subiendo...'
+                      : existingVideos.length > 0
+                        ? 'Agregar otro video'
+                        : 'Elegir archivo'}
                   </Button>
-                  {form.video && !uploadingVideo && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        update({ video: '' });
-                        setVideoError('');
-                      }}
-                      className="text-sm font-semibold text-red-600 transition hover:text-red-700"
-                    >
-                      Quitar video
-                    </button>
-                  )}
                 </div>
                 <p className="mt-2 text-xs text-slate-400">
-                  MP4, WebM o MOV, hasta 25 MB. Se sube al API y queda alojado
-                  en Cloudinary.
+                  Puedes elegir varios a la vez. MP4, WebM o MOV, hasta 25 MB
+                  cada uno. Se suben al API y quedan alojados en Cloudinary.
                 </p>
               </div>
 
@@ -834,40 +909,98 @@ export default function EditProductPage() {
                 </div>
               )}
 
-              {form.video && !uploadingVideo && (
-                <div className="relative aspect-video overflow-hidden rounded-xl border border-slate-200 bg-slate-900">
-                  {/* `key` por URL: al cambiar de video React recrea el
-                      reproductor en vez de reutilizar el anterior con la
-                      fuente vieja. */}
-                  <video
-                    key={form.video}
-                    src={form.video}
-                    controls
-                    className="h-full w-full object-contain"
-                  />
+              {existingVideos.length > 0 && (
+                <div className="space-y-3">
+                  {existingVideos.map((url, i) => (
+                    <div
+                      key={`video-${i}`}
+                      className="rounded-xl border border-slate-200 bg-slate-50 p-2"
+                    >
+                      <div className="relative aspect-video overflow-hidden rounded-lg bg-slate-900">
+                        {/* `key` por indice: al mover o quitar, React monta
+                            cada reproductor con su propia fuente. */}
+                        <video
+                          key={`${url}-${i}`}
+                          src={url}
+                          controls
+                          className="h-full w-full object-contain"
+                        />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-slate-500">
+                          Video {i + 1}
+                          {i === 0 && ' (principal)'}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => moveVideo(i, -1)}
+                            disabled={i === 0}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-900 hover:text-white disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                            aria-label={`Mover video ${i + 1} arriba`}
+                          >
+                            <span className="text-xs font-bold">↑</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveVideo(i, 1)}
+                            disabled={i === existingVideos.length - 1}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-900 hover:text-white disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                            aria-label={`Mover video ${i + 1} abajo`}
+                          >
+                            <span className="text-xs font-bold">↓</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeVideo(i)}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-red-600 transition hover:bg-red-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                            aria-label={`Quitar video ${i + 1}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
               <Field
-                label="URL del video"
+                label="Agregar video por URL"
                 htmlFor="video"
                 hint={
                   <p className="text-xs text-slate-400">
-                    Alternativa a subir el archivo: admite YouTube, Vimeo o una
-                    URL directa. Con YouTube o Vimeo el sitio no carga nada de
-                    ellos hasta que el visitante pulse reproducir.
+                    Admite YouTube, Vimeo o una URL directa. Con YouTube o
+                    Vimeo el sitio no carga nada de ellos hasta que el
+                    visitante pulse reproducir.
                   </p>
                 }
               >
-                <Input
-                  id="video"
-                  value={form.video}
-                  onChange={(e) => {
-                    update({ video: e.target.value });
-                    setVideoError('');
-                  }}
-                  placeholder="https://youtube.com/watch?v=..."
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="video"
+                    value={form.video}
+                    onChange={(e) => {
+                      update({ video: e.target.value });
+                      setVideoError('');
+                    }}
+                    placeholder="https://youtube.com/watch?v=..."
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      const url = form.video.trim();
+                      if (!url) return;
+                      setExistingVideos((prev) => [...prev, url]);
+                      update({ video: '' });
+                      setVideoError('');
+                    }}
+                    disabled={!form.video.trim()}
+                  >
+                    Agregar
+                  </Button>
+                </div>
               </Field>
             </div>
           </SectionCard>

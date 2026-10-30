@@ -481,8 +481,8 @@ export default function ProductPage() {
   const beneficios = [
     {
       titulo: "Despacho rápido",
-      detalle: "Sale de bodega en 24 horas",
-      rango: [1, 2],
+      detalle: "Sale de bodega en 1 a 5 días",
+      rango: [1, 5],
       gradiente: "from-blue-400 to-blue-600 shadow-blue-200",
       icono:
         "M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z",
@@ -490,7 +490,7 @@ export default function ProductPage() {
     {
       titulo: "Envío gratis",
       detalle: "En cualquier ciudad de Colombia",
-      rango: [3, 5],
+      rango: [6, 10],
       gradiente: "from-emerald-400 to-emerald-600 shadow-emerald-200",
       icono:
         "M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z",
@@ -498,7 +498,7 @@ export default function ProductPage() {
     {
       titulo: "Pago seguro",
       detalle: "Pagas solo cuando recibes tu pedido",
-      rango: [5, 7],
+      rango: [11, 15],
       gradiente: "from-purple-400 to-purple-600 shadow-purple-200",
       icono:
         "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
@@ -591,17 +591,11 @@ const isVideo = selectedMedia?.kind === "video";
                 position:absolute con inset:0. Sin un ancestro posicionado se
                 mide contra el viewport entero y se sale de la tarjeta.
 
-                El video no usa `flex-1`: un video es 16:9, y estirarlo hasta
-                copiar el alto de la columna de Informacion solo dejaba franjas
-                negras. Con altura fija se ve mas compacto y el resto de la
-                columna sube, en vez de dejar un hueco vacio debajo. */}
-            <div
-              className={
-                isVideo
-                  ? "relative min-h-[168px] md:min-h-[290px] bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200"
-                  : "relative flex-1 min-h-[280px] md:min-h-[380px] bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200"
-              }
-            >
+                El marco es CUADRADO y fijo para imagenes y videos: asi no
+                quedan franjas blancas (o negras) cuando la media no coincide
+                con la altura de la columna. `object-cover` recorta el
+                sobrante en vez de dejarlo vacio. */}
+            <div className="relative aspect-square w-full bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200">
               {/* Se repite `selectedMedia?.kind === "video"` en vez de usar
                   `isVideo`: es esa comparacion en linea la que le dice a
                   TypeScript que `selectedMedia` no es null dentro de la rama. */}
@@ -622,7 +616,7 @@ const isVideo = selectedMedia?.kind === "video";
                     loop
                     muted
                     playsInline
-                    className="w-full h-full object-contain bg-black"
+                    className="w-full h-full object-cover bg-black"
                   />
                 )
               ) : (
@@ -632,7 +626,7 @@ const isVideo = selectedMedia?.kind === "video";
                   alt={product.name}
                   priority
                   sizes="(max-width: 1024px) 100vw, 50vw"
-                  className="object-contain"
+                  className="object-cover"
                 />
               )}
             </div>

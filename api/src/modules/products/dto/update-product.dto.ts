@@ -46,6 +46,15 @@ export class UpdateProductDto {
   @IsString()
   video?: string;
 
+  /**
+   * Videos del producto (lista completa). `video` sigue existiendo como
+   * el primero de la lista, por compatibilidad con quien solo lee ese.
+   */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  videos?: string[];
+
   @IsOptional()
   @IsString()
   customCode?: string;
