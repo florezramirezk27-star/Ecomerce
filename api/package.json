@@ -35,7 +35,7 @@
     "@nestjs/websockets": "^11.1.27",
     "@prisma/client": "^6.19.3",
     "ai": "^7.0.17",
-    "axios": "^1.12.0",
+    "axios": "^1.20.0",
     "axios-cookiejar-support": "^7.0.0",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
@@ -47,8 +47,8 @@
     "google-auth-library": "^11.1.0",
     "helmet": "^8.2.0",
     "ioredis": "^5.11.1",
-    "multer": "^2.3.0",
-    "nodemailer": "^8.0.10",
+    "multer": "^2.5.0",
+    "nodemailer": "^10.1.4",
     "passport": "^0.7.0",
     "passport-facebook": "^3.0.0",
     "passport-google-oauth20": "^2.0.0",
@@ -60,7 +60,7 @@
     "speakeasy": "^2.0.0",
     "swagger-ui-express": "^5.0.1",
     "tough-cookie": "^6.0.1",
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

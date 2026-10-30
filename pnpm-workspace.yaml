@@ -14,6 +14,14 @@ overrides:
   proxy-addr: ^2.0.8
   handlebars: ">=4.7.10"
   multer: "^2.3.0"
+  undici: "^7.30.1"
+  engine.io: "^6.6.10"
+  body-parser: "^2.4.0"
+  qs: "^6.16.1"
+  follow-redirects: "^1.16.1"
+  fast-uri: "^3.1.9"
+  js-yaml: ">=5.4.1"
+  source-map-js: "^1.2.2"
 
 # pnpm 10+ no ejecuta los scripts de compilacion de las dependencias salvo
 # que esten en esta lista. Sin ella, prisma no genera el cliente y bcrypt se
