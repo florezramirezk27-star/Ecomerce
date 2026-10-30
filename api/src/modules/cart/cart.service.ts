@@ -4,6 +4,7 @@ import {
   effectiveStock,
   findProductVariation,
 } from '../../common/utils/product-variations';
+import { getLineUnitPrice } from '../../common/utils/product-promotion';
 
 @Injectable()
 export class CartService {
@@ -16,12 +17,19 @@ export class CartService {
    * presentacion). Si el producto tiene presentaciones, se valida contra la
    * elegida y se guarda su nombre, para mostrarlo y para que el pedido lo
    * arrastre hasta Dropi.
+   *
+   * `promotion` marca la linea como comprada desde el selector de promociones
+   * de la landing: solo esas lineas se cobran con el precio de oferta por
+   * cantidad. La marca es de ida (nunca se quita): si la mitad de la linea
+   * compro con promocion, cobrarle despues a precio normal seria cobrarle mas
+   * de lo que ofrecio la landing.
    */
   async addToCart(
     userId: string,
     productId: string,
     quantity: number,
     variationId = 0,
+    promotion = false,
   ) {
     if (quantity > 100) {
       throw new BadRequestException('Cantidad inválida');
@@ -78,8 +86,14 @@ export class CartService {
           quantity,
           variationId,
           variationName,
+          promotion,
         },
-        update: { quantity: { increment: quantity } },
+        /* La marca solo sube: si la linea ya venia de la promocion, un alta
+           normal posterior no la quita (ver doc de addToCart). */
+        update: {
+          quantity: { increment: quantity },
+          ...(promotion ? { promotion: true } : {}),
+        },
       });
 
       if (item.quantity > available) {
@@ -111,7 +125,9 @@ export class CartService {
     }
 
     const items = cart.items.map((item) => {
-      const price = Number(item.product.price);
+      // La promocion por cantidad solo aplica a las lineas que la eligieron
+      // en la landing; las normales pagan el precio por unidad.
+      const price = getLineUnitPrice(item.product, item.quantity, item.promotion);
       const quantity = item.quantity;
 
       return {

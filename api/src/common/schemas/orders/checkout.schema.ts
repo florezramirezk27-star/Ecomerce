@@ -287,6 +287,12 @@ const guestItemSchema = z.object({
     .int('La presentación debe ser un número entero')
     .min(0, 'Presentación inválida')
     .optional(),
+  /**
+   * La linea salio del selector de promociones de la landing: solo entonces
+   * el servidor le cobra el precio de oferta por cantidad. Ausente/false =
+   * compra normal desde la ficha, a precio por unidad.
+   */
+  promotion: z.boolean().optional(),
 });
 
 const checkoutObjectSchema = z.object({

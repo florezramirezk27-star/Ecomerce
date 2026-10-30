@@ -197,6 +197,13 @@ model CartItem {
   variationId   Int     @default(0)
   variationName String?
 
+  /**
+   * La linea salio del selector de promociones de la landing: cobra el precio
+   * de oferta por cantidad (2 frascos = $99.900, 3 = $129.900). `false` =
+   * compra normal desde la ficha: precio por unidad por la cantidad pedida.
+   */
+  promotion     Boolean @default(false)
+
   @@unique([cartId, productId, variationId])
 }
 
@@ -250,6 +257,13 @@ model OrderItem {
   /** Presentacion enviada a Dropi (0 = producto simple). */
   variationId   Int     @default(0)
   variationName String?
+
+  /**
+   * La linea compro la promocion de la landing. Se guarda en el pedido para
+   * que el precio registrado (`price`) se pueda auditar: si es `true`, ese
+   * precio es el de oferta por cantidad; si no, el precio normal.
+   */
+  promotion     Boolean @default(false)
 
   @@index([orderId])
 }

@@ -12,7 +12,7 @@ import { mergeGuestCartIntoServer } from "@/lib/cart-merge";
 import { trackMetaEvent } from "@/lib/facebook-pixel";
 import { DEPARTMENTS, MUNICIPALITIES } from "@/lib/colombia";
 import { lookupPostalCode } from "@/lib/postal-code";
-import { getProductUnitPrice } from "@/lib/product-promotion";
+import { getLineUnitPrice } from "@/lib/product-promotion";
 import {
   CHECKOUT_FIELD_ORDER,
   DOCUMENT_TYPE_OPTIONS,
@@ -38,6 +38,11 @@ interface CartItem {
   /** Presentacion elegida (0 = ninguna). */
   variationId?: number;
   variationName?: string | null;
+  /**
+   * La linea salio del selector de promociones de la landing: cobra el precio
+   * de oferta por cantidad. Las lineas normales pagan el precio por unidad.
+   */
+  promotion?: boolean;
   product: {
     id: string;
     name: string;
@@ -82,6 +87,7 @@ function guestToCartItem(item: GuestCartItem, index: number): CartItem {
     quantity: item.quantity,
     variationId: item.variationId ?? 0,
     variationName: item.variationName ?? null,
+    promotion: item.promotion === true,
     product: {
       id: item.productId,
       name: item.name,
@@ -117,14 +123,22 @@ function formatPrice(n: string | number) {
   return Number(n).toLocaleString("es-CO") + " COP";
 }
 
+/**
+ * Precio unitario que cobra la linea.
+ *
+ * Las lineas que vienen del selector de promociones de la landing pagan el
+ * precio de oferta por cantidad; todas las demas pagan el precio normal del
+ * producto por la cantidad pedida.
+ */
 function cartItemUnitPrice(item: CartItem) {
-  return getProductUnitPrice(
+  return getLineUnitPrice(
     {
       name: item.product.name,
       slug: item.product.slug,
       price: item.product.price,
     },
     item.quantity,
+    item.promotion === true,
   );
 }
 
@@ -262,6 +276,22 @@ export default function CartPage() {
     avisar(bottomBarVisible);
     return () => avisar(false);
   }, [bottomBarVisible]);
+
+  /* El formulario de datos de envio es un modal a pantalla completa con
+     `z-50`, el mismo nivel del boton flotante del chat: mientras estaba
+     abierto el boton se pintaba ENCIMA del formulario y estorba mientras el
+     cliente digitaba su direccion. Se oculta el chat mientras el modal esta
+     abierto. */
+  useEffect(() => {
+    function avisar(open: boolean) {
+      window.dispatchEvent(
+        new CustomEvent("store:checkout-modal", { detail: { open } }),
+      );
+    }
+
+    avisar(showCheckout);
+    return () => avisar(false);
+  }, [showCheckout]);
 
   /**
    * false = el campo lo pone el geocoder, true = lo escribio el cliente y ya no
@@ -646,6 +676,9 @@ export default function CartPage() {
             productId: item.productId,
             quantity: item.quantity,
             variationId: item.variationId ?? 0,
+            // El servidor cobra la promocion solo si la linea la trae: sin este
+            // flag pasaria a precio normal aunque el cliente la hubiera elegido.
+            promotion: item.promotion === true,
           }));
       const res = await apiFetch("/orders/checkout", {
         method: "POST",

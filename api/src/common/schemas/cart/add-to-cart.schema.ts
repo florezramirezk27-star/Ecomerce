@@ -13,4 +13,9 @@ export const addToCartSchema = z.object({
     .int('La presentación debe ser un número entero')
     .min(0, 'Presentación inválida')
     .optional(),
+  /**
+   * La linea viene del selector de promociones de la landing: cobra el precio
+   * de oferta por cantidad. Ausente/false = compra normal a precio por unidad.
+   */
+  promotion: z.boolean().optional(),
 });

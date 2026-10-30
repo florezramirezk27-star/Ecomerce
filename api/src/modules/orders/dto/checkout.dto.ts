@@ -59,5 +59,7 @@ export class CheckoutDto {
     productId: string;
     quantity: number;
     variationId?: number;
+    /** La linea vino del selector de promociones de la landing. */
+    promotion?: boolean;
   }>;
 }

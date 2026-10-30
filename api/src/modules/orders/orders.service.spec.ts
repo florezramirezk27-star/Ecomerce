@@ -507,4 +507,90 @@ describe('OrdersService', () => {
       );
     });
   });
+
+  describe('checkout: la promocion de la landing solo cobra a quien la eligio', () => {
+    const oftalmiel = {
+      id: 'prod-of',
+      name: 'Gotas Oftalmiel',
+      slug: 'gotas-oftalmiel',
+      price: 64_900,
+      stock: 10,
+      active: true,
+      dropiProductId: null,
+      variations: null,
+    };
+
+    const dtoBase: CheckoutDto = {
+      shippingName: 'Pedro Gomez',
+      shippingPhone: '3009876543',
+      shippingAddress: 'Carrera 7 #8-9',
+      shippingCity: 'Medellin',
+      shippingState: 'Antioquia',
+    };
+
+    beforeEach(() => {
+      productFindMany.mockResolvedValue([oftalmiel]);
+      txMock.product.findMany.mockResolvedValue([oftalmiel]);
+    });
+
+    it('cobra la oferta por cantidad cuando la linea vino del selector de la landing', async () => {
+      await service.checkout(null, {
+        ...dtoBase,
+        items: [{ productId: 'prod-of', quantity: 2, promotion: true }],
+      });
+
+      expect(txMock.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            total: 99_900,
+            items: {
+              create: [
+                expect.objectContaining({ price: 49_950, promotion: true }),
+              ],
+            },
+          }) as unknown,
+        }),
+      );
+    });
+
+    it('cobra el precio normal por unidad cuando la linea no eligio la promocion', async () => {
+      // Mismas 2 unidades, pero agregadas desde la ficha del producto: pagan
+      // precio normal por unidad, no el precio de la promocion.
+      await service.checkout(null, {
+        ...dtoBase,
+        items: [{ productId: 'prod-of', quantity: 2 }],
+      });
+
+      expect(txMock.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            total: 129_800,
+            items: {
+              create: [
+                expect.objectContaining({ price: 64_900, promotion: false }),
+              ],
+            },
+          }) as unknown,
+        }),
+      );
+    });
+
+    it('aplica el precio familiar a la promocion de 3 frascos', async () => {
+      await service.checkout(null, {
+        ...dtoBase,
+        items: [{ productId: 'prod-of', quantity: 3, promotion: true }],
+      });
+
+      expect(txMock.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            total: 129_900,
+            items: {
+              create: [expect.objectContaining({ price: 43_300 })],
+            },
+          }) as unknown,
+        }),
+      );
+    });
+  });
 });

@@ -34,6 +34,9 @@ export async function mergeGuestCartIntoServer(): Promise<boolean> {
           productId: item.productId,
           quantity: item.quantity,
           variationId: item.variationId ?? 0,
+          // La promocion viaja con la linea: si no, al pasar al servidor la
+          // linea dejaria de cobrarse con el precio de oferta.
+          promotion: item.promotion === true,
         }),
       });
       merged.push(item);

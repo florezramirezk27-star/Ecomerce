@@ -56,6 +56,13 @@ export interface LandingAddToCart {
   comboName?: string;
   comboPrice?: number;
   quantity?: number;
+  /**
+   * `true` cuando la peticion sale del selector de promociones de la landing.
+   * Solo en ese caso aplica el precio de oferta por cantidad: quien compra
+   * desde la ficha del producto paga el precio normal por unidad aunque pida
+   * las mismas unidades.
+   */
+  promotion?: boolean;
 }
 
 /**
@@ -247,6 +254,7 @@ export default function LandingFrame({
           comboName: payload.comboName,
           comboPrice: Number(payload.comboPrice) || undefined,
           quantity: Number(payload.quantity) || 1,
+          promotion: payload.promotion === true,
         });
         Promise.resolve(addResult)
           .then((added) => sendCheckoutStatus(added ? "success" : "error"))

@@ -16,7 +16,7 @@ import {
   effectiveStock,
   findProductVariation,
 } from '../../common/utils/product-variations';
-import { getProductUnitPrice } from '../../common/utils/product-promotion';
+import { getLineUnitPrice } from '../../common/utils/product-promotion';
 import type { Product } from '@prisma/client';
 
 /**
@@ -30,6 +30,11 @@ type CheckoutLine = {
   /** Presentacion elegida (0 = producto simple). */
   variationId: number;
   variationName: string | null;
+  /**
+   * La linea vino del selector de promociones de la landing: cobra el precio
+   * de oferta por cantidad. `false` = compra normal, a precio por unidad.
+   */
+  promotion: boolean;
   product: Product;
 };
 
@@ -181,7 +186,9 @@ export class OrdersService {
           }
 
           return (
-            sum + getProductUnitPrice(product, item.quantity) * item.quantity
+            sum +
+            getLineUnitPrice(product, item.quantity, item.promotion) *
+              item.quantity
           );
         }, 0);
 
@@ -205,14 +212,18 @@ export class OrdersService {
               create: items.map((item) => ({
                 productId: item.productId,
                 quantity: item.quantity,
-                price: getProductUnitPrice(
+                price: getLineUnitPrice(
                   productMap.get(item.productId)!,
                   item.quantity,
+                  item.promotion,
                 ),
                 // Presentacion enviada a Dropi: queda registrada en el pedido
                 // (0 = producto simple, para no arrastrar variante inventada).
                 variationId: item.variationId || 0,
                 variationName: item.variationName,
+                // Queda registrado si esa linea se cobro con la promocion, para
+                // poder auditar el precio guardado arriba.
+                promotion: item.promotion,
               })),
             },
           },
@@ -280,7 +291,7 @@ export class OrdersService {
             items: dropiItems.map((i) => ({
               dropiProductId: i.product.dropiProductId!,
               quantity: i.quantity,
-              price: getProductUnitPrice(i.product, i.quantity),
+              price: getLineUnitPrice(i.product, i.quantity, i.promotion),
               name: i.product.name,
               // Solo se manda la presentacion elegida; si no hay (producto
               // simple) se omite y Dropi resuelve el producto normal.
@@ -385,7 +396,11 @@ export class OrdersService {
         items.map((item) => ({
           name: item.product.name,
           quantity: item.quantity,
-          price: getProductUnitPrice(item.product, item.quantity),
+          price: getLineUnitPrice(
+            item.product,
+            item.quantity,
+            item.promotion,
+          ),
           variationName: item.variationName,
         })),
         Number(order.total),
@@ -445,7 +460,11 @@ export class OrdersService {
         items.map((item) => ({
           name: item.product.name,
           quantity: item.quantity,
-          price: getProductUnitPrice(item.product, item.quantity),
+          price: getLineUnitPrice(
+            item.product,
+            item.quantity,
+            item.promotion,
+          ),
           variationName: item.variationName,
         })),
         Number(order.total),
@@ -569,6 +588,10 @@ export class OrdersService {
         quantity: line.quantity,
         variationId,
         variationName: variation ? variation.name : null,
+        // La promocion solo aplica si la linea la trae: sin esto un invitado
+        // podria pedir el precio de oferta marcando la bandera, o perderla al
+        // pasar el carrito al servidor.
+        promotion: line.promotion === true,
         product,
       };
     });

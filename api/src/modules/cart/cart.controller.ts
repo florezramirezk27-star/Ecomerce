@@ -28,13 +28,19 @@ export class CartController {
   addToCart(
     @Req() req: AuthenticatedRequest,
     @Body(new ZodValidationPipe(addToCartSchema))
-    dto: { productId: string; quantity: number; variationId?: number },
+    dto: {
+      productId: string;
+      quantity: number;
+      variationId?: number;
+      promotion?: boolean;
+    },
   ) {
     return this.cartService.addToCart(
       req.user.id,
       dto.productId,
       dto.quantity,
       dto.variationId ?? 0,
+      dto.promotion === true,
     );
   }
 

@@ -12,6 +12,12 @@ export interface GuestCartItem {
    */
   variationId?: number;
   variationName?: string | null;
+  /**
+   * La linea se eligio desde el selector de promociones de la landing. Solo
+   * en ese caso cobra el precio de oferta por cantidad; una linea normal
+   * (agregada desde la ficha) paga el precio por unidad del producto.
+   */
+  promotion?: boolean;
 }
 
 const GUEST_CART_KEY = "guest_cart";

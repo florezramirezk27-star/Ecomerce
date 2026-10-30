@@ -79,6 +79,7 @@ describe('CartService.addToCart: presentaciones', () => {
         quantity: 2,
         variationId: 10,
         variationName: 'Talla M',
+        promotion: false,
       },
       update: { quantity: { increment: 2 } },
     });
@@ -135,6 +136,7 @@ describe('CartService.addToCart: presentaciones', () => {
         quantity: 2,
         variationId: 0,
         variationName: null,
+        promotion: false,
       },
       update: { quantity: { increment: 2 } },
     });
@@ -150,6 +152,59 @@ describe('CartService.addToCart: presentaciones', () => {
 
     await expect(service.addToCart('u1', 'p1', 5, 10)).rejects.toThrow(
       'Stock insuficiente',
+    );
+  });
+});
+
+describe('CartService.addToCart: promocion de la landing', () => {
+  it('guarda la marca cuando la linea viene del selector de promociones', async () => {
+    const { service, cartItemUpsert } = makeService({
+      product: { id: 'p2', active: true, stock: 10, variations: null },
+    });
+
+    await service.addToCart('u1', 'p2', 2, 0, true);
+
+    expect(cartItemUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ promotion: true }),
+      }),
+    );
+  });
+
+  it('sube la marca si una linea existente recibe una compra con promocion', async () => {
+    // El cliente ya tenia 1 frasco normal y despues compra la promocion desde
+    // la landing: la linea pasa a cobrarse con el precio de oferta.
+    const { service, cartItemUpsert } = makeService({
+      product: { id: 'p2', active: true, stock: 10, variations: null },
+      existingQuantity: 1,
+    });
+
+    await service.addToCart('u1', 'p2', 2, 0, true);
+
+    expect(cartItemUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { quantity: { increment: 2 }, promotion: true },
+      }),
+    );
+  });
+
+  it('nunca quita la marca si despues llega una compra normal', async () => {
+    // Cobrar a precio normal una linea que ya se habia comprado con
+    // promocion seria cobrarle mas de lo que ofrecio la landing.
+    const { service, cartItemUpsert } = makeService({
+      product: { id: 'p2', active: true, stock: 10, variations: null },
+      existingQuantity: 2,
+    });
+
+    await service.addToCart('u1', 'p2', 1, 0, false);
+
+    expect(cartItemUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { quantity: { increment: 1 } },
+      }),
+    );
+    expect(cartItemUpsert.mock.calls[0][0].update).not.toHaveProperty(
+      'promotion',
     );
   });
 });

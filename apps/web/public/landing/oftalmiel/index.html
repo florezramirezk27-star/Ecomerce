@@ -1052,9 +1052,15 @@
             if (checkoutPending) return;
             checkoutPending = true;
             updateCheckoutButton('loading');
+            /* `promotion: true` le dice a la tienda que esta compra viene de
+               AQUI, del selector de promociones: solo en ese caso aplica el
+               precio de oferta por cantidad. Quien compra desde la ficha del
+               producto paga el precio normal por unidad, aunque pida las
+               mismas 2 o 3 unidades. */
             window.parent.postMessage({
                 type: 'kronio-add-to-cart',
-                quantity: currentOfferId
+                quantity: currentOfferId,
+                promotion: true
             }, '*');
         }
 

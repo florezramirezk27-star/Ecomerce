@@ -15,7 +15,7 @@ import CountdownTimer from "@/components/CountdownTimer";
 import { getOfferEndTime } from "@/lib/offer-countdown";
 import CartToast, { useCartToast } from "@/components/CartToast";
 import LandingFrame, { type LandingAddToCart } from "@/components/LandingFrame";
-import { getProductUnitPrice } from "@/lib/product-promotion";
+import { getLineUnitPrice } from "@/lib/product-promotion";
 
 interface ProductVariation {
   id: number;
@@ -257,9 +257,17 @@ export default function ProductPage() {
     };
   }, []);
 
-  const handleAddToCart = async (overrideQuantity?: number) => {
+  const handleAddToCart = async (
+    overrideQuantity?: number,
+    opts?: { promotion?: boolean },
+  ) => {
     if (!product) return false;
     const qty = Math.max(1, overrideQuantity ?? quantity);
+    /* Solo la compra hecha desde el selector de promociones de la landing
+       trae `promotion`: esa cobra el precio de oferta por cantidad. El boton
+       normal de la ficha paga el precio unitario por la cantidad pedida. */
+    const promotion = opts?.promotion === true;
+    const unitPrice = getLineUnitPrice(product, qty, promotion);
     const selectedVariation =
       (product.variations ?? []).find((v) => v.id === selectedVariationId) ??
       null;
@@ -283,12 +291,13 @@ export default function ProductPage() {
         quantity: qty,
         variationId,
         variationName,
+        promotion,
       });
       void trackMetaEvent("AddToCart", {
         content_ids: [product.id],
         content_name: contentName,
         content_type: "product",
-        value: getProductUnitPrice(product, qty) * qty,
+        value: unitPrice * qty,
         currency: "COP",
       });
       mostrarAviso("success", `✓ ${unidades}`);
@@ -303,6 +312,7 @@ export default function ProductPage() {
           productId: product.id,
           quantity: qty,
           variationId,
+          promotion,
         }),
       });
 
@@ -315,7 +325,7 @@ export default function ProductPage() {
         content_ids: [product.id],
         content_name: contentName,
         content_type: "product",
-        value: getProductUnitPrice(product, qty) * qty,
+        value: unitPrice * qty,
         currency: "COP",
       });
 
@@ -353,7 +363,9 @@ export default function ProductPage() {
       return false;
     }
 
-    const added = await handleAddToCart(requestedQuantity);
+    const added = await handleAddToCart(requestedQuantity, {
+      promotion: offer.promotion === true,
+    });
     if (added) router.push("/cart");
     return added;
   };
@@ -958,18 +970,10 @@ const isVideo = selectedMedia?.kind === "video";
         </div>
       </div>
 
-      {hasLanding && (
-        <section className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden">
-          <LandingFrame
-            src={`/landing/${encodeURIComponent(product.slug)}`}
-            title={`Landing de ${product.name}`}
-            initialHeight={1200}
-            offerEndTime={offerEndTime}
-            onAddToCart={handleLandingAddToCart}
-          />
-        </section>
-      )}
-
+      {/* La landing larga va DEBAJO de los productos similares, en todas las
+          fichas: el visitante primero ve las alternativas (y puede salir a
+          otra) y recien al final la landing completa. Antes iba antes y
+          empujaba los similares fuera de pantalla. */}
       {product.similarProducts && product.similarProducts.length > 0 && (
         <div className="max-w-7xl mx-auto px-6 pb-12">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Productos similares</h2>
@@ -998,6 +1002,18 @@ const isVideo = selectedMedia?.kind === "video";
             ))}
           </div>
         </div>
+      )}
+
+      {hasLanding && (
+        <section className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden">
+          <LandingFrame
+            src={`/landing/${encodeURIComponent(product.slug)}`}
+            title={`Landing de ${product.name}`}
+            initialHeight={1200}
+            offerEndTime={offerEndTime}
+            onAddToCart={handleLandingAddToCart}
+          />
+        </section>
       )}
 
       {product.name === "Set de Velas Aromáticas" && <CandleInfographic />}

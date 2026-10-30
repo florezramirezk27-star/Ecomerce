@@ -134,6 +134,13 @@ export default function StoreChat() {
    */
   const [consentBarVisible, setConsentBarVisible] = useState(false);
   /**
+   * El cliente esta en el modal de datos de envio del checkout. Es una
+   * ventana a pantalla completa con `z-50`, el mismo nivel que el boton
+   * flotante del chat: mientras estaba ahi el boton se pintaba encima del
+   * formulario y estorba mientras el cliente digitaba su direccion.
+   */
+  const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
+  /**
    * El visitante esta escribiendo en un campo del formulario de la pagina
    * (los datos de envio del checkout, la busqueda, etc.). El boton flotante
    * se aparta mientras tanto: en celular el teclado ocupa casi media
@@ -186,11 +193,18 @@ export default function StoreChat() {
       setConsentBarVisible(Boolean(detail?.visible));
     }
 
+    function onCheckoutModalChange(event: Event) {
+      const detail = (event as CustomEvent<{ open?: boolean }>).detail;
+      setCheckoutModalOpen(Boolean(detail?.open));
+    }
+
     window.addEventListener("store:bottom-bar", onBottomBarChange);
     window.addEventListener("store:consent-bar", onConsentBarChange);
+    window.addEventListener("store:checkout-modal", onCheckoutModalChange);
     return () => {
       window.removeEventListener("store:bottom-bar", onBottomBarChange);
       window.removeEventListener("store:consent-bar", onConsentBarChange);
+      window.removeEventListener("store:checkout-modal", onCheckoutModalChange);
     };
   }, []);
 
@@ -384,17 +398,21 @@ export default function StoreChat() {
       {/* Botón flotante.
           Se oculta mientras haya una barra fija en la parte baja de la
           pantalla (barra de compra de la ficha, barra de finalizar compra
-          del carrito), el aviso de cookies o el visitante esté escribiendo en
-          un campo del formulario (p. ej. los datos de envío del checkout):
-          todas compiten por el mismo sitio, y con el teclado abierto el botón
-          quedaba tapando el campo activo. El aviso llega con los eventos
-          `store:bottom-bar` y `store:consent-bar`.
+          del carrito), el aviso de cookies, el modal de datos de envío del
+          checkout o el visitante esté escribiendo en un campo del formulario:
+          todas compiten por el mismo sitio, y el modal (z-50, igual que el
+          boton) se pintaba encima del formulario mientras el cliente
+          digitaba su dirección. El aviso llega con los eventos
+          `store:bottom-bar`, `store:consent-bar` y `store:checkout-modal`.
 
           Con el chat abierto el boton se conserva aunque haya barra: ese
           boton es el de cerrar, y sin el el chat no se podria cerrar. Las
           barras se apartan solas mientras el chat esta abierto. */}
       {(open ||
-        (!bottomBarVisible && !consentBarVisible && !typingInForm)) && (
+        (!bottomBarVisible &&
+          !consentBarVisible &&
+          !checkoutModalOpen &&
+          !typingInForm)) && (
         <button
           type="button"
           onClick={() => setOpenedOn(open ? null : pathname)}
@@ -437,8 +455,10 @@ export default function StoreChat() {
       </button>
       )}
 
-      {/* Ventana */}
-      {open && !consentBarVisible && (
+      {/* Ventana. Con el modal de datos de envío abierto se esconde también:
+          el modal tapa la pantalla y la ventana quedaria encima del
+          formulario. */}
+      {open && !consentBarVisible && !checkoutModalOpen && (
         /* La altura se calcula con `dvh` y con un tope: antes era una altura
            fija de 600px + 96px de margen inferior, o sea 696px, mas que la
            altura de un iPhone SE (667px). La ventana se salia por arriba y
