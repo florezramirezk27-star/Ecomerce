@@ -93,20 +93,32 @@
             0% { transform: translateX(0); }
             100% { transform: translateX(calc(-50% - 0.75rem)); }
         }
+        /* Las reseñas se desplazan solas también en celular: antes este bloque
+           quitaba la animación en pantallas chicas y dejaba el carrusel
+           parado, con scroll manual. La máscara se mantiene en todos los
+           tamaños para que las tarjetas entren y salgan con el mismo borde
+           suave que en escritorio. */
         @media (max-width: 639px) {
-            .marquee-container {
-                overflow-x: auto;
-                -webkit-mask-image: none;
-                mask-image: none;
-                scrollbar-width: none;
-            }
-            .marquee-container::-webkit-scrollbar {
-                display: none;
-            }
-            .marquee-track {
-                animation: none;
-            }
             .announcement-group { gap: 1.5rem; padding-right: 1.5rem; }
+        }
+        /* Selección de las tarjetas de oferta.
+           Se resuelve con una clase propia y no alternando utilidades de
+           Tailwind: el CDN genera las utilidades al parsear el HTML, y añadir
+           o quitar clases en tiempo de ejecución dejaba dos reglas de fondo
+           compitiendo (p. ej. `bg-white` contra `bg-amberCustom-50/40`), con
+           lo que la tarjeta marcada no siempre coincidía con la promoción
+           elegida. */
+        .offer-card.is-selected {
+            border-color: #f97316;
+            background-color: #fffbeb;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+        }
+        .offer-card.is-selected .radio-indicator {
+            border-color: #d97706;
+            background-color: #fff7ed;
+        }
+        .offer-card.is-selected .inner-dot {
+            background-color: #d97706;
         }
         @media (prefers-reduced-motion: reduce) {
             *,
@@ -754,12 +766,12 @@
                 </div>
 
                 <!-- Oferta 2 (Más Popular / Destacada) -->
-                <div onclick="selectOffer(2, 99900, '2 Frascos Oftalmiel (¡Más Vendido!)')" id="offer-card-2" class="offer-card cursor-pointer bg-gradient-to-b from-amberCustom-50 to-white rounded-3xl p-5 sm:p-6 border-2 border-softOrange-500 shadow-lg relative transition-all transform md:-translate-y-2">
+                <div onclick="selectOffer(2, 99900, '2 Frascos Oftalmiel (¡Más Vendido!)')" id="offer-card-2" class="offer-card is-selected cursor-pointer bg-white rounded-3xl p-5 sm:p-6 border-2 border-amberCustom-300 shadow-sm relative transition-all transform md:-translate-y-2">
                     <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-softOrange-600 text-white font-bold text-[10px] uppercase tracking-widest px-3 py-1 rounded-full shadow">
                         🔥 ¡Más Popular & Ahorro!
                     </div>
-                    <div class="absolute top-4 right-4 radio-indicator w-6 h-6 rounded-full border-2 border-softOrange-600 flex items-center justify-center bg-softOrange-50">
-                        <div class="inner-dot w-3 h-3 rounded-full bg-softOrange-600"></div>
+                    <div class="absolute top-4 right-4 radio-indicator w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center">
+                        <div class="inner-dot w-3 h-3 rounded-full bg-transparent"></div>
                     </div>
                     <span class="text-xs font-bold text-softOrange-600 uppercase">Tratamiento Doble</span>
                     <h3 class="text-lg font-bold text-gray-900 mt-1">Lleva 2 Frascos</h3>
@@ -1015,25 +1027,14 @@
             document.getElementById('selected-offer-title').innerText = title;
             document.getElementById('checkout-total-price').innerText = '$ ' + price.toLocaleString('es-CO');
 
-            // Actualizar estilos de tarjetas
+            /* Marcar únicamente la tarjeta elegida con la clase `is-selected`
+               (su estilo vive en el <style> de arriba). Antes se alternaban
+               utilidades de Tailwind y la tarjeta resaltada no siempre era la
+               seleccionada: al quitar `bg-white` y añadir `bg-amberCustom-50/40`
+               quedaban dos clases de fondo compitiendo, y las tarjetas con
+               degradado o `shadow-lg` nunca se desmarcaban del todo. */
             for (let i = 1; i <= 3; i++) {
-                const card = document.getElementById('offer-card-' + i);
-                const indicator = card.querySelector('.radio-indicator');
-                const dot = card.querySelector('.inner-dot');
-
-                if (i === offerId) {
-                    card.classList.add('border-softOrange-500', 'bg-amberCustom-50/40', 'shadow-md');
-                    card.classList.remove('border-amberCustom-300', 'bg-white');
-                    indicator.classList.add('border-softOrange-600', 'bg-softOrange-50');
-                    dot.classList.add('bg-softOrange-600');
-                    dot.classList.remove('bg-transparent');
-                } else {
-                    card.classList.remove('border-softOrange-500', 'bg-amberCustom-50/40', 'shadow-md');
-                    card.classList.add('border-amberCustom-300', 'bg-white');
-                    indicator.classList.remove('border-softOrange-600', 'bg-softOrange-50');
-                    dot.classList.remove('bg-softOrange-600');
-                    dot.classList.add('bg-transparent');
-                }
+                document.getElementById('offer-card-' + i).classList.toggle('is-selected', i === offerId);
             }
         }
 

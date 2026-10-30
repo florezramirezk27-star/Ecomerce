@@ -133,8 +133,47 @@ export default function StoreChat() {
    * `store:consent-bar`, que dispara el componente de consentimiento.
    */
   const [consentBarVisible, setConsentBarVisible] = useState(false);
+  /**
+   * El visitante esta escribiendo en un campo del formulario de la pagina
+   * (los datos de envio del checkout, la busqueda, etc.). El boton flotante
+   * se aparta mientras tanto: en celular el teclado ocupa casi media
+   * pantalla y el boton quedaria justo encima del campo activo, tapandolo.
+   */
+  const [typingInForm, setTypingInForm] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  /** Panel del chat abierto: su propio input no debe ocultar el boton. */
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  /* El boton flotante se oculta mientras el visitante escribe en un campo de
+     la pagina. `focusin`/`focusout` llegan aunque el foco salte entre campos
+     y son disparados tambien por el teclado virtual del celular. Se ignoran
+     los eventos cuyo destino esta dentro del propio chat: ahi el boton es el
+     de cerrar y ocultarlo dejaria la ventana sin forma de cerrarse. */
+  useEffect(() => {
+    function esCampoDeFormulario(target: EventTarget | null): boolean {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+    }
+
+    function onFocusIn(event: FocusEvent) {
+      if (panelRef.current?.contains(event.target as Node)) return;
+      if (esCampoDeFormulario(event.target)) setTypingInForm(true);
+    }
+
+    function onFocusOut(event: FocusEvent) {
+      if (panelRef.current?.contains(event.target as Node)) return;
+      if (esCampoDeFormulario(event.target)) setTypingInForm(false);
+    }
+
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+    };
+  }, []);
 
   useEffect(() => {
     function onBottomBarChange(event: Event) {
@@ -345,14 +384,17 @@ export default function StoreChat() {
       {/* Botón flotante.
           Se oculta mientras haya una barra fija en la parte baja de la
           pantalla (barra de compra de la ficha, barra de finalizar compra
-          del carrito) o el aviso de cookies: todas ocupan el mismo sitio y
-          se pisarian. El aviso llega con los eventos `store:bottom-bar` y
-          `store:consent-bar`.
+          del carrito), el aviso de cookies o el visitante esté escribiendo en
+          un campo del formulario (p. ej. los datos de envío del checkout):
+          todas compiten por el mismo sitio, y con el teclado abierto el botón
+          quedaba tapando el campo activo. El aviso llega con los eventos
+          `store:bottom-bar` y `store:consent-bar`.
 
           Con el chat abierto el boton se conserva aunque haya barra: ese
           boton es el de cerrar, y sin el el chat no se podria cerrar. Las
           barras se apartan solas mientras el chat esta abierto. */}
-      {(open || (!bottomBarVisible && !consentBarVisible)) && (
+      {(open ||
+        (!bottomBarVisible && !consentBarVisible && !typingInForm)) && (
         <button
           type="button"
           onClick={() => setOpenedOn(open ? null : pathname)}
@@ -403,7 +445,7 @@ export default function StoreChat() {
            tapaba la barra de navegacion. Ahora ocupa como maximo
            `100dvh - 10rem` (160px), de forma que el borde superior nunca
            queda por encima de la barra (64px) ni del borde de la pantalla. */
-        <div className="fixed bottom-safe-24 right-4 sm:right-6 z-50 flex h-[min(600px,calc(100dvh-10rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+        <div ref={panelRef} className="fixed bottom-safe-24 right-4 sm:right-6 z-50 flex h-[min(600px,calc(100dvh-10rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
           {/* Header */}
           <div className="flex items-center justify-between bg-gray-900 px-5 py-4 text-white">
             <div>
