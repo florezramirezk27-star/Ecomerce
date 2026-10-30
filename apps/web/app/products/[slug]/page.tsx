@@ -70,6 +70,24 @@ function getVimeoEmbed(url: string) {
     : null;
 }
 
+/**
+ * Pide a Cloudinary la version optimizada de un video.
+ *
+ * Una URL de `res.cloudinary.com/.../upload/v.../archivo.mp4` sirve el MP4
+ * crudo tal cual se subio: el video de Oftalmiel llega a 2.5 MB a bitrate
+ * alto y el navegador tarda en arrancar la reproduccion. Con `q_auto`
+ * Cloudinary entrega la version transcodificada (menos peso, arranque
+ * rapido) y con `f_auto` el formato que el navegador prefiera (webm/av1 si
+ * lo soporta). Si la URL ya trae transformaciones se respeta.
+ */
+function cloudinaryVideoUrl(url: string) {
+  if (!url.includes("res.cloudinary.com/") || !url.includes("/upload/")) {
+    return url;
+  }
+  if (url.includes("/q_auto") || url.includes("/f_auto")) return url;
+  return url.replace("/upload/", "/upload/q_auto,f_auto/");
+}
+
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -508,7 +526,7 @@ if (product) {
     if (!mediaItems.some((m) => m.src === src)) {
       mediaItems.push({
         kind: "video",
-        src,
+        src: cloudinaryVideoUrl(src),
         embed: getYouTubeEmbed(src) || getVimeoEmbed(src),
       });
     }
