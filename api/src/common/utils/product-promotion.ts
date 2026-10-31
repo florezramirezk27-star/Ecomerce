@@ -22,6 +22,20 @@ const ACEITE_OREGANO_OFFER_UNIT_PRICES = {
   family: 46_600,
 };
 
+/**
+ * Precios unitarios de la promocion por cantidad de Glucora / Berberina (COP).
+ * Unidad normal: $89.900.
+ * - 2 frascos: $149.900 en total -> $74.950 c/u.
+ * - 3 frascos: "paga 2 y lleva 3" = 2 x $89.900 = $179.800 en total -> ~$59.933 c/u.
+ *
+ * Coinciden con `BULK_TOTALS` de `apps/web/components/landings/GlucoraLanding.tsx`.
+ */
+const GLUCORA_OFFER_UNIT_PRICES = {
+  single: 89_900,
+  double: 74_950,
+  family: 59_933,
+};
+
 function normalize(text: string): string {
   return text
     .normalize('NFD')
@@ -32,6 +46,15 @@ function normalize(text: string): string {
 function isAceiteOreganoProduct(product: PricedProduct): boolean {
   return normalize(`${product.name} ${product.slug}`).includes(
     'aceite de oregano',
+  );
+}
+
+function isGlucoraProduct(product: PricedProduct): boolean {
+  const text = normalize(`${product.name} ${product.slug}`);
+  return (
+    text.includes('glucora') ||
+    text.includes('berberine') ||
+    text.includes('berberina')
   );
 }
 
@@ -66,6 +89,16 @@ export function getProductUnitPrice(
         : quantity >= 2
           ? ACEITE_OREGANO_OFFER_UNIT_PRICES.double
           : ACEITE_OREGANO_OFFER_UNIT_PRICES.single;
+    return Math.min(regularPrice, offerPrice);
+  }
+
+  if (isGlucoraProduct(product)) {
+    const offerPrice =
+      quantity >= 3
+        ? GLUCORA_OFFER_UNIT_PRICES.family
+        : quantity >= 2
+          ? GLUCORA_OFFER_UNIT_PRICES.double
+          : GLUCORA_OFFER_UNIT_PRICES.single;
     return Math.min(regularPrice, offerPrice);
   }
 
