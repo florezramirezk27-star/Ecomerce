@@ -16,6 +16,7 @@ import { getOfferEndTime } from "@/lib/offer-countdown";
 import CartToast, { useCartToast } from "@/components/CartToast";
 import LandingFrame, { type LandingAddToCart } from "@/components/LandingFrame";
 import { getLineUnitPrice } from "@/lib/product-promotion";
+import AceiteOreganoLanding, { LANDING_SLUG } from "@/components/landings/AceiteOreganoLanding";
 
 interface ProductVariation {
   id: number;
@@ -427,6 +428,8 @@ export default function ProductPage() {
   const hasLanding =
     Boolean(product.landingCode?.trim()) ||
     /oftalmiel/i.test(`${product.name} ${product.slug}`);
+  const isAceiteOreganoProduct =
+    product.slug === LANDING_SLUG || /oregano/i.test(product.name);
   const hasVariations = variations.length > 0;
   const selectedVariation =
     variations.find((v) => v.id === selectedVariationId) ?? null;
@@ -1015,7 +1018,31 @@ const isVideo = selectedMedia?.kind === "video";
           </div>
         </div>
       )}
-
+  
+      {isAceiteOreganoProduct && (
+        <AceiteOreganoLanding
+          product={{
+            id: product.id,
+            name: product.name,
+            slug: product.slug,
+            price: product.price,
+            image: product.image,
+            stock: product.stock,
+          }}
+          onAddToCart={async (quantity, opts) =>
+            handleLandingAddToCart({
+              quantity,
+              promotion: opts?.promotion === true,
+            })
+          }
+          offerEndTime={
+            typeof offerEndTime === "number"
+              ? new Date(offerEndTime).toISOString()
+              : undefined
+          }
+        />
+      )}
+  
       {hasLanding && (
         <section className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden">
           <LandingFrame
