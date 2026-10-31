@@ -983,36 +983,7 @@ const isVideo = selectedMedia?.kind === "video";
 
           </div>
         </div>
-          </div>
-
-      {/* Videos del producto (debajo del banner principal de la ficha). */}
-      {isAceiteOreganoProduct && (
-        <section className="max-w-7xl mx-auto px-6 py-12 border-t border-green-100 bg-[var(--nb-cream)]">
-          <div className="mx-auto max-w-6xl space-y-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Míralo en acción</h2>
-            <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
-              <video
-                controls
-                playsInline
-                preload="metadata"
-                className="w-full aspect-video rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-3xl mx-auto"
-                src="/landings/aceite-oregano/videos/video-oregano-1.mp4"
-              >
-                Tu navegador no soporta el elemento de video.
-              </video>
-              <video
-                controls
-                playsInline
-                preload="metadata"
-                className="w-full aspect-video rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-3xl mx-auto"
-                src="/landings/aceite-oregano/videos/video-oregano-2.mp4"
-              >
-                Tu navegador no soporta el elemento de video.
-              </video>
-            </div>
-          </div>
-        </section>
-      )}
+      </div>
 
       {/* La landing larga va DEBAJO de los productos similares, en todas las
           fichas: el visitante primero ve las alternativas (y puede salir a

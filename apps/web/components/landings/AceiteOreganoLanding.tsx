@@ -177,6 +177,20 @@ const GALLERY: readonly MediaImage[] = [
   },
 ];
 
+/** Videos del producto (sección 4). */
+const VIDEOS: readonly MediaVideo[] = [
+  {
+    src: "/landings/aceite-oregano/videos/video-oregano-1.mp4",
+    title: "Cómo usar el aceite de orégano",
+    caption: "Tutorial rápido de aplicación y dosis diaria.",
+  },
+  {
+    src: "/landings/aceite-oregano/videos/video-oregano-2.mp4",
+    title: "Beneficios del aceite de orégano con semilla negra",
+    caption: "Descubre por qué es ideal para tu rutina diaria de bienestar.",
+  },
+];
+
 /**
  * TODO(RESULTADOS): fotos o capturas de clientes REALES con su permiso.
  * Vacío = sección oculta.
@@ -622,6 +636,27 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
       <div className="flex shrink-0 gap-4 pr-4" aria-hidden="true">
         {items.map((item, i) => card(item, `b-${i}`))}
       </div>
+    </div>
+  );
+}
+
+function VideoCard({ video }: { video: MediaVideo }) {
+  return (
+    <div className="space-y-3 rounded-3xl border border-green-100 bg-green-50/50 p-6 text-center transition-shadow hover:shadow-md sm:p-8">
+      <h3 className="text-lg font-bold text-gray-900">{video.title}</h3>
+      <div className="relative mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-3xl">
+        <video
+          controls
+          playsInline
+          preload="metadata"
+          poster={video.poster ? cld(video.poster) : undefined}
+          className="absolute inset-0 h-full w-full object-cover"
+        >
+          <source src={cld(video.src)} type="video/mp4" />
+          Tu navegador no soporta el elemento de video.
+        </video>
+      </div>
+      <p className="text-sm font-medium text-gray-600">{video.caption}</p>
     </div>
   );
 }
@@ -1156,15 +1191,19 @@ export default function AceiteOreganoLanding({
         </section>
       ) : null}
 
-      {/* 9. Testimonios (solo con opiniones reales) */}
-      {TESTIMONIALS.length > 0 ? (
-        <section className="overflow-hidden bg-[var(--nb-cream)] px-4 py-14">
+      {/* Videos del producto (justo antes del CTA final). */}
+      {VIDEOS.length > 0 ? (
+        <section className="border-t border-green-100 bg-white px-4 py-12">
           <div className="mx-auto max-w-6xl space-y-8">
             <SectionHeading
-              eyebrow="Confianza real"
-              title="Lo que dicen nuestros clientes en Colombia"
+              eyebrow="Míralo en acción"
+              title={`Conoce más sobre ${PRODUCT_SHORT_NAME}`}
             />
-            <TestimonialsCarousel items={TESTIMONIALS} />
+            <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+              {VIDEOS.map((video) => (
+                <VideoCard key={video.src} video={video} />
+              ))}
+            </div>
           </div>
         </section>
       ) : null}
