@@ -647,9 +647,9 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
 
 function VideoCard({ video }: { video: MediaVideo }) {
   return (
-    <div className="space-y-3 rounded-3xl border border-green-100 bg-green-50/50 p-4 text-center transition-shadow hover:shadow-md sm:p-6">
+    <div className="space-y-3 rounded-3xl border border-green-100 bg-green-50/50 p-6 text-center transition-shadow hover:shadow-md sm:p-8">
       <h3 className="text-lg font-bold text-gray-900">{video.title}</h3>
-      <div className="relative mx-auto aspect-[9/16] w-full max-w-[18rem] overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-xs">
+      <div className="relative mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-3xl">
         <video
           controls
           playsInline
@@ -986,6 +986,24 @@ export default function AceiteOreganoLanding({
         </div>
       </section>
 
+      {/* Videos del producto (debajo del banner principal).
+         Llena el array `VIDEOS` arriba para que se muestren. */}
+      {VIDEOS.length > 0 ? (
+        <section className="border-t border-green-100 bg-white px-4 py-12">
+          <div className="mx-auto max-w-6xl space-y-8">
+            <SectionHeading
+              eyebrow="Míralo en acción"
+              title={`Conoce más sobre ${PRODUCT_SHORT_NAME}`}
+            />
+            <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+              {VIDEOS.map((video) => (
+                <VideoCard key={video.src} video={video} />
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {/* 3. Señales de que necesitas el producto */}
       <section className="bg-white px-4 py-14">
         <div className="mx-auto max-w-5xl space-y-10">
@@ -1192,24 +1210,6 @@ export default function AceiteOreganoLanding({
               title="Lo que dicen nuestros clientes en Colombia"
             />
             <TestimonialsCarousel items={TESTIMONIALS} />
-          </div>
-        </section>
-      ) : null}
-
-      {/* Videos del producto (debajo de las reseñas).
-         Llena el array `VIDEOS` arriba para que se muestren. */}
-      {VIDEOS.length > 0 ? (
-        <section className="border-t border-green-100 bg-white px-4 py-12">
-          <div className="mx-auto max-w-6xl space-y-8">
-            <SectionHeading
-              eyebrow="Míralo en acción"
-              title={`Conoce más sobre ${PRODUCT_SHORT_NAME}`}
-            />
-            <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
-              {VIDEOS.map((video) => (
-                <VideoCard key={video.src} video={video} />
-              ))}
-            </div>
           </div>
         </section>
       ) : null}
