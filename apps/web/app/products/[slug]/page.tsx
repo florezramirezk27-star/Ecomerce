@@ -17,6 +17,7 @@ import CartToast, { useCartToast } from "@/components/CartToast";
 import LandingFrame, { type LandingAddToCart } from "@/components/LandingFrame";
 import { getLineUnitPrice } from "@/lib/product-promotion";
 import AceiteOreganoLanding, { LANDING_SLUG } from "@/components/landings/AceiteOreganoLanding";
+import GlucoraLanding, { GLUCORA_SLUG } from "@/components/landings/GlucoraLanding";
 
 interface ProductVariation {
   id: number;
@@ -430,6 +431,9 @@ export default function ProductPage() {
     /oftalmiel/i.test(`${product.name} ${product.slug}`);
   const isAceiteOreganoProduct =
     product.slug === LANDING_SLUG || /oregano/i.test(product.name);
+  const isGlucoraProduct =
+    product.slug === GLUCORA_SLUG ||
+    /berberine|glucora|berberina/i.test(`${product.name} ${product.slug}`);
   const hasVariations = variations.length > 0;
   const selectedVariation =
     variations.find((v) => v.id === selectedVariationId) ?? null;
@@ -1021,6 +1025,30 @@ const isVideo = selectedMedia?.kind === "video";
   
       {isAceiteOreganoProduct && (
         <AceiteOreganoLanding
+          product={{
+            id: product.id,
+            name: product.name,
+            slug: product.slug,
+            price: product.price,
+            image: product.image,
+            stock: product.stock,
+          }}
+          onAddToCart={async (quantity, opts) =>
+            handleLandingAddToCart({
+              quantity,
+              promotion: opts?.promotion === true,
+            })
+          }
+          offerEndTime={
+            typeof offerEndTime === "number"
+              ? new Date(offerEndTime).toISOString()
+              : undefined
+          }
+        />
+      )}
+
+      {isGlucoraProduct && (
+        <GlucoraLanding
           product={{
             id: product.id,
             name: product.name,
