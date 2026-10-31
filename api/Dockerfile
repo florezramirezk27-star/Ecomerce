@@ -23,15 +23,9 @@ COPY api/tsconfig*.json api/nest-cli.json ./api/
 COPY api/src ./api/src
 RUN pnpm --filter=api run build
 
-# /app queda autocontenida: package.json, dist y solo las dependencias de
-# produccion, con archivos reales (sin symlinks al store del workspace).
-RUN pnpm --filter=api deploy --prod --legacy /app
-
-WORKDIR /app
-# El cliente Prisma ya fue generado y viaja con pnpm deploy.
-# Copiar el schema para las migraciones al arrancar.
-COPY prisma ./prisma
-
+# Imagen de produccion: copiar todo desde el build stage.
+# Copiar node_modules completo (Docker resuelve symlinks a archivos reales),
+# el dist de la API, el schema de Prisma y el cliente Prisma generado.
 FROM node:22-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
@@ -39,7 +33,15 @@ ENV NODE_ENV=production
 # CLI de Prisma para las migraciones al arrancar
 RUN npm install -g prisma@6
 
-COPY --from=build /app ./
+# Copiar todo desde el stage de build
+COPY --from=build /repo/api/package.json ./package.json
+COPY --from=build /repo/api/dist ./dist
+COPY --from=build /repo/node_modules ./node_modules
+COPY --from=build /repo/prisma ./prisma
+
+# Regenerar el cliente Prisma en produccion por seguridad (por si acaso
+# el copy no trajo los archivos .prisma/client generados).
+RUN /app/node_modules/.bin/prisma generate --schema=prisma/schema.prisma
 
 EXPOSE 3001
 CMD ["sh", "-c", "prisma migrate deploy && node dist/main"]
