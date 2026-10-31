@@ -7,13 +7,18 @@ WORKDIR /repo
 
 # El lockfile de pnpm cubre el workspace completo, asi que para instalar solo
 # la API hacen falta los package.json de todos los importadores (aunque no su
-# codigo). `prisma/` va antes del install porque el postinstall de la raiz
-# ejecuta `prisma generate` y ese necesita el schema.
+# codigo). `prisma/` va antes del install porque `prisma generate` necesita el
+# schema. `--ignore-scripts` evita que el postinstall de @prisma/client intente
+# generar el cliente antes de que el schema este disponible.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY prisma ./prisma
 COPY api/package.json api/
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --filter=api... --filter=Ecommerce --ignore-scripts
+
+# Generar el cliente Prisma ANTES del build de Nest, para que TypeScript
+# tenga los tipos de PrismaService y las entidades (Product, User, Order, etc.)
+RUN pnpm exec prisma generate --schema=prisma/schema.prisma
 
 COPY api/tsconfig*.json api/nest-cli.json ./api/
 COPY api/src ./api/src
@@ -25,12 +30,9 @@ RUN pnpm --filter=api run build
 # inject-workspace-packages para el deploy sin ese flag.
 RUN pnpm --filter=api deploy --prod --legacy /app
 
-# El cliente Prisma generado por el postinstall vive dentro del store de pnpm
-# y NO viaja con `pnpm deploy` (no forma parte del paquete): hay regenerarlo
-# ya dentro de /app, donde el runtime lo encontrara.
 WORKDIR /app
-COPY prisma ./prisma
-RUN /repo/node_modules/.bin/prisma generate --schema=prisma/schema.prisma
+# El cliente Prisma ya esta generado dentro de node_modules/@prisma/client
+# y viaja con pnpm deploy. No hace falta regenerar aqui.
 
 FROM node:22-alpine AS production
 WORKDIR /app
