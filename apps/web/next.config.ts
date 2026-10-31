@@ -6,7 +6,7 @@ const DEV_API = "http://localhost:3001";
 
 const SERVER_API = (() => {
   const url = process.env.API_URL;
-  if (url) return url;
+  if (url) return url.replace(/\/+$/, "");
   if (isProd) {
     throw new Error(
       "API_URL no esta definida. En produccion el SSR y el proxy /api/proxy fallarian en silencio apuntando a localhost.",

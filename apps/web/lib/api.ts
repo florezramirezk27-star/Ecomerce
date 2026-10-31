@@ -47,8 +47,8 @@ function parseApiErrorDetails(value: unknown): ApiErrorDetail[] {
 }
 
 export const API_URL = isServer
-  ? (process.env.API_URL || 'http://localhost:3001')
-  : (process.env.NEXT_PUBLIC_API_URL || '/api/proxy');
+  ? (process.env.API_URL || 'http://localhost:3001').replace(/\/+$/, '')
+  : (process.env.NEXT_PUBLIC_API_URL || '/api/proxy').replace(/\/+$/, '');
 
 // El token de sesion no se guarda en ningun sitio del navegador. Solo viaja en
 // la cookie httpOnly que pone la API, y por eso estas peticiones van siempre con
@@ -193,7 +193,7 @@ export async function apiFetch(
   }
 
   let response = await fetchWithRetry(
-    `${API_URL}${endpoint}`,
+    `${API_URL}${endpoint.replace(/^\//, '')}`,
     {
       ...options,
       headers,

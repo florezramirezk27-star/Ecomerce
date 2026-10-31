@@ -19,7 +19,7 @@
         "lint": "pnpm --dir apps/web lint",
         "prisma:generate": "prisma generate",
         "prisma:migrate": "prisma migrate dev",
-        "postinstall": "prisma generate"
+        "postinstall": "prisma generate --schema=prisma/schema.prisma"
     },
     "keywords": [],
     "author": "",

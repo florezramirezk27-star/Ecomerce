@@ -13,7 +13,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY prisma ./prisma
 COPY api/package.json api/
 COPY apps/web/package.json apps/web/
-RUN pnpm install --frozen-lockfile --filter=api... --filter=Ecommerce
+RUN pnpm install --frozen-lockfile --filter=api... --filter=Ecommerce --ignore-scripts
 
 COPY api/tsconfig*.json api/nest-cli.json ./api/
 COPY api/src ./api/src
