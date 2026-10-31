@@ -7,6 +7,35 @@ const OFTALMIEL_OFFER_UNIT_PRICES = {
 };
 
 /**
+ * Precios unitarios de la promocion por cantidad de Aceite de Orégano (COP).
+ * Unidad normal: $69.900.
+ * - 2 frascos: $109.900 en total -> $54.950 c/u.
+ * - 3 frascos: $139.800 en total ("paga 2 y lleva 3") -> $46.600 c/u.
+ *
+ * Coinciden con `BULK_TOTALS` de
+ * `apps/web/components/landings/AceiteOreganoLanding.tsx`, asi que el precio
+ * que se muestra en la landing es exactamente el que se cobra en el carrito.
+ */
+const ACEITE_OREGANO_OFFER_UNIT_PRICES = {
+  single: 69_900,
+  double: 54_950,
+  family: 46_600,
+};
+
+function normalize(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function isAceiteOreganoProduct(product: PricedProduct): boolean {
+  return normalize(`${product.name} ${product.slug}`).includes(
+    'aceite de oregano',
+  );
+}
+
+/**
  * Producto con lo justo para calcular el precio.
  *
  * `price` acepta tambien numeros y strings ademas del `Decimal` de Prisma:
@@ -19,7 +48,7 @@ type PricedProduct = Pick<Product, 'name' | 'slug'> & {
 };
 
 /**
- * Precio unitario de la promocion por cantidad (solo Oftalmiel).
+ * Precio unitario de la promocion por cantidad.
  *
  * Se aplica UNICAMENTE a las lineas marcadas con `promotion` (las que salen
  * del selector de promociones de la landing). Ver `getLineUnitPrice`.
@@ -29,11 +58,20 @@ export function getProductUnitPrice(
   quantity: number,
 ): number {
   const regularPrice = Number(product.price);
-  const isOftalmiel = `${product.name} ${product.slug}`
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .includes('oftalmiel');
+
+  if (isAceiteOreganoProduct(product)) {
+    const offerPrice =
+      quantity >= 3
+        ? ACEITE_OREGANO_OFFER_UNIT_PRICES.family
+        : quantity >= 2
+          ? ACEITE_OREGANO_OFFER_UNIT_PRICES.double
+          : ACEITE_OREGANO_OFFER_UNIT_PRICES.single;
+    return Math.min(regularPrice, offerPrice);
+  }
+
+  const isOftalmiel = normalize(`${product.name} ${product.slug}`).includes(
+    'oftalmiel',
+  );
 
   if (!isOftalmiel) return regularPrice;
 
