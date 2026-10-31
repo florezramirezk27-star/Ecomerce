@@ -72,8 +72,8 @@ const PRODUCT_NAME = "Glucora";
  * aunque se elija una oferta.
  */
 const BULK_TOTALS: Readonly<Record<2 | 3, number | null>> = {
-  2: 109_900,
-  3: 139_800,
+  2: 149_900,
+  3: null,
 };
 
 interface MediaVideo {
@@ -356,13 +356,23 @@ function buildTiers(unitPrice: number): OfferTier[] {
   }
   const triple = BULK_TOTALS[3];
   if (triple !== null) {
+    const saving = unitPrice * 3 - triple;
     tiers.push({
       qty: 3,
       total: triple,
       regularTotal: unitPrice * 3,
-      note: "Paga 2 y lleva 3",
+      note: saving > 0 ? `Promoción: ahorras ${formatCop(saving)}` : "Promoción",
     });
   }
+  // Combo de 3: "paga 2 y lleve 3" -> total = 2 x precio unitario
+  const tripleTotal = unitPrice * 2;
+  const savingTriple = unitPrice * 3 - tripleTotal;
+  tiers.push({
+    qty: 3,
+    total: tripleTotal,
+    regularTotal: unitPrice * 3,
+    note: savingTriple > 0 ? `Paga 2 y lleva 3 (ahorras ${formatCop(savingTriple)})` : "Paga 2 y lleva 3",
+  });
   return tiers;
 }
 
@@ -505,27 +515,25 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
     const el = trackRef.current;
     if (!el) return;
 
-    const mobile = window.matchMedia("(max-width: 767px)");
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let raf = 0;
-    let last = 0;
-    let pos = el.scrollLeft;
+      const mobile = window.matchMedia("(max-width: 767px)");
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+      let raf = 0;
+      let last = 0;
+      let pos = el.scrollLeft;
 
-    const step = (now: number) => {
-      raf = window.requestAnimationFrame(step);
-      const dt = last ? now - last : 0;
-      last = now;
-      // Fuera de móvil, con movimiento reducido o en pausa, se sigue la
-      // posición real para retomar desde donde el usuario dejó el scroll.
-      if (!mobile.matches || reduced.matches || pausedRef.current) {
-        pos = el.scrollLeft;
-        return;
-      }
-      pos += dt * 0.035; // ≈ 35 px/s
-      const half = el.scrollWidth / 2;
-      if (half > 0 && pos >= half) pos -= half;
-      el.scrollLeft = pos;
-    };
+      const step = (now: number) => {
+        raf = window.requestAnimationFrame(step);
+        const dt = last ? now - last : 0;
+        last = now;
+        if (reduced.matches || pausedRef.current) {
+          pos = el.scrollLeft;
+          return;
+        }
+        pos += dt * 0.035; // ≈ 35 px/s
+        const half = el.scrollWidth / 2;
+        if (half > 0 && pos >= half) pos -= half;
+        el.scrollLeft = pos;
+      };
 
     raf = window.requestAnimationFrame(step);
     return () => {
@@ -555,7 +563,7 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
   const card = (item: Review, key: string) => (
     <figure
       key={key}
-      className="flex w-80 shrink-0 flex-col justify-between rounded-2xl border border-[var(--gl-stone-2)] bg-white p-5 md:w-auto"
+      className="flex w-80 shrink-0 flex-col justify-between rounded-2xl border border-[var(--gl-stone-2)] bg-white p-5"
     >
       <div className="space-y-3">
         <Stars value={item.stars} />
@@ -575,7 +583,7 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
   return (
     <div
       ref={trackRef}
-      className="gl-hide-scrollbar flex overflow-x-auto md:grid md:grid-cols-2 md:gap-4 md:overflow-visible lg:grid-cols-3"
+      className="gl-hide-scrollbar flex overflow-x-auto gap-4"
       onMouseEnter={pause}
       onMouseLeave={() => resume(0)}
       onTouchStart={pause}
@@ -585,10 +593,10 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
       onBlur={() => resume(0)}
     >
       {/* Dos grupos idénticos: al terminar el primero el salto es invisible. */}
-      <div className="flex shrink-0 gap-4 pr-4 md:contents">
+      <div className="flex shrink-0 gap-4 pr-4">
         {items.map((item, i) => card(item, `a-${i}`))}
       </div>
-      <div className="flex shrink-0 gap-4 pr-4 md:hidden" aria-hidden="true">
+      <div className="flex shrink-0 gap-4 pr-4" aria-hidden="true">
         {items.map((item, i) => card(item, `b-${i}`))}
       </div>
     </div>
@@ -719,7 +727,7 @@ export default function GlucoraLanding({
           --gl-turmeric: #e8a020;
           --gl-cinnamon: #a0643a;
           --gl-bone: #f4ede4;
-          --gl-stone: #f4f7f2;
+          --gl-stone: #fafbf7;
           --gl-stone-2: #d9d2c6;
           --gl-ink: #24161a;
         }
