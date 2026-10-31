@@ -345,70 +345,6 @@ function UrgencyMarquee() {
   );
 }
 
-/** Contador regresivo. Comparte la hora de fin con el aviso de la ficha. */
-function OfferCountdown({ endTime }: { endTime: number | null }) {
-  const [remaining, setRemaining] = useState<{
-    hours: number;
-    minutes: number;
-    seconds: number;
-  } | null>(null);
-
-  useEffect(() => {
-    let end = endTime ?? getOfferEndTime();
-    const tick = () => {
-      const r = getOfferRemaining(end);
-      // Vencida la oferta se genera una nueva: el contador no se queda en cero.
-      if (r.total <= 0) end = getOfferEndTime();
-      setRemaining({ hours: r.hours, minutes: r.minutes, seconds: r.seconds });
-    };
-    // Primer tick fuera del cuerpo del efecto: sin `localStorage` en el primer
-    // render del servidor, la hora se resuelve ya montado.
-    const first = window.setTimeout(tick, 0);
-    const id = window.setInterval(tick, 1000);
-    return () => {
-      window.clearTimeout(first);
-      window.clearInterval(id);
-    };
-  }, [endTime]);
-
-  const cells: readonly { label: string; value: number | null }[] = [
-    { label: "Horas", value: remaining?.hours ?? null },
-    { label: "Minutos", value: remaining?.minutes ?? null },
-    { label: "Segundos", value: remaining?.seconds ?? null },
-  ];
-
-  return (
-    <div className="rounded-2xl border border-green-200 bg-green-50/70 px-3 py-3 sm:px-5">
-      <p className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-[var(--nb-green-800)]">
-        ¡Oferta por tiempo limitado! Envío gratis si ordenas en:
-      </p>
-      <div
-        className="flex items-start justify-center gap-2 select-none"
-        role="timer"
-        aria-live="off"
-      >
-        {cells.map((cell, index) => (
-          <div key={cell.label} className="flex items-start gap-2">
-            <div className="flex flex-col items-center">
-              <span className="min-w-14 rounded-lg bg-[var(--nb-green-950)] px-2 py-1.5 text-center text-3xl font-bold leading-none text-white tabular-nums">
-                {cell.value === null ? "--" : pad2(cell.value)}
-              </span>
-              <span className="mt-1 text-[10px] uppercase tracking-wider text-gray-500">
-                {cell.label}
-              </span>
-            </div>
-            {index < cells.length - 1 ? (
-              <span className="pt-1 text-3xl font-bold leading-none text-[var(--nb-green-950)]">
-                :
-              </span>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /** 9. Testimonios: grid en escritorio, auto-scroll horizontal en móvil. */
 function TestimonialsCarousel({ items }: { items: readonly Testimonial[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -571,12 +507,6 @@ export default function AceiteOreganoLanding({
 
   const selectedTier = tiers.find((t) => t.qty === selectedQty) ?? null;
 
-  const endTime = useMemo(() => {
-    if (!offerEndTime) return null;
-    const parsed = Date.parse(offerEndTime);
-    return Number.isFinite(parsed) ? parsed : null;
-  }, [offerEndTime]);
-
   const heroImage = product.image ? cld(product.image) : null;
   const galleryItems: readonly MediaImage[] = useMemo(() => {
     if (GALLERY.length > 0) return GALLERY;
@@ -667,7 +597,7 @@ export default function AceiteOreganoLanding({
       <UrgencyMarquee />
 
       {/* 2. Hero */}
-      <section className="bg-gradient-to-b from-green-50 via-white to-[var(--nb-cream)] px-4 pb-12 pt-8 sm:pt-12 lg:pb-16 lg:pt-16">
+      <section className="bg-[var(--nb-cream)] px-4 pb-12 pt-8 sm:pt-12 lg:pb-16 lg:pt-16">
         <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-8 lg:grid-cols-12 lg:gap-10">
           <div className="lg:col-span-5">
             <div className="relative mx-auto w-full max-w-sm rounded-3xl border border-green-200 bg-white p-3 shadow-xl">
@@ -837,8 +767,6 @@ export default function AceiteOreganoLanding({
                 </div>
               ) : null}
             </div>
-
-            <OfferCountdown endTime={endTime} />
 
             <div>
               <button
@@ -1075,6 +1003,24 @@ export default function AceiteOreganoLanding({
               title="Lo que dicen nuestros clientes en Colombia"
             />
             <TestimonialsCarousel items={TESTIMONIALS} />
+          </div>
+        </section>
+      ) : null}
+
+      {/* Videos del producto (debajo del carrusel de testimonios).
+         Llena el array `VIDEOS` arriba para que se muestren. */}
+      {VIDEOS.length > 0 ? (
+        <section className="border-t border-green-100 bg-white px-4 py-12">
+          <div className="mx-auto max-w-6xl space-y-8">
+            <SectionHeading
+              eyebrow="Míralo en acción"
+              title={`Conoce más sobre ${PRODUCT_SHORT_NAME}`}
+            />
+            <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+              {VIDEOS.map((video) => (
+                <VideoCard key={video.src} video={video} />
+              ))}
+            </div>
           </div>
         </section>
       ) : null}
