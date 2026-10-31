@@ -93,14 +93,104 @@ interface Testimonial {
   rating: 1 | 2 | 3 | 4 | 5;
 }
 
+interface Review {
+  name: string;
+  stars: 1 | 2 | 3 | 4 | 5;
+  title: string;
+  text: string;
+}
+
+const REVIEWS: readonly Review[] = [
+  {
+    name: "Camila R.",
+    stars: 5,
+    title: "¡Excelente para las defensas!",
+    text: "Llevo usándolo un par de semanas todas las mañanas y la verdad he notado un cambio positivo en mi energía y bienestar general. El sabor es fuerte, como es de esperarse por el orégano, pero me lo tomo con un poco de jugo y listo. Me da mucha confianza que tenga semilla negra y vitamina E. ¡Muy recomendado!",
+  },
+  {
+    name: "Esteban M.",
+    stars: 5,
+    title: "Súper práctico y natural",
+    text: "Compré estas gotas porque buscaba un apoyo natural para la salud respiratoria y la digestión, y me ha encantado. El gotero es muy cómodo de usar y rinde bastante. Se nota que es un producto de buena calidad.",
+  },
+  {
+    name: "Valeria G.",
+    stars: 5,
+    title: "Me ayudó muchísimo en temporada de cambios de clima",
+    text: "Siempre que cambia el clima sufro de la garganta y las vías respiratorias. Empecé a tomar este aceite de orégano con semilla negra preventivamente y este año la historia ha sido totalmente distinta. Definitivamente se quedó en mi rutina diaria.",
+  },
+  {
+    name: "Felipe T.",
+    stars: 5,
+    title: "Calidad y buen rendimiento",
+    text: "Lo que más me gusta es la combinación de ingredientes (orégano, semilla negra y vitamina E), ya que te ahorra tener que comprar varios suplementos por separado. Lo tomo con un poco de agua y miel para suavizar el sabor. ¡Excelente compra!",
+  },
+  {
+    name: "Andrea P.",
+    stars: 4,
+    title: "Muy bueno, aunque el sabor es fuerte",
+    text: "El producto cumple con lo que promete, siento que me ayuda bastante con la digestión y el sistema inmune. Le doy 4 estrellas solo porque el sabor del orégano puro es bastante intenso al principio, pero te acostumbras si lo diluyes bien en agua o té.",
+  },
+  {
+    name: "Mateo L.",
+    stars: 4,
+    title: "Llegó rápido y funciona bien",
+    text: "El paquete llegó en perfecto estado y muy rápido. Llevo pocos días usándolo pero ya noto una sensación de bienestar general. Me gusta que sea un suplemento 100% natural.",
+  },
+  {
+    name: "Sofía D.",
+    stars: 4,
+    title: "Buen antioxidante diario",
+    text: "Lo uso principalmente por sus propiedades antioxidantes y para cuidar la piel desde adentro gracias a la vitamina E. La textura es ligera y se absorbe bien. Recomiendo leer bien las instrucciones para no pasarse con las gotas.",
+  },
+  {
+    name: "Javier S.",
+    stars: 5,
+    title: "¡Una maravilla para la salud diaria!",
+    text: "Tenía mis dudas al principio, pero la combinación con aceite de semilla negra es un plus grandísimo. Me siento con más defensas y con menos pesadez estomacal después de las comidas. Definitivamente lo volveré a pedir cuando se me acabe.",
+  },
+  {
+    name: "Lucía M.",
+    stars: 3,
+    title: "Es bueno, pero hay que saber tomarlo",
+    text: "El aceite como tal es de buena calidad y los ingredientes son excelentes. Sin embargo, si no te gustan los sabores herbales fuertes, te advierto que sabe bastante a orégano concentrado. Si lo mezclas con jugo de naranja casi ni se siente. Funcional, pero requiere maña para tomarlo.",
+  },
+  {
+    name: "Carlos H.",
+    stars: 5,
+    title: "Superó mis expectativas",
+    text: "Estaba buscando un suplemento dietario que me ayudara con el sistema inmune y la respiración de forma natural y este dio en el clavo. El gotero facilita mucho la dosis exacta y los 30 ml rinden bastante bien. ¡Cinco estrellas bien merecidas!",
+  },
+];
+
 /** TODO(MEDIA): video principal del hero. Si es `null` se usa la foto del producto. */
 const HERO_VIDEO: MediaVideo | null = null;
 
-/** TODO(MEDIA): videos del producto (sección 4). Vacío = sección oculta. */
-const VIDEOS: readonly MediaVideo[] = [];
+/** Videos del producto (sección 4). Vacío = sección oculta. */
+const VIDEOS: readonly MediaVideo[] = [
+  {
+    src: "/landings/aceite-oregano/videos/video-oregano-1.mp4",
+    title: "Cómo usar el aceite de orégano",
+    caption: "Tutorial rápido de aplicación y dosis diaria.",
+  },
+  {
+    src: "/landings/aceite-oregano/videos/video-oregano-2.mp4",
+    title: "Beneficios del aceite de orégano con semilla negra",
+    caption: "Descubre por qué es ideal para tu rutina diaria de bienestar.",
+  },
+];
 
-/** TODO(MEDIA): fotos de la galería. Vacío = se usa solo la foto del producto. */
-const GALLERY: readonly MediaImage[] = [];
+/** Fotos de la galería del producto. */
+const GALLERY: readonly MediaImage[] = [
+  {
+    src: "/landings/aceite-oregano/images/galeria-1.png",
+    alt: `${PRODUCT_SHORT_NAME}, frasco gotero de 30 ml`,
+  },
+  {
+    src: "/landings/aceite-oregano/images/galeria-2.png",
+    alt: `${PRODUCT_SHORT_NAME}, ingredientes naturales`,
+  },
+];
 
 /**
  * TODO(RESULTADOS): fotos o capturas de clientes REALES con su permiso.
@@ -447,6 +537,108 @@ function TestimonialsCarousel({ items }: { items: readonly Testimonial[] }) {
         {items.map((item, i) => card(item, `a-${i}`))}
       </div>
       <div className="flex shrink-0 gap-4 pr-4 md:hidden" aria-hidden="true">
+        {items.map((item, i) => card(item, `b-${i}`))}
+      </div>
+    </div>
+  );
+}
+
+/** Reseñas con auto-scroll horizontal continuo. */
+function ReviewsCarousel({ items }: { items: readonly Review[] }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const pausedRef = useRef(false);
+  const resumeTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let raf = 0;
+    let last = 0;
+    let pos = el.scrollLeft;
+
+    const step = (now: number) => {
+      raf = window.requestAnimationFrame(step);
+      const dt = last ? now - last : 0;
+      last = now;
+      if (reduced.matches || pausedRef.current) {
+        pos = el.scrollLeft;
+        return;
+      }
+      pos += dt * 0.04; // ≈ 40 px/s
+      const half = el.scrollWidth / 2;
+      if (half > 0 && pos >= half) pos -= half;
+      el.scrollLeft = pos;
+    };
+
+    raf = window.requestAnimationFrame(step);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      if (resumeTimerRef.current !== null) {
+        window.clearTimeout(resumeTimerRef.current);
+        resumeTimerRef.current = null;
+      }
+    };
+  }, [items.length]);
+
+  const pause = () => {
+    if (resumeTimerRef.current !== null) {
+      window.clearTimeout(resumeTimerRef.current);
+      resumeTimerRef.current = null;
+    }
+    pausedRef.current = true;
+  };
+  const resume = (delayMs: number) => {
+    if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = window.setTimeout(() => {
+      pausedRef.current = false;
+      resumeTimerRef.current = null;
+    }, delayMs);
+  };
+
+  const stars = (rating: number) =>
+    Array.from({ length: rating }, (_, i) => (
+      <span key={i} aria-hidden="true" style={{ color: "#ca8a04" }}>
+        ★
+      </span>
+    ));
+
+  const card = (item: Review, key: string) => (
+    <figure
+      key={key}
+      className="flex w-80 shrink-0 flex-col justify-between rounded-2xl border border-green-200 bg-white p-5 shadow-sm"
+    >
+      <div>
+        <div className="mb-3 flex text-yellow-500" role="img" aria-label={`${item.stars} de 5 estrellas`}>
+          {stars(item.stars)}
+        </div>
+        <h3 className="mb-2 text-sm font-bold text-gray-900">{item.title}</h3>
+        <blockquote className="text-sm italic text-gray-700">
+          “{item.text}”
+        </blockquote>
+      </div>
+      <figcaption className="mt-4 border-t border-green-200 pt-3 text-xs">
+        <span className="block font-bold text-gray-900">{item.name}</span>
+      </figcaption>
+    </figure>
+  );
+
+  return (
+    <div
+      ref={trackRef}
+      className="nb-hide-scrollbar flex overflow-x-auto gap-4"
+      onMouseEnter={pause}
+      onMouseLeave={() => resume(0)}
+      onTouchStart={pause}
+      onTouchEnd={() => resume(2000)}
+      onTouchCancel={() => resume(2000)}
+    >
+      {/* Dos grupos idénticos: al terminar el primero el salto es invisible. */}
+      <div className="flex shrink-0 gap-4 pr-4">
+        {items.map((item, i) => card(item, `a-${i}`))}
+      </div>
+      <div className="flex shrink-0 gap-4 pr-4" aria-hidden="true">
         {items.map((item, i) => card(item, `b-${i}`))}
       </div>
     </div>
@@ -837,23 +1029,6 @@ export default function AceiteOreganoLanding({
         </div>
       </section>
 
-      {/* 4. Videos del producto (solo con videos cargados) */}
-      {VIDEOS.length > 0 ? (
-        <section className="border-t border-green-100 bg-white px-4 py-12">
-          <div className="mx-auto max-w-6xl space-y-8">
-            <SectionHeading
-              eyebrow="Míralo en acción"
-              title={`Conoce más sobre ${PRODUCT_SHORT_NAME}`}
-            />
-            <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
-              {VIDEOS.map((video) => (
-                <VideoCard key={video.src} video={video} />
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
       {/* 5. Ingredientes y beneficios */}
       <section className="bg-[var(--nb-cream)] px-4 py-16">
         <div className="mx-auto max-w-6xl space-y-10">
@@ -994,6 +1169,20 @@ export default function AceiteOreganoLanding({
         </section>
       ) : null}
 
+      {/* Reseñas de clientes (auto-scroll horizontal) */}
+      {REVIEWS.length > 0 ? (
+        <section className="bg-[var(--nb-cream)] px-4 py-14">
+          <div className="mx-auto max-w-6xl space-y-8">
+            <SectionHeading
+              eyebrow="Reseñas de clientes"
+              title="Lo que dicen quienes ya lo probaron"
+              subtitle="Opiniones reales de personas que usan el aceite de orégano con semilla negra y vitamina E."
+            />
+            <ReviewsCarousel items={REVIEWS} />
+          </div>
+        </section>
+      ) : null}
+
       {/* 9. Testimonios (solo con opiniones reales) */}
       {TESTIMONIALS.length > 0 ? (
         <section className="overflow-hidden bg-[var(--nb-cream)] px-4 py-14">
@@ -1007,7 +1196,7 @@ export default function AceiteOreganoLanding({
         </section>
       ) : null}
 
-      {/* Videos del producto (debajo del carrusel de testimonios).
+      {/* Videos del producto (debajo de las reseñas).
          Llena el array `VIDEOS` arriba para que se muestren. */}
       {VIDEOS.length > 0 ? (
         <section className="border-t border-green-100 bg-white px-4 py-12">
@@ -1021,6 +1210,19 @@ export default function AceiteOreganoLanding({
                 <VideoCard key={video.src} video={video} />
               ))}
             </div>
+          </div>
+        </section>
+      ) : null}
+
+      {/* 9. Testimonios (solo con opiniones reales) */}
+      {TESTIMONIALS.length > 0 ? (
+        <section className="overflow-hidden bg-[var(--nb-cream)] px-4 py-14">
+          <div className="mx-auto max-w-6xl space-y-8">
+            <SectionHeading
+              eyebrow="Confianza real"
+              title="Lo que dicen nuestros clientes en Colombia"
+            />
+            <TestimonialsCarousel items={TESTIMONIALS} />
           </div>
         </section>
       ) : null}
