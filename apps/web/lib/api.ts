@@ -184,6 +184,8 @@ export async function apiFetch(
 
   const isSafeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(method);
 
+  const requestUrl = `${API_URL}/${endpoint.replace(/^\/+/, '')}`;
+
   if (!isSafeMethod) {
     await ensureCsrfCookie();
     const csrfToken = getCsrfToken();
@@ -193,7 +195,7 @@ export async function apiFetch(
   }
 
   let response = await fetchWithRetry(
-    `${API_URL}${endpoint.replace(/^\//, '')}`,
+    requestUrl,
     {
       ...options,
       headers,
@@ -214,7 +216,7 @@ export async function apiFetch(
       const fresh = getCsrfToken();
       if (fresh) headers['X-CSRF-Token'] = fresh;
       response = await fetchWithRetry(
-        `${API_URL}${endpoint}`,
+        requestUrl,
         {
           ...options,
           headers,
@@ -230,7 +232,7 @@ export async function apiFetch(
       if (fresh) headers['X-CSRF-Token'] = fresh;
     }
     response = await fetchWithRetry(
-      `${API_URL}${endpoint}`,
+      requestUrl,
       {
         ...options,
         headers,
