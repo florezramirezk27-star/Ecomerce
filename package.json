@@ -18,8 +18,7 @@
         "test": "pnpm --dir api test",
         "lint": "pnpm --dir apps/web lint",
         "prisma:generate": "prisma generate",
-        "prisma:migrate": "prisma migrate dev",
-        "postinstall": "prisma generate --schema=prisma/schema.prisma"
+        "prisma:migrate": "prisma migrate dev"
     },
     "keywords": [],
     "author": "",
