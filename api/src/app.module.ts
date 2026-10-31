@@ -48,7 +48,6 @@ function positiveIntegerEnv(name: string, fallback: number): number {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
     }),
     RedisModule,
     CacheModule,
