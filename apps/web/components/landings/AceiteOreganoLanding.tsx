@@ -4,31 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProductImage from "@/components/ProductImage";
 
-/**
- * Landing de "Gotas líquidas de Aceite de Orégano con Aceite de Semilla Negra"
- * (NutriBella, 30 ml). Estructura y orden de secciones tomados de la landing de
- * Oftalmiel (`public/landing/oftalmiel/index.html`), pero como componente React
- * dentro de la ficha del producto: sin iframe, sin `postMessage` y sin CDN.
- *
- * Se monta en `app/products/[slug]/page.tsx`, debajo de "Productos similares",
- * cuando `product.slug === LANDING_SLUG`.
- *
- * Todo lo que NO se pudo inventar con honestidad (precios de oferta, videos,
- * testimonios, resultados, garantía, registro sanitario) vive en las constantes
- * de la sección "CONTENIDO" marcadas con `TODO`. Una sección que depende de un
- * dato vacío no se pinta: así nunca sale a producción un testimonio, un
- * resultado o un descuento inventados.
- */
-
-/* ------------------------------------------------------------------------- */
-/* Contrato de integración                                                    */
-/* ------------------------------------------------------------------------- */
-
 interface LandingProduct {
   id: string;
   name: string;
   slug: string;
-  /** Precio normal unitario. */
   price: string | number;
   image?: string | null;
   stock?: number;
@@ -36,43 +15,16 @@ interface LandingProduct {
 
 interface LandingProps {
   product: LandingProduct;
-  /** La página de producto llama a `handleAddToCart`; devuelve true si se agregó. */
   onAddToCart: (
     quantity: number,
     opts?: { promotion?: boolean },
   ) => Promise<boolean>;
-  /** Fecha límite del contador (ISO 8601, opcional). */
   offerEndTime?: string | null;
 }
 
-/** Slug con el que la página de producto decide montar esta landing. */
 export const LANDING_SLUG = "aceite-oregano";
 
-/* ------------------------------------------------------------------------- */
-/* CONTENIDO                                                                  */
-/* ------------------------------------------------------------------------- */
-
-const PRODUCT_SHORT_NAME = "Aceite de Orégano";
-
-/**
- * Total de la promoción por cantidad (COP). Unidad normal: $69.900.
- * - 2 frascos: $109.900 (promoción).
- * - 3 frascos: "paga 2 y lleva 3" = 2 × $69.900 = $139.800.
- *
- * ADVERTENCIA: estos totales son lo que se MUESTRA. Lo que se cobra lo
- * calculan `getProductUnitPrice`/`getLineUnitPrice` (web) y su gemela en
- * `api/src/common/utils/product-promotion.ts`, y hoy ambas devuelven el precio
- * normal para cualquier producto que no sea Oftalmiel. Hasta que el backend
- * conozca este producto, el carrito cobrará precio normal × cantidad aunque
- * se elija una tarjeta.
- */
-const BULK_TOTALS: Readonly<Record<2 | 3, number | null>> = {
-  2: 109_900,
-  3: 139_800,
-};
-
 interface MediaVideo {
-  /** URL de Cloudinary (se le agrega `q_auto,f_auto`). */
   src: string;
   poster?: string;
   title: string;
@@ -98,6 +50,94 @@ interface Review {
   title: string;
   text: string;
 }
+
+const PRODUCT_SHORT_NAME = "Aceite de Orégano";
+
+const BULK_TOTALS: Readonly<Record<2 | 3, number | null>> = {
+  2: 109_900,
+  3: 139_800,
+};
+
+const MAX_QUANTITY = 10;
+
+const HERO_VIDEO: MediaVideo | null = null;
+
+const VIDEOS: readonly MediaVideo[] = [
+  {
+    src: "/landings/aceite-oregano/videos/video-oregano-1.mp4",
+    title: "Cómo usar el aceite de orégano",
+    caption: "Tutorial rápido de aplicación y dosis diaria.",
+  },
+  {
+    src: "/landings/aceite-oregano/videos/video-oregano-2.mp4",
+    title: "Beneficios del aceite de orégano con semilla negra",
+    caption: "Descubre por qué es ideal para tu rutina diaria de bienestar.",
+  },
+];
+
+const GALLERY: readonly MediaImage[] = [
+  {
+    src: "/landings/aceite-oregano/images/galeria-1.png",
+    alt: `${PRODUCT_SHORT_NAME}, frasco gotero de 30 ml`,
+  },
+  {
+    src: "/landings/aceite-oregano/images/galeria-2.png",
+    alt: `${PRODUCT_SHORT_NAME}, ingredientes naturales`,
+  },
+];
+
+const RESULTS: readonly MediaImage[] = [];
+
+const TESTIMONIALS: readonly Testimonial[] = [];
+
+const MARQUEE_ITEMS: readonly { strong: string; rest: string }[] = [
+  { strong: "ENVÍO GRATIS", rest: "A TODA COLOMBIA" },
+  { strong: "PAGO CONTRA ENTREGA:", rest: "paga al recibir en casa" },
+  { strong: "COMPRA SEGURA", rest: "Y RECIBE EN LA PUERTA DE TU CASA" },
+  { strong: "OFERTA ESPECIAL", rest: "POR TIEMPO LIMITADO" },
+];
+
+const QUICK_BENEFITS: readonly string[] = [
+  "Apoyo para tus defensas",
+  "Fuente de antioxidantes",
+  "Fórmula natural",
+  "Frasco gotero de 30 ml",
+];
+
+const SIGNS: readonly { icon: string; title: string; text: string }[] = [
+  {
+    icon: "🌦️",
+    title: "Cambios de clima",
+    text: "Los cambios bruscos de temperatura y los ambientes cargados exigen más a tu cuerpo.",
+  },
+  {
+    icon: "⚡",
+    title: "Bajas defensas",
+    text: "Resfriados frecuentes, cansancio constante y falta de energía son señales de alerta.",
+  },
+  {
+    icon: "🍽️",
+    title: "Problemas digestivos",
+    text: "Inflamación, pesadez estomacal y digestión lenta afectan tu día a día.",
+  },
+  {
+    icon: "🛡️",
+    title: "Sistema inmune",
+    text: "Refuerza tus barreras naturales con antioxidantes y compuestos protectores.",
+  },
+];
+
+const USAGE_STEPS: readonly { title: string; text: string }[] = [
+  { title: "Agita", text: "Agita bien el frasco antes de cada uso." },
+  { title: "Dosis", text: "Coloca las gotas indicadas bajo la lengua o en agua." },
+  { title: "Rutina", text: "Tómalo diariamente, preferiblemente en ayunas." },
+];
+
+const GUARANTEE_TEXT: string | null = null;
+
+const SANITARY_REGISTRY: string | null = null;
+
+const DISCLAIMER = "Este producto es un suplemento dietario. No es un medicamento. No se usa para diagnosticar, tratar, curar o prevenir ninguna enfermedad. Consulta con un profesional de la salud antes de usarlo si estás embarazada, amamantando o bajo tratamiento médico.";
 
 const REVIEWS: readonly Review[] = [
   {
@@ -162,275 +202,82 @@ const REVIEWS: readonly Review[] = [
   },
 ];
 
-/** TODO(MEDIA): video principal del hero. Si es `null` se usa la foto del producto. */
-const HERO_VIDEO: MediaVideo | null = null;
-
-/** Fotos de la galería del producto. */
-const GALLERY: readonly MediaImage[] = [
-  {
-    src: "/landings/aceite-oregano/images/galeria-1.png",
-    alt: `${PRODUCT_SHORT_NAME}, frasco gotero de 30 ml`,
-  },
-  {
-    src: "/landings/aceite-oregano/images/galeria-2.png",
-    alt: `${PRODUCT_SHORT_NAME}, ingredientes naturales`,
-  },
-];
-
-/** Videos del producto (sección 4). */
-const VIDEOS: readonly MediaVideo[] = [
-  {
-    src: "/landings/aceite-oregano/videos/video-oregano-1.mp4",
-    title: "Cómo usar el aceite de orégano",
-    caption: "Tutorial rápido de aplicación y dosis diaria.",
-  },
-  {
-    src: "/landings/aceite-oregano/videos/video-oregano-2.mp4",
-    title: "Beneficios del aceite de orégano con semilla negra",
-    caption: "Descubre por qué es ideal para tu rutina diaria de bienestar.",
-  },
-];
-
-/**
- * TODO(RESULTADOS): fotos o capturas de clientes REALES con su permiso.
- * Vacío = sección oculta.
- */
-const RESULTS: readonly MediaImage[] = [];
-
-/**
- * TODO(TESTIMONIOS): opiniones REALES de clientes. Vacío = sección oculta.
- * No se rellena con textos de ejemplo.
- */
-const TESTIMONIALS: readonly Testimonial[] = [];
-
-/** TODO(GARANTIA): texto de la garantía, solo si la tienda la ofrece de verdad. */
-const GUARANTEE_TEXT: string | null = null;
-
-/** TODO(INVIMA): número de registro o notificación sanitaria, si aplica. */
-const SANITARY_REGISTRY: string | null = null;
-
-const MARQUEE_ITEMS: readonly { strong: string; rest: string }[] = [
-  { strong: "ENVÍO GRATIS", rest: "A TODA COLOMBIA" },
-  { strong: "PAGO CONTRA ENTREGA:", rest: "paga al recibir en casa" },
-  { strong: "COMPRA SEGURA", rest: "Y RECIBE EN LA PUERTA DE TU CASA" },
-  { strong: "OFERTA ESPECIAL", rest: "POR TIEMPO LIMITADO" },
-];
-
-const QUICK_BENEFITS: readonly string[] = [
-  "Apoyo para tus defensas",
-  "Fuente de antioxidantes",
-  "Fórmula natural",
-  "Frasco gotero de 30 ml",
-];
-
-const SIGNS: readonly { icon: string; title: string; text: string }[] = [
-  {
-    icon: "🌦️",
-    title: "Cambios de clima",
-    text: "Los cambios bruscos de temperatura y los ambientes cargados exigen más a tu cuerpo.",
-  },
-  {
-    icon: "⚡",
-    title: "Rutina acelerada",
-    text: "Dormir poco y comer a las carreras deja pocos antioxidantes en tu día a día.",
-  },
-  {
-    icon: "🍽️",
-    title: "Comidas pesadas",
-    text: "Las comidas abundantes o desordenadas pueden hacerte sentir pesadez durante el día.",
-  },
-  {
-    icon: "🗓️",
-    title: "Poca constancia",
-    text: "Cuesta mantener hábitos de bienestar sin un apoyo sencillo que puedas tomar cada día.",
-  },
-];
-
-const BENEFITS: readonly {
-  icon: string;
-  title: string;
-  text: string;
-  featured?: boolean;
-}[] = [
-  {
-    icon: "🌿",
-    title: "Aceite de Orégano",
-    text: "Rico en compuestos naturales como el carvacrol y el timol, que ayudan a fortalecer el sistema inmunológico y aportan propiedades antioxidantes.",
-  },
-  {
-    icon: "🫙",
-    title: "Gotas líquidas 30 ml",
-    text: "Una combinación natural con aceite de semilla negra y vitamina E que potencia sus beneficios y te brinda un apoyo para tu bienestar todos los días.",
-    featured: true,
-  },
-  {
-    icon: "⚫",
-    title: "Aceite de Semilla Negra",
-    text: "Fuente natural de ácidos grasos esenciales que apoya la salud respiratoria y contribuye al equilibrio del sistema inmune.",
-  },
-];
-
-/** TODO(USO): confirmar los pasos y la porción con la etiqueta del frasco. */
-const USAGE_STEPS: readonly { title: string; text: string }[] = [
-  {
-    title: "Agita el frasco",
-    text: "Antes de usar, agita suavemente el frasco gotero para mezclar bien el contenido.",
-  },
-  {
-    title: "Toma la porción indicada",
-    text: "Usa la cantidad que indica la etiqueta del producto. No excedas la porción recomendada.",
-  },
-  {
-    title: "Sé constante",
-    text: "Incorpóralo a tu rutina diaria y guárdalo en un lugar fresco y seco, lejos de la luz directa.",
-  },
-];
-
-const DISCLAIMER =
-  "Suplemento dietario. No es un medicamento ni sustituye una alimentación equilibrada, y no está destinado a diagnosticar, tratar, curar o prevenir ninguna enfermedad. Si estás embarazada, en lactancia, tomas medicamentos o tienes una condición de salud, consulta a tu médico antes de usarlo.";
-
-/** Máximo de unidades en la compra normal (sin oferta). */
-const MAX_QUANTITY = 10;
-
-/* ------------------------------------------------------------------------- */
-/* Utilidades                                                                 */
-/* ------------------------------------------------------------------------- */
-
-/** Pide a Cloudinary la versión optimizada; deja intactas las demás URLs. */
 function cld(url: string): string {
-  if (!url.includes("res.cloudinary.com/") || !url.includes("/upload/")) {
-    return url;
-  }
-  if (url.includes("/q_auto") || url.includes("/f_auto")) return url;
-  return url.replace("/upload/", "/upload/q_auto,f_auto/");
+  return url;
 }
-
-const copFormatter = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
 
 function formatCop(value: number): string {
-  return copFormatter.format(value);
+  return value.toLocaleString("es-CO");
 }
 
-interface OfferTier {
-  qty: 1 | 2 | 3;
-  /** Lo que se muestra como total de la tarjeta. */
-  total: number;
-  /** `precio normal × cantidad`, para mostrar el ahorro. */
-  regularTotal: number;
-  label: string;
-  badge?: string;
-  /** Texto que reemplaza a "Ahorras $X" (p. ej. "Paga 2 y lleva 3"). */
-  note?: string;
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
 }
 
-function buildTiers(unitPrice: number): OfferTier[] {
-  if (!Number.isFinite(unitPrice) || unitPrice <= 0) return [];
-
-  const tiers: OfferTier[] = [
-    { qty: 1, total: unitPrice, regularTotal: unitPrice, label: "Prueba individual" },
-  ];
-  const double = BULK_TOTALS[2];
-  if (double !== null) {
-    tiers.push({
+function buildTiers(unitPrice: number) {
+  const regularTotal = (qty: number) => unitPrice * qty;
+  return [
+    {
+      qty: 1,
+      label: "Prueba individual",
+      badge: null,
+      total: unitPrice,
+      regularTotal: regularTotal(1),
+      note: null,
+      saving: 0,
+      priceText: formatCop(unitPrice),
+    },
+    {
       qty: 2,
-      total: double,
-      regularTotal: unitPrice * 2,
       label: "Pack doble",
       badge: "Más popular",
-    });
-  }
-  const triple = BULK_TOTALS[3];
-  if (triple !== null) {
-    tiers.push({
+      total: BULK_TOTALS[2]!,
+      regularTotal: regularTotal(2),
+      note: `Ahorras ${formatCop(regularTotal(2) - (BULK_TOTALS[2]!))}`,
+      saving: regularTotal(2) - (BULK_TOTALS[2]!),
+      priceText: formatCop(Math.round((BULK_TOTALS[2]! / 2))),
+    },
+    {
       qty: 3,
-      total: triple,
-      regularTotal: unitPrice * 3,
       label: "Paga 2 y lleva 3",
       badge: "Máximo ahorro",
-      note: "¡Paga 2 y lleva 3!",
-    });
-  }
-  return tiers;
+      total: BULK_TOTALS[3]!,
+      regularTotal: regularTotal(3),
+      note: `¡Paga 2 y lleva 3!`,
+      saving: regularTotal(3) - (BULK_TOTALS[3]!),
+      priceText: formatCop(Math.round((BULK_TOTALS[3]! / 3))),
+    },
+  ];
 }
 
-/* ------------------------------------------------------------------------- */
-/* Piezas pequeñas                                                            */
-/* ------------------------------------------------------------------------- */
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        fillRule="evenodd"
-        d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4l3.8 3.8 6.8-6.8a1 1 0 0 1 1.4 0z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
+function normalize(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-function SectionHeading({
-  eyebrow,
-  title,
-  subtitle,
-}: {
-  eyebrow: string;
-  title: string;
-  subtitle?: string;
-}) {
+function isAceiteOreganoProduct(product: LandingProduct): boolean {
+  return normalize(`${product.name} ${product.slug}`).includes("aceite de oregano");
+}
+
+function SectionHeading({ eyebrow, title, subtitle }: { eyebrow?: string; title: string; subtitle?: string }) {
   return (
-    <div className="text-center">
-      <span className="inline-block rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold uppercase tracking-widest text-[var(--nb-green-700)]">
-        {eyebrow}
-      </span>
-      <h2 className="mt-2 text-2xl font-extrabold text-gray-900 sm:text-3xl">
+    <div className="space-y-2">
+      {eyebrow && (
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--nb-green-600)]">
+          {eyebrow}
+        </p>
+      )}
+      <h2 className="text-2xl font-extrabold text-gray-900 sm:text-3xl tracking-tight">
         {title}
       </h2>
-      {subtitle ? (
-        <p className="mx-auto mt-2 max-w-2xl text-sm text-gray-600">{subtitle}</p>
-      ) : null}
+      {subtitle && (
+        <p className="text-sm text-gray-600 leading-relaxed max-w-2xl">
+          {subtitle}
+        </p>
+      )}
     </div>
   );
 }
 
-/** 1. Marquee superior de urgencia (usa `--animate-marquee` de globals.css). */
-function UrgencyMarquee() {
-  const group = (hidden: boolean) => (
-    <div
-      className="flex shrink-0 items-center gap-10 pr-10"
-      aria-hidden={hidden ? true : undefined}
-    >
-      {MARQUEE_ITEMS.map((item) => (
-        <span key={item.strong}>
-          <strong>{item.strong}</strong> {item.rest}
-        </span>
-      ))}
-    </div>
-  );
-
-  return (
-    <div
-      className="overflow-hidden whitespace-nowrap bg-[var(--nb-green-800)] py-2.5 text-[11px] font-medium text-white sm:text-sm"
-      aria-label="Información de envío y pago"
-    >
-      <div className="flex w-max animate-marquee will-change-transform">
-        {group(false)}
-        {group(true)}
-      </div>
-    </div>
-  );
-}
-
-/** 9. Testimonios: grid en escritorio, auto-scroll horizontal en móvil. */
 function TestimonialsCarousel({ items }: { items: readonly Testimonial[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(false);
@@ -450,13 +297,11 @@ function TestimonialsCarousel({ items }: { items: readonly Testimonial[] }) {
       raf = window.requestAnimationFrame(step);
       const dt = last ? now - last : 0;
       last = now;
-      // Fuera de móvil, con movimiento reducido o en pausa, se sigue la
-      // posición real para retomar desde donde el usuario dejó el scroll.
       if (!mobile.matches || reduced.matches || pausedRef.current) {
         pos = el.scrollLeft;
         return;
       }
-      pos += dt * 0.035; // ≈ 35 px/s
+      pos += dt * 0.035;
       const half = el.scrollWidth / 2;
       if (half > 0 && pos >= half) pos -= half;
       el.scrollLeft = pos;
@@ -527,7 +372,6 @@ function TestimonialsCarousel({ items }: { items: readonly Testimonial[] }) {
       onFocus={pause}
       onBlur={() => resume(0)}
     >
-      {/* Dos grupos idénticos: al terminar el primero el salto es invisible. */}
       <div className="flex shrink-0 gap-4 pr-4 md:contents">
         {items.map((item, i) => card(item, `a-${i}`))}
       </div>
@@ -538,7 +382,6 @@ function TestimonialsCarousel({ items }: { items: readonly Testimonial[] }) {
   );
 }
 
-/** Reseñas con auto-scroll horizontal continuo. */
 function ReviewsCarousel({ items }: { items: readonly Review[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(false);
@@ -561,7 +404,7 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
         pos = el.scrollLeft;
         return;
       }
-      pos += dt * 0.04; // ≈ 40 px/s
+      pos += dt * 0.04;
       const half = el.scrollWidth / 2;
       if (half > 0 && pos >= half) pos -= half;
       el.scrollLeft = pos;
@@ -629,7 +472,6 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
       onTouchEnd={() => resume(2000)}
       onTouchCancel={() => resume(2000)}
     >
-      {/* Dos grupos idénticos: al terminar el primero el salto es invisible. */}
       <div className="flex shrink-0 gap-4 pr-4">
         {items.map((item, i) => card(item, `a-${i}`))}
       </div>
@@ -661,10 +503,6 @@ function VideoCard({ video }: { video: MediaVideo }) {
   );
 }
 
-/* ------------------------------------------------------------------------- */
-/* Landing                                                                    */
-/* ------------------------------------------------------------------------- */
-
 export default function AceiteOreganoLanding({
   product,
   onAddToCart,
@@ -676,10 +514,6 @@ export default function AceiteOreganoLanding({
   const tiers = useMemo(() => buildTiers(unitPrice), [unitPrice]);
   const hasPrice = Number.isFinite(unitPrice) && unitPrice > 0;
 
-  /**
-   * Oferta elegida en el selector (`null` = ninguna). SOLO una tarjeta elegida
-   * manda `promotion: true`; sin tarjeta, la compra va a precio normal.
-   */
   const [selectedQty, setSelectedQty] = useState<1 | 2 | 3 | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [pending, setPending] = useState(false);
@@ -695,6 +529,7 @@ export default function AceiteOreganoLanding({
   const selectedTier = tiers.find((t) => t.qty === selectedQty) ?? null;
 
   const heroImage = product.image ? cld(product.image) : null;
+
   const galleryItems: readonly MediaImage[] = useMemo(() => {
     if (GALLERY.length > 0) return GALLERY;
     return heroImage
@@ -780,333 +615,123 @@ export default function AceiteOreganoLanding({
         }
       `}</style>
 
-      {/* 1. Marquee de urgencia */}
-      <UrgencyMarquee />
-
-      {/* 2. Hero */}
-      <section className="bg-[var(--nb-cream)] px-4 pb-12 pt-8 sm:pt-12 lg:pb-16 lg:pt-16">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-8 lg:grid-cols-12 lg:gap-10">
-          <div className="lg:col-span-5">
-            <div className="relative mx-auto w-full max-w-sm rounded-3xl border border-green-200 bg-white p-3 shadow-xl">
-              <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-green-50">
-                {heroMedia}
-              </div>
-              <p className="mt-3 text-center text-xs font-medium text-gray-500">
-                Frasco gotero de 30 ml · Uso oral
-              </p>
+      <section className="relative overflow-hidden bg-[var(--nb-cream)] px-4 pt-8 sm:pt-16 lg:pt-24 pb-12">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <div className="relative">
+              {heroMedia}
+              <div className="absolute inset-0 bg-gradient-to-t from-[var(--nb-cream)]/90 to-transparent pointer-events-none" />
             </div>
-          </div>
-
-          <div className="space-y-5 lg:col-span-7">
-            <div className="space-y-4 text-center lg:text-left">
-              <span className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--nb-green-800)]">
-                🌿 Naturaleza que cuida de ti
-              </span>
-              <h1 className="text-3xl font-extrabold leading-tight text-gray-900 sm:text-4xl lg:text-5xl">
-                Gotas líquidas de{" "}
-                <span className="text-[var(--nb-green-700)]">
-                  Aceite de Orégano
-                </span>{" "}
-                con Aceite de Semilla Negra
+            <div className="space-y-6 lg:space-y-8">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-green-200 text-[var(--nb-green-700)] text-xs font-bold uppercase tracking-widest w-fit">
+                <span className="flex h-2 w-2 rounded-full bg-[var(--nb-green-600)]" />
+                <span>Disponible para envío</span>
+              </div>
+              <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight leading-tight sm:text-5xl lg:text-6xl">
+                {product.name}
               </h1>
-              <p className="mx-auto max-w-xl text-sm text-gray-600 sm:text-lg lg:mx-0">
-                Una combinación natural con carvacrol, timol y vitamina E para
-                darle a tu cuerpo un apoyo diario para tu bienestar.
-              </p>
-              <ul className="mx-auto grid max-w-md grid-cols-2 gap-2 text-left text-xs font-medium text-gray-700 sm:text-sm lg:mx-0">
-                {QUICK_BENEFITS.map((benefit) => (
-                  <li key={benefit} className="flex items-center gap-2">
-                    <CheckIcon className="h-4 w-4 shrink-0 text-[var(--nb-green-600)]" />
-                    {benefit}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Selector de ofertas por cantidad */}
-            <div id="ofertas" className="scroll-mt-24 space-y-3">
-              {tiers.length > 1 ? (
-                <>
-                  <p className="text-center text-sm font-bold text-gray-900 lg:text-left">
-                    Elige tu promoción
-                  </p>
-                  <div
-                    role="radiogroup"
-                    aria-label="Ofertas por cantidad"
-                    className="grid grid-cols-1 gap-3 sm:grid-cols-3"
-                  >
-                    {tiers.map((tier) => {
-                      const isSelected = tier.qty === selectedQty;
-                      const unavailable =
-                        soldOut || (typeof stock === "number" && tier.qty > stock);
-                      const saving = tier.regularTotal - tier.total;
-                      return (
-                        <button
-                          key={tier.qty}
-                          type="button"
-                          role="radio"
-                          aria-checked={isSelected}
-                          disabled={unavailable}
-                          onClick={() => {
-                            setFailed(false);
-                            setSelectedQty(isSelected ? null : tier.qty);
-                          }}
-                          className={`relative min-h-11 rounded-2xl border-2 p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
-                            isSelected
-                              ? "border-[var(--nb-green-600)] bg-green-50 shadow-lg"
-                              : "border-green-200 bg-white hover:border-[var(--nb-green-600)] hover:shadow-md"
-                          }`}
-                        >
-                          {tier.badge ? (
-                            <span className="absolute -top-3 left-4 rounded-full bg-[var(--nb-green-700)] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
-                              {tier.badge}
-                            </span>
-                          ) : null}
-                          <span
-                            className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                              isSelected
-                                ? "border-[var(--nb-green-600)]"
-                                : "border-gray-300"
-                            }`}
-                            aria-hidden="true"
-                          >
-                            <span
-                              className={`h-2.5 w-2.5 rounded-full ${
-                                isSelected ? "bg-[var(--nb-green-600)]" : "bg-transparent"
-                              }`}
-                            />
-                          </span>
-                          <span className="block text-[11px] font-bold uppercase text-gray-500">
-                            {tier.label}
-                          </span>
-                          <span className="mt-1 block text-base font-bold text-gray-900">
-                            {tier.qty} {tier.qty === 1 ? "frasco" : "frascos"}
-                          </span>
-                          <span className="mt-2 block text-2xl font-extrabold text-[var(--nb-green-700)]">
-                            {formatCop(tier.total)}
-                          </span>
-                          <span className="block text-xs text-gray-500">
-                            {saving > 0 ? (
-                              <>
-                                <del>{formatCop(tier.regularTotal)}</del> ·{" "}
-                                {tier.note ?? `Ahorras ${formatCop(saving)}`}
-                              </>
-                            ) : (
-                              "COP · Pago contra entrega"
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-center text-xs text-gray-500 lg:text-left">
-                    {selectedTier
-                      ? "Toca de nuevo la oferta para quitarla y comprar a precio normal."
-                      : "Sin oferta elegida pagas el precio normal por unidad."}
-                  </p>
-                </>
-              ) : null}
-
-              {/* Cantidad: solo en compra normal (sin oferta elegida) */}
-              {!selectedTier && hasPrice ? (
-                <div className="flex items-center justify-between gap-3 rounded-2xl border border-green-200 bg-white px-4 py-3">
-                  <div>
-                    <span className="block text-xs font-bold uppercase text-gray-500">
-                      Precio normal
-                    </span>
-                    <span className="text-xl font-extrabold text-[var(--nb-green-700)]">
-                      {formatCop(unitPrice)}
-                    </span>
-                    <span className="ml-1 text-xs text-gray-500">c/u</span>
-                  </div>
-                  <div
-                    className="flex items-center gap-2"
-                    role="group"
-                    aria-label="Cantidad"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                      disabled={quantity <= 1}
-                      aria-label="Disminuir cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-green-200 text-lg font-bold text-[var(--nb-green-800)] disabled:opacity-40"
-                    >
-                      −
-                    </button>
-                    <span
-                      className="w-8 text-center text-lg font-bold tabular-nums"
-                      aria-live="polite"
-                    >
-                      {quantity}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setQuantity((q) => Math.min(maxQuantity, q + 1))
-                      }
-                      disabled={quantity >= maxQuantity}
-                      aria-label="Aumentar cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-green-200 text-lg font-bold text-[var(--nb-green-800)] disabled:opacity-40"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            <div>
-              <button
-                type="button"
-                onClick={() => void handleBuy()}
-                disabled={pending || soldOut || !hasPrice}
-                className={`nb-pulse flex min-h-14 w-full items-center justify-center rounded-2xl px-5 py-4 text-base font-bold text-white shadow-lg transition-all sm:text-lg ${
-                  soldOut || !hasPrice
-                    ? "cursor-not-allowed bg-gray-400"
-                    : "bg-gradient-to-r from-[var(--nb-green-600)] to-[var(--nb-green-800)] hover:-translate-y-0.5"
-                } ${pending ? "cursor-wait opacity-75" : ""}`}
-              >
-                {ctaLabel}
-              </button>
-              {failed ? (
-                <p role="alert" className="mt-2 text-center text-sm text-red-600">
-                  No pudimos agregar el producto. Intenta de nuevo.
+              {product.image && (
+                <p className="text-sm text-gray-600 leading-relaxed max-w-md">
+                  Gotas líquidas naturales con orégano, aceite de semilla negra y vitamina E.
+                  Soporte diario para tu sistema inmune y bienestar general.
                 </p>
-              ) : null}
-              <p className="mt-2 text-center text-xs text-gray-500">
-                Pago contra entrega disponible en todo el país · Envío gratis
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Señales de que necesitas el producto */}
-      <section className="bg-white px-4 py-14">
-        <div className="mx-auto max-w-5xl space-y-10">
-          <SectionHeading
-            eyebrow="¿Te suena familiar?"
-            title={`Señales de que necesitas ${PRODUCT_SHORT_NAME}`}
-            subtitle="Tu rutina diaria exige más de lo que parece. Un apoyo natural y constante puede acompañarte."
-          />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {SIGNS.map((sign) => (
-              <div
-                key={sign.title}
-                className="rounded-2xl border border-green-200 bg-green-50/60 p-5 transition-shadow hover:shadow-md"
-              >
-                <div
-                  className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg"
-                  aria-hidden="true"
-                >
-                  {sign.icon}
-                </div>
-                <h3 className="mb-1 font-bold text-gray-900">{sign.title}</h3>
-                <p className="text-xs leading-relaxed text-gray-600">{sign.text}</p>
+              )}
+              <div className="flex items-center gap-4">
+                <span className="text-2xl font-extrabold text-[var(--nb-green-800)]">
+                  $ {formatCop(unitPrice)}
+                </span>
+                <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                  COP c/u
+                </span>
               </div>
-            ))}
-          </div>
-          <div className="flex flex-col items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-[var(--nb-green-700)] to-[var(--nb-green-950)] p-6 text-white shadow-lg sm:flex-row">
-            <div className="text-center sm:text-left">
-              <h3 className="text-lg font-bold">Dale a tu día un apoyo natural</h3>
-              <p className="text-xs text-green-100 sm:text-sm">
-                Gotas líquidas fáciles de tomar, con envío gratis y pago contra
-                entrega.
-              </p>
-            </div>
-            <a
-              href="#ofertas"
-              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--nb-green-800)] shadow transition-colors hover:bg-green-50"
-            >
-              Quiero pedirlo
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* 5. Ingredientes y beneficios */}
-      <section className="bg-[var(--nb-cream)] px-4 py-16">
-        <div className="mx-auto max-w-6xl space-y-10">
-          <SectionHeading
-            eyebrow="Poder de la naturaleza"
-            title="Ingredientes que trabajan en equipo"
-            subtitle="Orégano, semilla negra y vitamina E en una fórmula líquida de uso oral."
-          />
-          <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-3">
-            {BENEFITS.map((benefit) =>
-              benefit.featured ? (
-                <div
-                  key={benefit.title}
-                  className="relative space-y-3 rounded-3xl border-2 border-[var(--nb-green-600)] bg-gradient-to-b from-white to-green-100 p-8 text-center shadow-xl"
-                >
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--nb-green-700)] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
-                    Fórmula natural
+              <div className="flex flex-wrap gap-3">
+                {QUICK_BENEFITS.map((benefit) => (
+                  <span
+                    key={benefit}
+                    className="px-3 py-1 rounded-full border border-green-200 bg-white text-xs font-medium text-gray-700"
+                  >
+                    {benefit}
                   </span>
-                  <div
-                    className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-4 border-white bg-green-200 text-3xl shadow-md"
-                    aria-hidden="true"
-                  >
-                    {benefit.icon}
-                  </div>
-                  <h3 className="text-xl font-extrabold text-gray-900">
-                    {benefit.title}
-                  </h3>
-                  <p className="text-xs leading-relaxed text-gray-700">
-                    {benefit.text}
-                  </p>
-                </div>
-              ) : (
-                <div
-                  key={benefit.title}
-                  className="space-y-3 rounded-3xl border border-green-200 bg-white p-6 text-center shadow-sm transition-colors hover:border-[var(--nb-green-600)]"
-                >
-                  <div
-                    className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-green-100 text-2xl"
-                    aria-hidden="true"
-                  >
-                    {benefit.icon}
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900">
-                    {benefit.title}
-                  </h3>
-                  <p className="text-xs leading-relaxed text-gray-700">
-                    {benefit.text}
-                  </p>
-                </div>
-              ),
-            )}
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* 6. Cómo usarlo */}
-      <section className="bg-white px-4 py-14">
-        <div className="mx-auto max-w-4xl space-y-10">
+      <section className="bg-white px-4 py-14 border-t border-green-100">
+        <div className="mx-auto max-w-7xl space-y-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+            <div className="space-y-6">
+              <SectionHeading
+                eyebrow="Poder de la naturaleza"
+                title="Ingredientes que trabajan en equipo"
+                subtitle="Orégano, semilla negra y vitamina E en una fórmula líquida de uso oral."
+              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {[
+                  {
+                    title: "Orégano",
+                    text: "Rico en carvacrol y timol, compuestos con propiedades protectoras tradicionales.",
+                  },
+                  {
+                    title: "Semilla negra",
+                    text: "Conocida por su alto contenido en timoquinona y ácidos grasos esenciales.",
+                  },
+                  {
+                    title: "Vitamina E",
+                    text: "Antioxidante que ayuda a proteger las células del estrés oxidativo.",
+                  },
+                ].map((ing) => (
+                  <div
+                    key={ing.title}
+                    className="rounded-2xl border border-green-200 bg-green-50/50 p-5 text-center transition-shadow hover:shadow-sm"
+                  >
+                    <span className="text-2xl">{ing.title === "Orégano" ? "🌿" : ing.title === "Semilla negra" ? "🌱" : "✨"}</span>
+                    <h3 className="mb-2 font-bold text-gray-900">{ing.title}</h3>
+                    <p className="text-xs text-gray-600 leading-relaxed">{ing.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="relative aspect-square bg-green-50 rounded-3xl overflow-hidden border border-green-200">
+              <ProductImage
+                src={heroImage}
+                alt={`${PRODUCT_SHORT_NAME}, fórmula`}
+                sizes="(max-width: 640px) 100vw, 33vw"
+                className="object-cover"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[var(--nb-cream)] px-4 py-16 border-t border-green-100">
+        <div className="mx-auto max-w-7xl space-y-12">
           <SectionHeading
             eyebrow="Fácil de usar"
             title="Cómo usarlo"
-            subtitle="Tres pasos sencillos para incorporarlo a tu rutina."
+            subtitle="Tres pasos sencillos para incorporarlo a tu rutina diaria."
           />
-          <ol className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {USAGE_STEPS.map((step, index) => (
-              <li
+              <div
                 key={step.title}
-                className="rounded-2xl border border-green-200 bg-green-50/50 p-5 text-center"
+                className="rounded-2xl border border-green-200 bg-white p-6 text-center transition-shadow hover:shadow-sm"
               >
                 <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--nb-green-700)] text-lg font-extrabold text-white">
                   {index + 1}
                 </span>
                 <h3 className="mb-1 font-bold text-gray-900">{step.title}</h3>
-                <p className="text-xs leading-relaxed text-gray-600">{step.text}</p>
-              </li>
+                <p className="text-sm text-gray-600 leading-relaxed">{step.text}</p>
+              </div>
             ))}
-          </ol>
+          </div>
         </div>
       </section>
 
-      {/* 7. Resultados reales (solo con material real) */}
       {RESULTS.length > 0 ? (
-        <section className="bg-[var(--nb-cream)] px-4 py-14">
+        <section className="bg-white px-4 py-14 border-t border-green-100">
           <div className="mx-auto max-w-6xl space-y-8">
             <SectionHeading
               eyebrow="Resultados reales"
@@ -1139,34 +764,30 @@ export default function AceiteOreganoLanding({
         </section>
       ) : null}
 
-      {/* 8. Galería de imágenes */}
-      {galleryItems.length > 0 ? (
-        <section className="bg-white px-4 py-14">
-          <div className="mx-auto max-w-6xl space-y-8">
-            <SectionHeading eyebrow="Galería" title={`Conoce ${PRODUCT_SHORT_NAME}`} />
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {galleryItems.map((image, index) => (
-                <div
-                  key={image.src}
-                  className="group relative aspect-square overflow-hidden rounded-xl border border-green-200 bg-green-50"
-                >
-                  <ProductImage
-                    src={cld(image.src)}
-                    alt={image.alt}
-                    loading={index === 0 ? "eager" : "lazy"}
-                    sizes="(max-width: 640px) 50vw, 25vw"
-                    className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                </div>
-              ))}
-            </div>
+      <section className="bg-white px-4 py-14 border-t border-green-100">
+        <div className="mx-auto max-w-6xl space-y-8">
+          <SectionHeading eyebrow="Galería" title={`Conoce ${PRODUCT_SHORT_NAME}`} />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {galleryItems.map((image, index) => (
+              <div
+                key={image.src}
+                className="group relative aspect-square overflow-hidden rounded-xl border border-green-200 bg-green-50"
+              >
+                <ProductImage
+                  src={cld(image.src)}
+                  alt={image.alt}
+                  loading={index === 0 ? "eager" : "lazy"}
+                  sizes="(max-width: 640px) 50vw, 25vw"
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+              </div>
+            ))}
           </div>
-        </section>
-      ) : null}
+        </div>
+      </section>
 
-      {/* Reseñas de clientes (auto-scroll horizontal) */}
       {REVIEWS.length > 0 ? (
-        <section className="bg-[var(--nb-cream)] px-4 py-14">
+        <section className="bg-[var(--nb-cream)] px-4 py-14 border-t border-green-100">
           <div className="mx-auto max-w-6xl space-y-8">
             <SectionHeading
               eyebrow="Reseñas de clientes"
@@ -1178,9 +799,8 @@ export default function AceiteOreganoLanding({
         </section>
       ) : null}
 
-      {/* 9. Testimonios (solo con opiniones reales) */}
       {TESTIMONIALS.length > 0 ? (
-        <section className="overflow-hidden bg-[var(--nb-cream)] px-4 py-14">
+        <section className="overflow-hidden bg-[var(--nb-cream)] px-4 py-14 border-t border-green-100">
           <div className="mx-auto max-w-6xl space-y-8">
             <SectionHeading
               eyebrow="Confianza real"
@@ -1191,7 +811,6 @@ export default function AceiteOreganoLanding({
         </section>
       ) : null}
 
-      {/* Videos del producto (justo antes del CTA final). */}
       {VIDEOS.length > 0 ? (
         <section className="border-t border-green-100 bg-white px-4 py-12">
           <div className="mx-auto max-w-6xl space-y-8">
@@ -1208,13 +827,12 @@ export default function AceiteOreganoLanding({
         </section>
       ) : null}
 
-      {/* 10. CTA final + garantía */}
-      <section className="bg-gradient-to-b from-[var(--nb-green-800)] to-[var(--nb-green-950)] px-4 py-14 text-center text-white">
-        <div className="mx-auto max-w-3xl space-y-5">
-          <h2 className="text-2xl font-extrabold sm:text-4xl">
+      <section className="bg-gradient-to-b from-[var(--nb-green-800)] to-[var(--nb-green-950)] px-4 py-16 text-center text-white border-t border-white/10">
+        <div className="mx-auto max-w-3xl space-y-6">
+          <h2 className="text-2xl font-extrabold sm:text-5xl tracking-tight">
             Naturaleza que cuida de ti
           </h2>
-          <p className="text-sm text-green-100 sm:text-base">
+          <p className="text-sm text-green-100 sm:text-base max-w-xl mx-auto leading-relaxed">
             Pide hoy tus gotas de {PRODUCT_SHORT_NAME} con envío gratis y paga
             al recibir en la puerta de tu casa.
           </p>
