@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProductImage from "@/components/ProductImage";
-import { getOfferEndTime, getOfferRemaining } from "@/lib/offer-countdown";
 
 /**
  * Landing de "Gotas líquidas de Aceite de Orégano con Aceite de Semilla Negra"
@@ -166,20 +165,6 @@ const REVIEWS: readonly Review[] = [
 /** TODO(MEDIA): video principal del hero. Si es `null` se usa la foto del producto. */
 const HERO_VIDEO: MediaVideo | null = null;
 
-/** Videos del producto (sección 4). Vacío = sección oculta. */
-const VIDEOS: readonly MediaVideo[] = [
-  {
-    src: "/landings/aceite-oregano/videos/video-oregano-1.mp4",
-    title: "Cómo usar el aceite de orégano",
-    caption: "Tutorial rápido de aplicación y dosis diaria.",
-  },
-  {
-    src: "/landings/aceite-oregano/videos/video-oregano-2.mp4",
-    title: "Beneficios del aceite de orégano con semilla negra",
-    caption: "Descubre por qué es ideal para tu rutina diaria de bienestar.",
-  },
-];
-
 /** Fotos de la galería del producto. */
 const GALLERY: readonly MediaImage[] = [
   {
@@ -314,10 +299,6 @@ const copFormatter = new Intl.NumberFormat("es-CO", {
 
 function formatCop(value: number): string {
   return copFormatter.format(value);
-}
-
-function pad2(value: number): string {
-  return String(value).padStart(2, "0");
 }
 
 interface OfferTier {
@@ -645,27 +626,6 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
   );
 }
 
-function VideoCard({ video }: { video: MediaVideo }) {
-  return (
-    <div className="space-y-3 rounded-3xl border border-green-100 bg-green-50/50 p-6 text-center transition-shadow hover:shadow-md sm:p-8">
-      <h3 className="text-lg font-bold text-gray-900">{video.title}</h3>
-      <div className="relative mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-3xl">
-        <video
-          controls
-          playsInline
-          preload="metadata"
-          poster={video.poster ? cld(video.poster) : undefined}
-          className="absolute inset-0 h-full w-full object-cover"
-        >
-          <source src={cld(video.src)} type="video/mp4" />
-          Tu navegador no soporta el elemento de video.
-        </video>
-      </div>
-      <p className="text-sm font-medium text-gray-600">{video.caption}</p>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------------- */
 /* Landing                                                                    */
 /* ------------------------------------------------------------------------- */
@@ -985,24 +945,6 @@ export default function AceiteOreganoLanding({
           </div>
         </div>
       </section>
-
-      {/* Videos del producto (debajo del banner principal).
-         Llena el array `VIDEOS` arriba para que se muestren. */}
-      {VIDEOS.length > 0 ? (
-        <section className="border-t border-green-100 bg-white px-4 py-12">
-          <div className="mx-auto max-w-6xl space-y-8">
-            <SectionHeading
-              eyebrow="Míralo en acción"
-              title={`Conoce más sobre ${PRODUCT_SHORT_NAME}`}
-            />
-            <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
-              {VIDEOS.map((video) => (
-                <VideoCard key={video.src} video={video} />
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
 
       {/* 3. Señales de que necesitas el producto */}
       <section className="bg-white px-4 py-14">
