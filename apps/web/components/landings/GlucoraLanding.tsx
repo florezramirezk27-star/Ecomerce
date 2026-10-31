@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProductImage from "@/components/ProductImage";
-import { getOfferEndTime, getOfferRemaining } from "@/lib/offer-countdown";
 
 /**
  * Landing de "Glucora" (gotas líquidas de berberina, canela de Ceilán, cromo,
@@ -99,24 +98,38 @@ interface Review {
 }
 
 const HERO_IMAGE: MediaImage = {
-  src: "/landings/glucora/images/glucora-hero.webp",
-  alt: "Frasco gotero de Glucora de 50 ml rodeado de canela, cúrcuma y melón amargo",
+  src: "/landings/glucora/images/glucora-1.png",
+  alt: "Frasco gotero de Glucora de 50 ml",
 };
 
 /** Fotos de la galería (la primera carga con prioridad, el resto lazy). */
 const GALLERY: readonly MediaImage[] = [
   {
-    src: "/landings/glucora/images/glucora-ingredientes.webp",
-    alt: "Glucora sobre una mesa de mármol con melón amargo, cúrcuma fresca y ramas de canela",
+    src: "/landings/glucora/images/glucora-1.png",
+    alt: "Frasco gotero de Glucora de 50 ml",
   },
-  HERO_IMAGE,
+  {
+    src: "/landings/glucora/images/glucora-2.png",
+    alt: "Glucora ingredientes naturales",
+  },
 ];
 
 /** TODO(MEDIA): video del hero (Cloudinary). `null` = se usa la foto. */
 const HERO_VIDEO: MediaVideo | null = null;
 
 /** TODO(MEDIA): videos del producto. Vacío = sección oculta. */
-const VIDEOS: readonly MediaVideo[] = [];
+const VIDEOS: readonly MediaVideo[] = [
+  {
+    src: "/landings/glucora/videos/glucora-video-1.mp4",
+    title: "Cómo usar Glucora",
+    caption: "Tutorial rápido de aplicación y dosis diaria.",
+  },
+  {
+    src: "/landings/glucora/videos/glucora-video-2.mp4",
+    title: "Beneficios de Glucora con berberina",
+    caption: "Descubre por qué es ideal para tu rutina diaria de bienestar.",
+  },
+];
 
 /** TODO(RESULTADOS): fotos reales de clientes con su permiso. Vacío = oculta. */
 const RESULTS: readonly MediaImage[] = [];
@@ -482,58 +495,6 @@ function UrgencyMarquee() {
   );
 }
 
-/** Contador regresivo. Comparte la hora de fin con el aviso de la ficha. */
-function OfferCountdown({ endTime }: { endTime: number | null }) {
-  const [remaining, setRemaining] = useState<{
-    hours: number;
-    minutes: number;
-    seconds: number;
-  } | null>(null);
-
-  useEffect(() => {
-    let end = endTime ?? getOfferEndTime();
-    const tick = () => {
-      const r = getOfferRemaining(end);
-      // Vencida la oferta se genera una nueva: el contador no se queda en cero.
-      if (r.total <= 0) end = getOfferEndTime();
-      setRemaining({ hours: r.hours, minutes: r.minutes, seconds: r.seconds });
-    };
-    // Sin `localStorage` en el render del servidor, la hora se resuelve ya montado.
-    const first = window.setTimeout(tick, 0);
-    const id = window.setInterval(tick, 1000);
-    return () => {
-      window.clearTimeout(first);
-      window.clearInterval(id);
-    };
-  }, [endTime]);
-
-  const cells: readonly { label: string; value: number | null }[] = [
-    { label: "horas", value: remaining?.hours ?? null },
-    { label: "min", value: remaining?.minutes ?? null },
-    { label: "seg", value: remaining?.seconds ?? null },
-  ];
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/15 bg-white/5 px-4 py-3">
-      <p className="text-sm font-medium text-[var(--gl-bone)]">
-        Envío gratis si ordenas en:
-      </p>
-      <div className="flex items-end gap-2 select-none" role="timer" aria-live="off">
-        {cells.map((cell) => (
-          <div key={cell.label} className="flex flex-col items-center">
-            <span className="min-w-12 rounded-lg bg-[var(--gl-wine-900)] px-2 py-1.5 text-center text-2xl font-bold leading-none text-[var(--gl-turmeric)] tabular-nums">
-              {cell.value === null ? "--" : pad2(cell.value)}
-            </span>
-            <span className="mt-1 text-[10px] text-[var(--gl-bone)]/60">
-              {cell.label}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /** 9. Reseñas: grid en escritorio, auto-scroll horizontal en móvil. */
 function ReviewsCarousel({ items }: { items: readonly Review[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -690,12 +651,6 @@ export default function GlucoraLanding({
 
   const selectedTier = tiers.find((t) => t.qty === selectedQty) ?? null;
 
-  const endTime = useMemo(() => {
-    if (!offerEndTime) return null;
-    const parsed = Date.parse(offerEndTime);
-    return Number.isFinite(parsed) ? parsed : null;
-  }, [offerEndTime]);
-
   const average = useMemo(() => {
     const sum = REVIEWS.reduce((acc, r) => acc + r.stars, 0);
     return REVIEWS.length > 0 ? sum / REVIEWS.length : 0;
@@ -764,7 +719,7 @@ export default function GlucoraLanding({
           --gl-turmeric: #e8a020;
           --gl-cinnamon: #a0643a;
           --gl-bone: #f4ede4;
-          --gl-stone: #ece8e1;
+          --gl-stone: #f4f7f2;
           --gl-stone-2: #d9d2c6;
           --gl-ink: #24161a;
         }
@@ -924,8 +879,6 @@ export default function GlucoraLanding({
                 </div>
               </div>
             ) : null}
-
-            <OfferCountdown endTime={endTime} />
 
             <div>
               <button
