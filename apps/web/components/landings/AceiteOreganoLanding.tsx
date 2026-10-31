@@ -797,6 +797,19 @@ export default function AceiteOreganoLanding({
             </div>
           </div>
 
+          {/* Videos del producto */}
+          <div className="lg:col-span-12 col-span-1 space-y-4">
+            <SectionHeading
+              eyebrow="Míralo en acción"
+              title={`Conoce más sobre ${PRODUCT_SHORT_NAME}`}
+            />
+            <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+              {VIDEOS.map((video) => (
+                <VideoCard key={video.src} video={video} />
+              ))}
+            </div>
+          </div>
+
           <div className="space-y-5 lg:col-span-7">
             <div className="space-y-4 text-center lg:text-left">
               <span className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--nb-green-800)]">
@@ -1187,23 +1200,6 @@ export default function AceiteOreganoLanding({
               title="Lo que dicen nuestros clientes en Colombia"
             />
             <TestimonialsCarousel items={TESTIMONIALS} />
-          </div>
-        </section>
-      ) : null}
-
-      {/* Videos del producto (justo antes del CTA final). */}
-      {VIDEOS.length > 0 ? (
-        <section className="border-t border-green-100 bg-white px-4 py-12">
-          <div className="mx-auto max-w-6xl space-y-8">
-            <SectionHeading
-              eyebrow="Míralo en acción"
-              title={`Conoce más sobre ${PRODUCT_SHORT_NAME}`}
-            />
-            <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
-              {VIDEOS.map((video) => (
-                <VideoCard key={video.src} video={video} />
-              ))}
-            </div>
           </div>
         </section>
       ) : null}
