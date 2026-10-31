@@ -786,17 +786,6 @@ export default function AceiteOreganoLanding({
       {/* 2. Hero */}
       <section className="bg-[var(--nb-cream)] px-4 pb-12 pt-8 sm:pt-12 lg:pb-16 lg:pt-16">
         <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-8 lg:grid-cols-12 lg:gap-10">
-          <div className="lg:col-span-5">
-            <div className="relative mx-auto w-full max-w-sm rounded-3xl border border-green-200 bg-white p-3 shadow-xl">
-              <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-green-50">
-                {heroMedia}
-              </div>
-              <p className="mt-3 text-center text-xs font-medium text-gray-500">
-                Frasco gotero de 30 ml · Uso oral
-              </p>
-            </div>
-          </div>
-
           {/* Videos del producto */}
           <div className="lg:col-span-12 col-span-1 space-y-4">
             <SectionHeading
@@ -807,6 +796,17 @@ export default function AceiteOreganoLanding({
               {VIDEOS.map((video) => (
                 <VideoCard key={video.src} video={video} />
               ))}
+            </div>
+          </div>
+
+          <div className="lg:col-span-5">
+            <div className="relative mx-auto w-full max-w-sm rounded-3xl border border-green-200 bg-white p-3 shadow-xl">
+              <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-green-50">
+                {heroMedia}
+              </div>
+              <p className="mt-3 text-center text-xs font-medium text-gray-500">
+                Frasco gotero de 30 ml · Uso oral
+              </p>
             </div>
           </div>
 
