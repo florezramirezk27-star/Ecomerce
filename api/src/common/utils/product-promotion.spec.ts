@@ -30,6 +30,20 @@ describe('getProductUnitPrice', () => {
       ),
     ).toBe(80_000);
   });
+
+  it.each([
+    [1, 69_900],
+    [2, 54_950],
+    [3, 46_600],
+    [4, 46_600],
+  ])('applies the Arbutina offer for quantity %i', (quantity, price) => {
+    const arbutina = {
+      name: 'CREMA ARBUTINA TOSOWOONG',
+      slug: 'crema-arbutina-tosowoong',
+      price: 69_900,
+    };
+    expect(getProductUnitPrice(arbutina, quantity)).toBe(price);
+  });
 });
 
 describe('getLineUnitPrice', () => {
@@ -52,7 +66,11 @@ describe('getLineUnitPrice', () => {
   });
 
   it('keeps non-Oftalmiel products at their own price', () => {
-    const otro = { name: 'Otro producto', slug: 'otro-producto', price: 80_000 };
+    const otro = {
+      name: 'Otro producto',
+      slug: 'otro-producto',
+      price: 80_000,
+    };
     expect(getLineUnitPrice(otro, 2, true)).toBe(80_000);
     expect(getLineUnitPrice(otro, 2, false)).toBe(80_000);
   });

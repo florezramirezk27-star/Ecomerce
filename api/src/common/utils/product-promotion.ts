@@ -36,6 +36,21 @@ const GLUCORA_OFFER_UNIT_PRICES = {
   family: 59_933,
 };
 
+/**
+ * Precios unitarios de la promocion por cantidad de Crema Arbutina TOSOWOONG
+ * (COP). Unidad normal: $69.900, el mismo esquema que Aceite de Oregano.
+ * - 2 unidades: $109.900 en total -> $54.950 c/u.
+ * - 3 unidades: $139.800 en total ("paga 2 y lleva 3") -> $46.600 c/u.
+ *
+ * Coinciden con `BULK_TOTALS` de
+ * `apps/web/components/landings/ArbutinaLanding.tsx`.
+ */
+const ARBUTINA_OFFER_UNIT_PRICES = {
+  single: 69_900,
+  double: 54_950,
+  family: 46_600,
+};
+
 function normalize(text: string): string {
   return text
     .normalize('NFD')
@@ -56,6 +71,11 @@ function isGlucoraProduct(product: PricedProduct): boolean {
     text.includes('berberine') ||
     text.includes('berberina')
   );
+}
+
+function isArbutinaProduct(product: PricedProduct): boolean {
+  const text = normalize(`${product.name} ${product.slug}`);
+  return text.includes('arbutin') || text.includes('tosowoong');
 }
 
 /**
@@ -99,6 +119,16 @@ export function getProductUnitPrice(
         : quantity >= 2
           ? GLUCORA_OFFER_UNIT_PRICES.double
           : GLUCORA_OFFER_UNIT_PRICES.single;
+    return Math.min(regularPrice, offerPrice);
+  }
+
+  if (isArbutinaProduct(product)) {
+    const offerPrice =
+      quantity >= 3
+        ? ARBUTINA_OFFER_UNIT_PRICES.family
+        : quantity >= 2
+          ? ARBUTINA_OFFER_UNIT_PRICES.double
+          : ARBUTINA_OFFER_UNIT_PRICES.single;
     return Math.min(regularPrice, offerPrice);
   }
 

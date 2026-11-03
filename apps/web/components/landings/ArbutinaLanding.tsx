@@ -15,9 +15,9 @@ import ProductImage from "@/components/ProductImage";
  * Se monta en `app/products/[slug]/page.tsx` cuando el slug o el nombre del
  * producto coinciden con `ARBUTINA_SLUG` o con `/arbutin|tosowoong/i`.
  *
- * Las ofertas por cantidad quedan desactivadas (`BULK_TOTALS` en `null`)
- * porque el backend todavía no conoce los precios promocionales de este
- * producto. El selector normal de cantidad y el carrito siguen funcionando.
+ * Las ofertas por cantidad replican el esquema de las otras landings
+ * (2 unidades con descuento y "paga 2 y lleva 3") y su precio coincide con el
+ * que cobra el carrito vía `lib/product-promotion.ts`.
  */
 
 /* ------------------------------------------------------------------------- */
@@ -56,12 +56,17 @@ const PRODUCT_SHORT_NAME = "Crema Arbutina";
 const PRODUCT_BRAND = "TOSOWOONG";
 
 /**
- * Totales de promoción por cantidad (COP). Se dejan en `null` hasta que el
- * backend (`product-promotion.ts` y su gemela de la API) conozca este
- * producto: mostrar un precio que el carrito no cobra sería engañoso.
+ * Totales de promoción por cantidad (COP), iguales a los de la landing de
+ * Aceite de Orégano porque la unidad también cuesta $69.900.
+ * - 2 unidades: $109.900 en total.
+ * - 3 unidades: $139.800 en total ("paga 2 y lleva 3").
+ *
+ * Deben coincidir con `ARBUTINA_OFFER_UNIT_PRICES` de `lib/product-promotion.ts`
+ * y con su gemela de la API; si no, la landing mostraría un precio que el
+ * carrito no cobra.
  */
 const BULK_TOTALS: Readonly<Record<2 | 3, number | null>> = {
-  2: null,
+  2: 109_900,
   3: null,
 };
 
@@ -603,6 +608,17 @@ export default function ArbutinaLanding({
   const unitPrice = Number(product.price);
   const hasPrice = Number.isFinite(unitPrice) && unitPrice > 0;
   const tiers = useMemo(() => buildTiers(unitPrice), [unitPrice]);
+  const maxDiscount = useMemo(
+    () =>
+      tiers.reduce((max, tier) => {
+        if (tier.regularTotal <= 0) return max;
+        const pct = Math.round(
+          ((tier.regularTotal - tier.total) / tier.regularTotal) * 100,
+        );
+        return Math.max(max, pct);
+      }, 0),
+    [tiers],
+  );
 
   /**
    * Oferta elegida en el selector (`null` = ninguna). SOLO una tarjeta elegida
@@ -677,6 +693,7 @@ export default function ArbutinaLanding({
           --aw-rose-200: #f9c7da;
           --aw-rose-100: #fde7f0;
           --aw-blush: #fff6f9;
+          --aw-gold: #f6b21b;
         }
         @keyframes aw-pulse {
           0% { box-shadow: 0 0 0 0 rgba(212, 61, 122, 0.45); }
@@ -687,16 +704,33 @@ export default function ArbutinaLanding({
           from { transform: translate3d(0, 0, 0); }
           to { transform: translate3d(-50%, 0, 0); }
         }
+        @keyframes aw-shine {
+          0%, 55% { transform: translateX(-130%) skewX(-12deg); }
+          100% { transform: translateX(130%) skewX(-12deg); }
+        }
         .aw-landing .aw-pulse { animation: aw-pulse 2s infinite; }
         .aw-landing .aw-pulse:disabled { animation: none; }
         .aw-landing .aw-wave { animation: aw-wave-shift 18s linear infinite; }
         .aw-landing .aw-wave-reverse { animation: aw-wave-shift 24s linear infinite reverse; }
+        .aw-landing .aw-shine { position: relative; overflow: hidden; }
+        .aw-landing .aw-shine::after {
+          content: "";
+          position: absolute;
+          top: -20%;
+          bottom: -20%;
+          left: 0;
+          width: 45%;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+          animation: aw-shine 4.5s ease-in-out infinite;
+          pointer-events: none;
+        }
         .aw-landing .aw-hide-scrollbar { scrollbar-width: none; }
         .aw-landing .aw-hide-scrollbar::-webkit-scrollbar { display: none; }
         @media (prefers-reduced-motion: reduce) {
           .aw-landing .aw-pulse,
           .aw-landing .aw-wave,
           .aw-landing .aw-wave-reverse { animation: none; }
+          .aw-landing .aw-shine::after { animation: none; opacity: 0; }
           .aw-landing { scroll-behavior: auto; }
         }
       `}</style>
@@ -768,20 +802,81 @@ export default function ArbutinaLanding({
             {/* Selector de ofertas por cantidad */}
             <div id="ofertas" className="scroll-mt-24 space-y-3">
               {tiers.length > 1 ? (
-                <>
-                  <p className="text-center text-sm font-bold text-gray-900 lg:text-left">
-                    Elige tu promoción
-                  </p>
+                <div className="relative overflow-hidden rounded-3xl border border-rose-200 bg-gradient-to-b from-rose-50 via-white to-rose-50 p-4 shadow-[0_20px_55px_-28px_rgba(179,37,97,0.65)] sm:p-5">
+                  {/* Brillos decorativos del panel */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-rose-300/30 blur-3xl"
+                  />
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-rose-200/40 blur-3xl"
+                  />
+
+                  <div className="relative mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-base font-extrabold text-gray-900">
+                        🔥 Elige tu promoción
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        Lleva más y paga menos por cada crema.
+                      </p>
+                    </div>
+                    {maxDiscount > 0 ? (
+                      <span className="rounded-full bg-gradient-to-r from-[var(--aw-rose-600)] to-[var(--aw-rose-800)] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white shadow">
+                        Hasta {maxDiscount}% OFF
+                      </span>
+                    ) : null}
+                  </div>
+
                   <div
                     role="radiogroup"
                     aria-label="Ofertas por cantidad"
-                    className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+                    className="relative grid grid-cols-1 gap-3 sm:grid-cols-3"
                   >
                     {tiers.map((tier) => {
                       const isSelected = tier.qty === selectedQty;
                       const unavailable =
                         soldOut || (typeof stock === "number" && tier.qty > stock);
                       const saving = tier.regularTotal - tier.total;
+                      const discount =
+                        tier.regularTotal > 0
+                          ? Math.round((saving / tier.regularTotal) * 100)
+                          : 0;
+                      const isBest = tier.qty === 3;
+                      const isFeatured = tier.qty === 2;
+
+                      const cardLook = isBest
+                        ? "border-[var(--aw-rose-800)] bg-gradient-to-br from-[var(--aw-rose-800)] via-[var(--aw-rose-900)] to-[var(--aw-rose-950)] text-white shadow-xl"
+                        : isFeatured
+                          ? "border-[var(--aw-rose-400)] bg-gradient-to-b from-white to-rose-100 shadow-lg"
+                          : "border-rose-200 bg-white hover:border-rose-400 hover:shadow-md";
+                      const stateLook = isSelected
+                        ? isBest
+                          ? "-translate-y-1 border-[var(--aw-gold)] ring-4 ring-[var(--aw-gold)]/30 shadow-2xl"
+                          : "-translate-y-1 border-[var(--aw-rose-600)] ring-4 ring-[var(--aw-rose-300)]/60 shadow-2xl"
+                        : "hover:-translate-y-0.5";
+                      const mutedLook = isBest ? "text-rose-100/80" : "text-gray-500";
+                      const titleLook = isBest ? "text-white" : "text-gray-900";
+                      const priceLook = isBest
+                        ? "text-white"
+                        : "text-[var(--aw-rose-700)]";
+                      const badgeLook = isBest
+                        ? "bg-[var(--aw-gold)] text-[var(--aw-rose-950)]"
+                        : isFeatured
+                          ? "bg-[var(--aw-rose-600)] text-white"
+                          : "bg-rose-100 text-[var(--aw-rose-800)]";
+                      const chipLook = isBest
+                        ? "bg-[var(--aw-gold)]/90 text-[var(--aw-rose-950)]"
+                        : "bg-rose-100 text-[var(--aw-rose-800)]";
+                      const radioLook = isBest
+                        ? isSelected
+                          ? "border-[var(--aw-gold)] bg-[var(--aw-gold)]"
+                          : "border-white/60"
+                        : isSelected
+                          ? "border-[var(--aw-rose-600)] bg-[var(--aw-rose-600)]"
+                          : "border-gray-300 bg-white";
+
                       return (
                         <button
                           key={tier.qty}
@@ -793,60 +888,96 @@ export default function ArbutinaLanding({
                             setFailed(false);
                             setSelectedQty(isSelected ? null : tier.qty);
                           }}
-                          className={`relative min-h-11 rounded-2xl border-2 p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
-                            isSelected
-                              ? "border-[var(--aw-rose-600)] bg-rose-50 shadow-lg"
-                              : "border-rose-200 bg-white hover:border-[var(--aw-rose-600)] hover:shadow-md"
-                          }`}
+                          className={`relative flex min-h-11 flex-col rounded-2xl border-2 p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--aw-rose-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${cardLook} ${stateLook} ${isBest ? "aw-shine" : ""}`}
                         >
-                          {tier.badge ? (
-                            <span className="absolute -top-3 left-4 rounded-full bg-[var(--aw-rose-700)] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
-                              {tier.badge}
-                            </span>
-                          ) : null}
                           <span
-                            className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                              isSelected
-                                ? "border-[var(--aw-rose-600)]"
-                                : "border-gray-300"
-                            }`}
+                            className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors ${radioLook}`}
                             aria-hidden="true"
                           >
-                            <span
-                              className={`h-2.5 w-2.5 rounded-full ${
-                                isSelected ? "bg-[var(--aw-rose-600)]" : "bg-transparent"
-                              }`}
-                            />
+                            {isSelected ? (
+                              <CheckIcon
+                                className={`h-3 w-3 ${
+                                  isBest
+                                    ? "text-[var(--aw-rose-950)]"
+                                    : "text-white"
+                                }`}
+                              />
+                            ) : null}
                           </span>
-                          <span className="block text-[11px] font-bold uppercase text-gray-500">
+
+                          {tier.badge ? (
+                            <span
+                              className={`mb-2 inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] ${badgeLook}`}
+                            >
+                              {tier.badge}
+                            </span>
+                          ) : (
+                            <span
+                              className="mb-2 block h-[22px]"
+                              aria-hidden="true"
+                            />
+                          )}
+
+                          <span
+                            className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${mutedLook}`}
+                          >
                             {tier.label}
                           </span>
-                          <span className="mt-1 block text-base font-bold text-gray-900">
+                          <span className={`mt-0.5 block text-sm font-bold ${titleLook}`}>
                             {tier.qty} {tier.qty === 1 ? "unidad" : "unidades"}
                           </span>
-                          <span className="mt-2 block text-2xl font-extrabold text-[var(--aw-rose-700)]">
+                          <span
+                            className={`mt-2 block text-2xl font-black leading-none tracking-tight sm:text-[1.6rem] ${priceLook}`}
+                          >
                             {formatCop(tier.total)}
                           </span>
-                          <span className="block text-xs text-gray-500">
+                          <span className={`mt-1 block text-[11px] font-medium ${mutedLook}`}>
+                            {tier.qty > 1
+                              ? `${formatCop(tier.total / tier.qty)} c/u`
+                              : "Precio por unidad"}
+                          </span>
+
+                          <span className="mt-3 flex flex-wrap items-center gap-1.5">
                             {saving > 0 ? (
                               <>
-                                <del>{formatCop(tier.regularTotal)}</del> ·{" "}
-                                {tier.note ?? `Ahorras ${formatCop(saving)}`}
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-black ${chipLook}`}
+                                >
+                                  Ahorras {formatCop(saving)}
+                                </span>
+                                <del className={`text-[10px] ${mutedLook}`}>
+                                  {formatCop(tier.regularTotal)}
+                                </del>
                               </>
                             ) : (
-                              "COP · Pago contra entrega"
+                              <span className={`text-[10px] ${mutedLook}`}>
+                                Pago contra entrega
+                              </span>
                             )}
                           </span>
+
+                          {discount > 0 ? (
+                            <span
+                              className={`mt-2 inline-flex w-fit rounded-md px-1.5 py-0.5 text-[10px] font-black ${
+                                isBest
+                                  ? "bg-white/15 text-white"
+                                  : "bg-[var(--aw-rose-700)] text-white"
+                              }`}
+                            >
+                              -{discount}% OFF
+                            </span>
+                          ) : null}
                         </button>
                       );
                     })}
                   </div>
-                  <p className="text-center text-xs text-gray-500 lg:text-left">
+
+                  <p className="relative mt-3 text-center text-[11px] text-gray-500">
                     {selectedTier
                       ? "Toca de nuevo la oferta para quitarla y comprar a precio normal."
                       : "Sin oferta elegida pagas el precio normal por unidad."}
                   </p>
-                </>
+                </div>
               ) : null}
 
               {/* Cantidad: solo en compra normal (sin oferta elegida) */}
