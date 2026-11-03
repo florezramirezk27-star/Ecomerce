@@ -20,6 +20,7 @@ import AceiteOreganoLanding, { LANDING_SLUG } from "@/components/landings/Aceite
 import GlucoraLanding, { GLUCORA_SLUG } from "@/components/landings/GlucoraLanding";
 import ArbutinaLanding, { ARBUTINA_SLUG } from "@/components/landings/ArbutinaLanding";
 import BisagrasLanding, { BISAGRAS_SLUG } from "@/components/landings/BisagrasLanding";
+import KitEmergenciaVehiculoLanding, { KIT_EMERGENCIA_SLUG } from "@/components/landings/KitEmergenciaVehiculoLanding";
 
 interface ProductVariation {
   id: number;
@@ -442,6 +443,11 @@ export default function ProductPage() {
   const isBisagrasProduct =
     product.slug === BISAGRAS_SLUG ||
     /bisagra/i.test(`${product.name} ${product.slug}`);
+  const isKitEmergenciaVehiculoProduct =
+    product.slug === KIT_EMERGENCIA_SLUG ||
+    /emergencia|vehiculo|vehículo|kit de emergencia/i.test(
+      `${product.name} ${product.slug}`,
+    );
   const hasVariations = variations.length > 0;
   const selectedVariation =
     variations.find((v) => v.id === selectedVariationId) ?? null;
@@ -1105,6 +1111,30 @@ const isVideo = selectedMedia?.kind === "video";
 
       {isBisagrasProduct && (
         <BisagrasLanding
+          product={{
+            id: product.id,
+            name: product.name,
+            slug: product.slug,
+            price: product.price,
+            image: product.image,
+            stock: product.stock,
+          }}
+          onAddToCart={async (quantity, opts) =>
+            handleLandingAddToCart({
+              quantity,
+              promotion: opts?.promotion === true,
+            })
+          }
+          offerEndTime={
+            typeof offerEndTime === "number"
+              ? new Date(offerEndTime).toISOString()
+              : undefined
+          }
+        />
+      )}
+
+      {isKitEmergenciaVehiculoProduct && (
+        <KitEmergenciaVehiculoLanding
           product={{
             id: product.id,
             name: product.name,
