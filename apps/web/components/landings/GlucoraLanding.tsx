@@ -396,8 +396,8 @@ function DotChip({
       aria-hidden={decorative ? true : undefined}
       aria-label={decorative ? undefined : dot.label}
       title={decorative ? undefined : dot.label}
-      className={`inline-flex shrink-0 items-center justify-center rounded-full font-bold ${
-        size === "lg" ? "h-11 w-11 text-sm" : "h-7 w-7 text-[10px]"
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold ring-1 ring-black/10 ${
+        size === "lg" ? "h-12 w-12 text-xs" : "h-7 w-7 text-[10px]"
       }`}
       style={{ backgroundColor: dot.bg, color: dot.fg }}
     >
@@ -419,7 +419,7 @@ function BottleGlyph({ gold }: { gold?: boolean }) {
       <rect x="8.5" y="7" width="3" height="4" fill="#15090C" />
       <path
         d="M4 14.5c0-2.2 1.8-3.5 3.5-3.5h5c1.7 0 3.5 1.3 3.5 3.5V32a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z"
-        fill={gold ? "#E8A020" : "#9A2431"}
+        fill={gold ? "#F6B21B" : "#B3122F"}
       />
       <rect x="4" y="18" width="12" height="9" fill={gold ? "#FFF3D1" : "#F2E7E1"} opacity="0.92" />
     </svg>
@@ -450,24 +450,46 @@ function SectionHeading({
   title,
   subtitle,
   tone = "light",
+  index,
 }: {
   title: string;
   subtitle?: string;
   tone?: "light" | "dark";
+  /** Número de capítulo, solo decorativo. */
+  index?: string;
 }) {
+  const isDark = tone === "dark";
+
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-xl">
+      <div
+        aria-hidden="true"
+        className={`mb-5 flex items-center gap-3 ${
+          isDark ? "text-[var(--gl-turmeric)]" : "text-[var(--gl-garnet)]"
+        }`}
+      >
+        {index ? (
+          <span className="text-[11px] font-semibold tracking-[0.28em]">
+            {index}
+          </span>
+        ) : null}
+        <span
+          className={`h-px w-10 ${
+            isDark ? "bg-white/25" : "bg-[var(--gl-ink)]/20"
+          }`}
+        />
+      </div>
       <h2
-        className={`gl-serif text-3xl font-semibold leading-tight sm:text-4xl ${
-          tone === "dark" ? "text-[var(--gl-bone)]" : "text-[var(--gl-ink)]"
+        className={`gl-serif text-[1.9rem] font-semibold leading-[1.08] sm:text-[2.45rem] ${
+          isDark ? "text-[var(--gl-bone)]" : "text-[var(--gl-ink)]"
         }`}
       >
         {title}
       </h2>
       {subtitle ? (
         <p
-          className={`mt-3 text-base leading-relaxed ${
-            tone === "dark" ? "text-[var(--gl-bone)]/75" : "text-[var(--gl-ink)]/70"
+          className={`mt-4 text-[15px] leading-relaxed ${
+            isDark ? "text-[var(--gl-bone)]/65" : "text-[var(--gl-ink)]/65"
           }`}
         >
           {subtitle}
@@ -481,12 +503,21 @@ function SectionHeading({
 function UrgencyMarquee() {
   const group = (hidden: boolean) => (
     <div
-      className="flex shrink-0 items-center gap-10 pr-10"
+      className="flex shrink-0 items-center"
       aria-hidden={hidden ? true : undefined}
     >
       {MARQUEE_ITEMS.map((item) => (
-        <span key={item.strong}>
-          <strong>{item.strong}</strong> {item.rest}
+        <span key={item.strong} className="flex items-center">
+          <span className="px-6 text-[10px] uppercase tracking-[0.18em] sm:text-[11px]">
+            <strong className="font-semibold text-[var(--gl-turmeric)]">
+              {item.strong}
+            </strong>{" "}
+            <span className="text-[var(--gl-bone)]/60">{item.rest}</span>
+          </span>
+          <span
+            aria-hidden="true"
+            className="h-1 w-1 shrink-0 rounded-full bg-[var(--gl-turmeric)]/50"
+          />
         </span>
       ))}
     </div>
@@ -494,7 +525,7 @@ function UrgencyMarquee() {
 
   return (
     <div
-      className="overflow-hidden whitespace-nowrap bg-[var(--gl-wine-900)] py-2.5 text-[11px] font-medium text-[var(--gl-turmeric)] sm:text-sm"
+      className="overflow-hidden whitespace-nowrap border-b border-white/10 bg-[var(--gl-wine-950)] py-2.5"
       aria-label="Información de envío y pago"
     >
       <div className="flex w-max animate-marquee will-change-transform">
@@ -563,18 +594,22 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
   const card = (item: Review, key: string) => (
     <figure
       key={key}
-      className="flex w-80 shrink-0 flex-col justify-between rounded-2xl border border-[var(--gl-stone-2)] bg-white p-5"
+      className="flex w-[19rem] shrink-0 flex-col justify-between rounded-xl border border-[var(--gl-stone-2)] bg-white p-6 transition-colors hover:border-[var(--gl-garnet)]/35 sm:w-80"
     >
-      <div className="space-y-3">
+      <div>
         <Stars value={item.stars} />
-        <h3 className="gl-serif text-lg font-semibold leading-snug text-[var(--gl-ink)]">
+        <h3 className="gl-serif mt-3 text-[1.15rem] font-semibold leading-snug text-[var(--gl-ink)]">
           {item.title}
         </h3>
-        <blockquote className="text-sm leading-relaxed text-[var(--gl-ink)]/75">
+        <blockquote className="mt-2 text-[13.5px] leading-relaxed text-[var(--gl-ink)]/65">
           {item.text}
         </blockquote>
       </div>
-      <figcaption className="mt-4 text-sm font-semibold text-[var(--gl-ink)]">
+      <figcaption className="mt-5 flex items-center gap-2.5 text-xs font-semibold tracking-wide text-[var(--gl-ink)]">
+        <span
+          aria-hidden="true"
+          className="h-px w-5 bg-[var(--gl-garnet)]/60"
+        />
         {item.name}
       </figcaption>
     </figure>
@@ -606,7 +641,7 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
 function VideoCard({ video }: { video: MediaVideo }) {
   return (
     <div className="space-y-3">
-      <div className="relative mx-auto aspect-[9/16] w-full max-w-[18rem] overflow-hidden rounded-2xl bg-black sm:max-w-xs">
+      <div className="relative mx-auto aspect-[9/16] w-full max-w-[17rem] overflow-hidden rounded-xl bg-black ring-1 ring-black/10 sm:max-w-[18rem]">
         <video
           controls
           playsInline
@@ -621,7 +656,9 @@ function VideoCard({ video }: { video: MediaVideo }) {
       <h3 className="gl-serif text-center text-lg font-semibold text-[var(--gl-ink)]">
         {video.title}
       </h3>
-      <p className="text-center text-sm text-[var(--gl-ink)]/70">{video.caption}</p>
+      <p className="text-center text-[13px] leading-relaxed text-[var(--gl-ink)]/70">
+        {video.caption}
+      </p>
     </div>
   );
 }
@@ -721,25 +758,38 @@ export default function GlucoraLanding({
     <div className="gl-landing bg-[var(--gl-stone)] text-[var(--gl-ink)] antialiased">
       <style>{`
         .gl-landing {
-          --gl-wine-950: #1e070c;
-          --gl-wine-900: #3a0c14;
-          --gl-garnet: #8e1b28;
-          --gl-turmeric: #e8a020;
+          --gl-wine-950: #150409;
+          --gl-wine-900: #290710;
+          --gl-wine-800: #480d1c;
+          --gl-garnet: #b3122f;
+          --gl-garnet-soft: #d24b60;
+          --gl-turmeric: #f6b21b;
+          --gl-turmeric-soft: #f8d488;
           --gl-cinnamon: #a0643a;
-          --gl-bone: #f4ede4;
-          --gl-stone: #fafbf7;
-          --gl-stone-2: #d9d2c6;
-          --gl-ink: #24161a;
+          --gl-bone: #f7f0e7;
+          --gl-stone: #faf8f4;
+          --gl-stone-2: #e8e1d6;
+          --gl-ink: #1c1115;
+        }
+        .gl-landing ::selection {
+          background: var(--gl-turmeric);
+          color: var(--gl-wine-950);
         }
         .gl-landing .gl-serif {
           font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
           letter-spacing: -0.015em;
         }
+        .gl-landing .gl-hero-glow {
+          background-color: var(--gl-wine-950);
+          background-image:
+            radial-gradient(55% 45% at 82% 12%, rgba(246, 178, 27, 0.14), transparent 68%),
+            radial-gradient(45% 40% at 4% 86%, rgba(179, 18, 47, 0.3), transparent 70%);
+        }
         .gl-landing .gl-hide-scrollbar { scrollbar-width: none; }
         .gl-landing .gl-hide-scrollbar::-webkit-scrollbar { display: none; }
         .gl-landing :focus-visible {
           outline: 2px solid var(--gl-turmeric);
-          outline-offset: 2px;
+          outline-offset: 3px;
         }
         @media (prefers-reduced-motion: reduce) {
           .gl-landing { scroll-behavior: auto; }
@@ -750,24 +800,42 @@ export default function GlucoraLanding({
       <UrgencyMarquee />
 
       {/* 2. Hero */}
-      <section className="bg-[var(--gl-wine-950)] px-4 pb-14 pt-8 text-[var(--gl-bone)] sm:pt-12 lg:pb-20 lg:pt-16">
-        <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-12 lg:gap-x-12 lg:gap-y-6">
+      <section className="gl-hero-glow relative overflow-hidden px-5 pb-16 pt-10 text-[var(--gl-bone)] sm:px-6 sm:pt-14 lg:pb-24 lg:pt-16">
+        <div className="mx-auto grid max-w-6xl gap-x-12 gap-y-10 lg:grid-cols-12">
           {/* Titular */}
-          <div className="space-y-4 lg:col-span-6 lg:col-start-1 lg:row-start-1">
-            <h1 className="gl-serif text-4xl font-semibold leading-[1.05] sm:text-5xl lg:text-6xl">
-              Cinco ingredientes en un solo gotero
+          <div className="lg:col-span-6 lg:col-start-1 lg:row-start-1">
+            <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.26em] text-[var(--gl-bone)]/60 sm:text-[11px]">
+              <span
+                aria-hidden="true"
+                className="h-1.5 w-1.5 rounded-full bg-[var(--gl-turmeric)]"
+              />
+              <span className="text-[var(--gl-bone)]">{PRODUCT_NAME}</span>
+              <span
+                aria-hidden="true"
+                className="h-px w-8 bg-[var(--gl-turmeric)]/50"
+              />
+              <span>50 ml</span>
+            </div>
+            <h1 className="gl-serif mt-6 text-balance text-[2.4rem] font-semibold leading-[1] sm:text-[3.4rem] lg:text-[3.2rem] xl:text-[3.75rem]">
+              Cinco ingredientes
+              <span className="mt-1 block italic text-[var(--gl-turmeric)]">
+                en un solo gotero
+              </span>
             </h1>
-            <p className="max-w-xl text-base leading-relaxed text-[var(--gl-bone)]/80 sm:text-lg">
+            <p className="mt-6 max-w-md text-[15px] leading-relaxed text-[var(--gl-bone)]/70 sm:text-base">
               Berberina, canela de Ceilán, cromo, melón amargo y cúrcuma en
               gotas líquidas de 50 ml, para acompañar tu bienestar metabólico
               todos los días.
             </p>
-            <ul className="grid max-w-xl grid-cols-1 gap-2 text-sm text-[var(--gl-bone)]/85 sm:grid-cols-2">
+            <ul className="mt-8 grid max-w-md grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
               {QUICK_FACTS.map((fact) => (
-                <li key={fact} className="flex items-start gap-2">
+                <li
+                  key={fact}
+                  className="flex items-start gap-2.5 border-t border-white/12 pt-3 text-[13px] leading-snug text-[var(--gl-bone)]/75"
+                >
                   <span
                     aria-hidden="true"
-                    className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--gl-turmeric)]"
+                    className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[var(--gl-turmeric)]"
                   />
                   {fact}
                 </li>
@@ -776,16 +844,26 @@ export default function GlucoraLanding({
           </div>
 
           {/* Imagen o video */}
-          <div className="lg:col-span-6 lg:col-start-7 lg:row-span-2 lg:row-start-1">
-            <div className="relative mx-auto aspect-[4/5] w-full max-w-md overflow-hidden rounded-[2rem] bg-[var(--gl-wine-900)] ring-1 ring-white/10 lg:max-w-none">
-              {heroMedia}
+          <div className="lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1">
+            <div className="relative mx-auto w-full max-w-[25rem] lg:max-w-none lg:pt-2">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -inset-2.5 rounded-[1.75rem] border border-[var(--gl-turmeric)]/25"
+              />
+              <div className="relative aspect-[4/5] overflow-hidden rounded-[1.4rem] bg-[var(--gl-wine-900)] ring-1 ring-white/10">
+                {heroMedia}
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[var(--gl-wine-950)]/50 via-transparent to-transparent"
+                />
+              </div>
             </div>
           </div>
 
           {/* Compra */}
           <div
             id="ofertas"
-            className="scroll-mt-24 space-y-4 lg:col-span-6 lg:col-start-1 lg:row-start-2"
+            className="scroll-mt-24 space-y-3 lg:col-span-6 lg:col-start-1 lg:row-start-2"
           >
             {tiers.length > 1 ? (
               <div
@@ -808,10 +886,10 @@ export default function GlucoraLanding({
                         setFailed(false);
                         setSelectedQty(isSelected ? null : tier.qty);
                       }}
-                      className={`grid min-h-16 w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border-2 px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:gap-4 sm:px-4 ${
+                      className={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-45 sm:gap-4 sm:px-4 ${
                         isSelected
-                          ? "border-[var(--gl-turmeric)] bg-[var(--gl-wine-900)]"
-                          : "border-white/15 bg-white/5 hover:border-white/40"
+                          ? "border-[var(--gl-turmeric)] bg-white/[0.06]"
+                          : "border-white/12 hover:border-white/30 hover:bg-white/[0.03]"
                       }`}
                     >
                       <span className="flex w-16 items-end gap-0.5" aria-hidden="true">
@@ -819,20 +897,26 @@ export default function GlucoraLanding({
                           <BottleGlyph key={i} gold={tier.qty === 3 && i === 2} />
                         ))}
                       </span>
-                      <span>
-                        <span className="block text-base font-semibold">
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold sm:text-[15px]">
                           {tier.qty} {tier.qty === 1 ? "frasco" : "frascos"}
                         </span>
-                        <span className="block text-xs text-[var(--gl-bone)]/70">
+                        <span className="mt-0.5 block text-[11px] leading-snug text-[var(--gl-bone)]/55">
                           {tier.note}
                         </span>
                       </span>
                       <span className="text-right">
-                        <span className="gl-serif block text-xl font-semibold text-[var(--gl-turmeric)]">
+                        <span
+                          className={`gl-serif block text-lg font-semibold sm:text-xl ${
+                            isSelected
+                              ? "text-[var(--gl-turmeric)]"
+                              : "text-[var(--gl-bone)]"
+                          }`}
+                        >
                           {formatCop(tier.total)}
                         </span>
                         {tier.regularTotal > tier.total ? (
-                          <del className="block text-xs text-[var(--gl-bone)]/55">
+                          <del className="block text-[11px] text-[var(--gl-bone)]/55">
                             {formatCop(tier.regularTotal)}
                           </del>
                         ) : null}
@@ -840,7 +924,7 @@ export default function GlucoraLanding({
                     </button>
                   );
                 })}
-                <p className="text-xs text-[var(--gl-bone)]/60">
+                <p className="pt-1 text-[11px] leading-relaxed text-[var(--gl-bone)]/55">
                   {selectedTier
                     ? "Toca de nuevo la oferta para quitarla y comprar a precio normal."
                     : "Sin oferta elegida pagas el precio normal por unidad."}
@@ -850,22 +934,22 @@ export default function GlucoraLanding({
 
             {/* Cantidad: solo en compra normal (sin oferta elegida) */}
             {!selectedTier && hasPrice ? (
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-white/15 px-4 py-3">
+              <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-4">
                 <div>
-                  <span className="block text-xs text-[var(--gl-bone)]/65">
+                  <span className="block text-[10px] uppercase tracking-[0.16em] text-[var(--gl-bone)]/55">
                     Precio normal por frasco
                   </span>
-                  <span className="gl-serif text-xl font-semibold text-[var(--gl-turmeric)]">
+                  <span className="gl-serif mt-1 block text-xl font-semibold text-[var(--gl-turmeric)]">
                     {formatCop(unitPrice)}
                   </span>
                 </div>
-                <div className="flex items-center gap-2" role="group" aria-label="Cantidad">
+                <div className="flex items-center gap-1.5" role="group" aria-label="Cantidad">
                   <button
                     type="button"
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                     disabled={quantity <= 1}
                     aria-label="Disminuir cantidad"
-                    className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/25 text-lg font-bold disabled:opacity-40"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-lg font-semibold transition-colors hover:border-white/45 disabled:opacity-35"
                   >
                     −
                   </button>
@@ -880,7 +964,7 @@ export default function GlucoraLanding({
                     onClick={() => setQuantity((q) => Math.min(maxQuantity, q + 1))}
                     disabled={quantity >= maxQuantity}
                     aria-label="Aumentar cantidad"
-                    className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/25 text-lg font-bold disabled:opacity-40"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-lg font-semibold transition-colors hover:border-white/45 disabled:opacity-35"
                   >
                     +
                   </button>
@@ -893,20 +977,36 @@ export default function GlucoraLanding({
                 type="button"
                 onClick={() => void handleBuy()}
                 disabled={pending || soldOut || !hasPrice}
-                className={`flex min-h-14 w-full items-center justify-center rounded-xl px-5 py-4 text-base font-bold transition-colors sm:text-lg ${
+                className={`group mt-1 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl px-5 py-4 text-[15px] font-bold tracking-wide transition-colors sm:text-base ${
                   soldOut || !hasPrice
-                    ? "cursor-not-allowed bg-white/20 text-white/60"
-                    : "bg-[var(--gl-turmeric)] text-[var(--gl-wine-950)] hover:brightness-110"
+                    ? "cursor-not-allowed bg-white/15 text-white/50"
+                    : "bg-[var(--gl-turmeric)] text-[var(--gl-wine-950)] hover:bg-[var(--gl-turmeric-soft)]"
                 } ${pending ? "cursor-wait opacity-75" : ""}`}
               >
                 {ctaLabel}
+                {!pending && !soldOut && hasPrice ? (
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    className="h-4 w-4 transition-transform group-hover:translate-x-1"
+                  >
+                    <path
+                      d="M4 10h11M11 5.5 15.5 10 11 14.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : null}
               </button>
               {failed ? (
                 <p role="alert" className="mt-2 text-sm text-[#ff9aa5]">
                   No pudimos agregar el producto. Intenta de nuevo.
                 </p>
               ) : null}
-              <p className="mt-2 text-center text-xs text-[var(--gl-bone)]/60">
+              <p className="mt-3 text-center text-[11px] text-[var(--gl-bone)]/55">
                 Paga al recibir en casa. Envío gratis a toda Colombia.
               </p>
             </div>
@@ -915,29 +1015,45 @@ export default function GlucoraLanding({
       </section>
 
       {/* 3. Señales de que necesitas Glucora */}
-      <section className="px-4 py-16 sm:py-20">
-        <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-12">
+      <section className="px-5 py-20 sm:px-6 sm:py-28">
+        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-12 lg:gap-16">
           <div className="lg:col-span-5">
             <SectionHeading
+              index="01"
               title="Señales de que necesitas Glucora"
               subtitle="Situaciones del día a día donde un apoyo constante y fácil de tomar hace la diferencia."
             />
             <a
               href="#ofertas"
-              className="mt-6 inline-flex min-h-11 items-center rounded-xl bg-[var(--gl-garnet)] px-5 font-semibold text-white transition-colors hover:bg-[var(--gl-wine-900)]"
+              className="group mt-8 inline-flex items-center gap-3 text-sm font-semibold text-[var(--gl-garnet)]"
             >
               Ver promociones
+              <span
+                aria-hidden="true"
+                className="h-px w-8 bg-current transition-all group-hover:w-12"
+              />
             </a>
           </div>
-          <ul className="divide-y divide-[var(--gl-stone-2)] border-y border-[var(--gl-stone-2)] lg:col-span-7">
-            {SIGNS.map((sign) => (
-              <li key={sign.title} className="flex gap-4 py-5">
+          <ul className="lg:col-span-7 lg:pt-2">
+            {SIGNS.map((sign, index) => (
+              <li
+                key={sign.title}
+                className="grid grid-cols-[auto_1fr] gap-4 border-t border-[var(--gl-stone-2)] py-6 last:border-b sm:gap-6 sm:py-7"
+              >
                 <DotChip id={sign.dot} decorative />
                 <div>
-                  <h3 className="gl-serif text-xl font-semibold text-[var(--gl-ink)]">
-                    {sign.title}
-                  </h3>
-                  <p className="mt-1 max-w-prose text-sm leading-relaxed text-[var(--gl-ink)]/70">
+                  <div className="flex items-baseline justify-between gap-4">
+                    <h3 className="gl-serif text-[1.2rem] font-semibold leading-snug text-[var(--gl-ink)] sm:text-[1.35rem]">
+                      {sign.title}
+                    </h3>
+                    <span
+                      aria-hidden="true"
+                      className="gl-serif text-xs text-[var(--gl-ink)]/30"
+                    >
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 max-w-prose text-[13.5px] leading-relaxed text-[var(--gl-ink)]/70 sm:text-sm">
                     {sign.text}
                   </p>
                 </div>
@@ -949,10 +1065,10 @@ export default function GlucoraLanding({
 
       {/* 4. Videos del producto (solo con videos cargados) */}
       {VIDEOS.length > 0 ? (
-        <section className="bg-white px-4 py-16">
-          <div className="mx-auto max-w-6xl space-y-8">
+        <section className="border-y border-[var(--gl-stone-2)] bg-white px-5 py-20 sm:px-6 sm:py-24">
+          <div className="mx-auto max-w-6xl space-y-10">
             <SectionHeading title="Mira Glucora en acción" />
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
               {VIDEOS.map((video) => (
                 <VideoCard key={video.src} video={video} />
               ))}
@@ -962,57 +1078,80 @@ export default function GlucoraLanding({
       ) : null}
 
       {/* 5. Ingredientes */}
-      <section className="bg-[var(--gl-wine-950)] px-4 py-16 text-[var(--gl-bone)] sm:py-20">
-        <div className="mx-auto max-w-6xl space-y-10">
-          <SectionHeading
-            tone="dark"
-            title="Lo que dice la etiqueta, en palabras simples"
-            subtitle="Los cinco ingredientes principales y las vitaminas B y C, agrupados en tres ideas. Los círculos de color son los mismos que verás en el frasco."
-          />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {INGREDIENT_GROUPS.map((group) => (
-              <article
-                key={group.title}
-                className="flex flex-col gap-4 rounded-2xl border border-white/15 bg-white/[0.04] p-6"
-              >
-                <h3 className="gl-serif text-2xl font-semibold">{group.title}</h3>
-                <p className="text-sm leading-relaxed text-[var(--gl-bone)]/75">
-                  {group.text}
-                </p>
-                {group.dots.length > 0 ? (
-                  <div className="mt-auto flex items-center gap-2 pt-2">
-                    {group.dots.map((id) => (
-                      <DotChip key={id} id={id} size="lg" />
-                    ))}
+      <section className="gl-hero-glow relative px-5 py-20 text-[var(--gl-bone)] sm:px-6 sm:py-28">
+        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-12 lg:gap-16">
+          <div className="lg:col-span-4">
+            <div className="lg:sticky lg:top-24">
+              <SectionHeading
+                tone="dark"
+                index="02"
+                title="Lo que dice la etiqueta, en palabras simples"
+                subtitle="Los cinco ingredientes principales y las vitaminas B y C, agrupados en tres ideas. Los círculos de color son los mismos que verás en el frasco."
+              />
+            </div>
+          </div>
+          <div className="lg:col-span-8">
+            <div className="border-t border-white/12">
+              {INGREDIENT_GROUPS.map((group, index) => (
+                <article
+                  key={group.title}
+                  className="grid gap-4 border-b border-white/12 py-7 sm:grid-cols-[1fr_auto] sm:items-start sm:gap-8 sm:py-8"
+                >
+                  <div>
+                    <span
+                      aria-hidden="true"
+                      className="gl-serif text-xs tracking-widest text-[var(--gl-turmeric)]/80"
+                    >
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <h3 className="gl-serif mt-2 text-[1.5rem] font-semibold leading-tight sm:text-[1.7rem]">
+                      {group.title}
+                    </h3>
+                    <p className="mt-3 max-w-prose text-[13.5px] leading-relaxed text-[var(--gl-bone)]/65 sm:text-sm">
+                      {group.text}
+                    </p>
                   </div>
-                ) : null}
-              </article>
-            ))}
+                  {group.dots.length > 0 ? (
+                    <div className="flex items-center gap-2 sm:flex-col sm:items-end">
+                      {group.dots.map((id) => (
+                        <DotChip key={id} id={id} size="lg" />
+                      ))}
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       {/* 6. Cómo usarlo */}
-      <section className="px-4 py-16 sm:py-20">
-        <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-12">
+      <section className="px-5 py-20 sm:px-6 sm:py-28">
+        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-12 lg:gap-16">
           <div className="lg:col-span-5">
             <SectionHeading
+              index="03"
               title="Cómo usarlo"
               subtitle="Un gotero, un vaso de agua y una hora fija. Eso es todo."
             />
           </div>
-          <ol className="divide-y divide-[var(--gl-stone-2)] border-y border-[var(--gl-stone-2)] lg:col-span-7">
+          <ol className="lg:col-span-7">
             {USAGE_STEPS.map((step, index) => (
-              <li key={step.title} className="flex gap-5 py-5">
+              <li
+                key={step.title}
+                className="grid grid-cols-[auto_1fr] gap-5 border-t border-[var(--gl-stone-2)] py-6 last:border-b sm:gap-7"
+              >
                 <span
                   aria-hidden="true"
-                  className="gl-serif w-8 shrink-0 text-4xl font-semibold leading-none text-[var(--gl-garnet)]"
+                  className="gl-serif text-3xl font-semibold leading-none text-[var(--gl-garnet)]/80 sm:text-4xl"
                 >
-                  {index + 1}
+                  {String(index + 1).padStart(2, "0")}
                 </span>
-                <div>
-                  <h3 className="gl-serif text-xl font-semibold">{step.title}</h3>
-                  <p className="mt-1 max-w-prose text-sm leading-relaxed text-[var(--gl-ink)]/70">
+                <div className="pt-0.5">
+                  <h3 className="gl-serif text-[1.2rem] font-semibold text-[var(--gl-ink)]">
+                    {step.title}
+                  </h3>
+                  <p className="mt-1.5 max-w-prose text-[13.5px] leading-relaxed text-[var(--gl-ink)]/70 sm:text-sm">
                     {step.text}
                   </p>
                 </div>
@@ -1024,8 +1163,8 @@ export default function GlucoraLanding({
 
       {/* 7. Resultados reales (solo con material real) */}
       {RESULTS.length > 0 ? (
-        <section className="bg-white px-4 py-16">
-          <div className="mx-auto max-w-6xl space-y-8">
+        <section className="border-t border-[var(--gl-stone-2)] bg-white px-5 py-20 sm:px-6 sm:py-24">
+          <div className="mx-auto max-w-6xl space-y-10">
             <SectionHeading
               title="Resultados de clientes"
               subtitle="Los resultados pueden variar de una persona a otra."
@@ -1034,7 +1173,7 @@ export default function GlucoraLanding({
               {RESULTS.map((result) => (
                 <figure
                   key={result.src}
-                  className="overflow-hidden rounded-2xl border border-[var(--gl-stone-2)] bg-[var(--gl-stone)]"
+                  className="overflow-hidden rounded-xl border border-[var(--gl-stone-2)] bg-[var(--gl-stone)]"
                 >
                   <div className="relative aspect-[4/5]">
                     <ProductImage
@@ -1045,7 +1184,7 @@ export default function GlucoraLanding({
                     />
                   </div>
                   {result.caption ? (
-                    <figcaption className="p-3 text-sm text-[var(--gl-ink)]/70">
+                    <figcaption className="p-3 text-[13px] text-[var(--gl-ink)]/70">
                       {result.caption}
                     </figcaption>
                   ) : null}
@@ -1057,21 +1196,21 @@ export default function GlucoraLanding({
       ) : null}
 
       {/* 8. Galería */}
-      <section className="bg-white px-4 py-16 sm:py-20">
-        <div className="mx-auto max-w-6xl space-y-8">
-          <SectionHeading title="Mira el frasco de cerca" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <section className="bg-white px-5 py-20 sm:px-6 sm:py-28">
+        <div className="mx-auto max-w-6xl space-y-10">
+          <SectionHeading index="04" title="Mira el frasco de cerca" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-6">
             {GALLERY.map((image, index) => (
               <div
                 key={image.src}
-                className="group relative aspect-[4/5] overflow-hidden rounded-2xl bg-[var(--gl-wine-900)]"
+                className="group relative aspect-[4/5] overflow-hidden rounded-xl bg-[var(--gl-wine-900)] ring-1 ring-black/5"
               >
                 <ProductImage
                   src={cld(image.src)}
                   alt={image.alt}
                   priority={index === 0}
                   sizes="(max-width: 640px) 100vw, 50vw"
-                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
                 />
               </div>
             ))}
@@ -1080,20 +1219,23 @@ export default function GlucoraLanding({
       </section>
 
       {/* 9. Reseñas */}
-      <section className="overflow-hidden px-4 py-16 sm:py-20">
-        <div className="mx-auto max-w-6xl space-y-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <SectionHeading title="Lo que dicen quienes lo usan" />
-            <div className="flex items-center gap-3">
+      <section className="overflow-hidden bg-[var(--gl-stone)] px-5 py-20 sm:px-6 sm:py-28">
+        <div className="mx-auto max-w-6xl space-y-10">
+          <div className="flex flex-col gap-6 border-b border-[var(--gl-stone-2)] pb-8 sm:flex-row sm:items-end sm:justify-between">
+            <SectionHeading
+              index="05"
+              title="Lo que dicen quienes lo usan"
+            />
+            <div className="flex items-end gap-4">
               <span className="gl-serif text-5xl font-semibold leading-none">
                 {average.toLocaleString("es-CO", {
                   minimumFractionDigits: 1,
                   maximumFractionDigits: 1,
                 })}
               </span>
-              <div>
+              <div className="pb-1">
                 <Stars value={Math.floor(average)} />
-                <span className="block text-sm text-[var(--gl-ink)]/65">
+                <span className="mt-1 block text-xs text-[var(--gl-ink)]/65">
                   {REVIEWS.length} reseñas
                 </span>
               </div>
@@ -1104,27 +1246,45 @@ export default function GlucoraLanding({
       </section>
 
       {/* 10. CTA final + garantía */}
-      <section className="bg-[var(--gl-wine-950)] px-4 py-16 text-[var(--gl-bone)] sm:py-20">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <h2 className="gl-serif text-3xl font-semibold leading-tight sm:text-5xl">
+      <section className="gl-hero-glow relative overflow-hidden px-5 py-20 text-[var(--gl-bone)] sm:px-6 sm:py-28">
+        <div className="mx-auto max-w-4xl text-center">
+          <span
+            aria-hidden="true"
+            className="mx-auto mb-8 block h-px w-16 bg-[var(--gl-turmeric)]/50"
+          />
+          <h2 className="gl-serif text-[2.1rem] font-semibold leading-[1.05] sm:text-5xl">
             Empieza hoy con Glucora y paga al recibir
           </h2>
-          <p className="max-w-xl text-base leading-relaxed text-[var(--gl-bone)]/80">
+          <p className="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed text-[var(--gl-bone)]/70 sm:text-base">
             Elige tu promoción, recibe el frasco en la puerta de tu casa y paga
             cuando llegue. El envío es gratis a toda Colombia.
           </p>
           <a
             href="#ofertas"
-            className="inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-[var(--gl-turmeric)] px-8 py-4 text-lg font-bold text-[var(--gl-wine-950)] transition-colors hover:brightness-110 sm:w-auto"
+            className="group mt-8 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[var(--gl-turmeric)] px-8 py-4 text-base font-bold tracking-wide text-[var(--gl-wine-950)] transition-colors hover:bg-[var(--gl-turmeric-soft)] sm:w-auto"
           >
             Elegir mi promoción
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="h-4 w-4 transition-transform group-hover:translate-x-1"
+            >
+              <path
+                d="M4 10h11M11 5.5 15.5 10 11 14.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </a>
           {GUARANTEE_TEXT ? (
-            <p className="max-w-xl rounded-xl border border-white/20 bg-white/5 p-4 text-sm">
+            <p className="mx-auto mt-8 max-w-xl rounded-xl border border-white/15 bg-white/[0.04] p-4 text-sm">
               {GUARANTEE_TEXT}
             </p>
           ) : null}
-          <p className="max-w-2xl border-t border-white/15 pt-5 text-xs leading-relaxed text-[var(--gl-bone)]/60">
+          <p className="mx-auto mt-12 max-w-2xl border-t border-white/10 pt-6 text-left text-[11px] leading-relaxed text-[var(--gl-bone)]/60">
             {DISCLAIMER}
             {SANITARY_REGISTRY ? ` ${SANITARY_REGISTRY}` : ""}
           </p>
