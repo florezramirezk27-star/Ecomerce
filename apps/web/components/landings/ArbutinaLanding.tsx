@@ -119,6 +119,11 @@ const VIDEOS: readonly MediaVideo[] = [
     title: "Conoce la Crema Arbutina",
     caption: "Textura, presentación y cómo incorporarla a tu rutina facial.",
   },
+  {
+    src: "/landings/crema-arbutina/videos/crema.mp4",
+    title: "Crema Arbutina en acción",
+    caption: "Demostración de aplicación y resultados en piel real.",
+  },
 ];
 
 /** TODO(RESULTADOS): fotos o capturas de clientes reales con su permiso. */
