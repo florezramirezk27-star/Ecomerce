@@ -761,7 +761,7 @@ export default function BisagrasLanding({
     <div className="aw-landing bg-[var(--aw-slate-950)] text-gray-200 antialiased">
       <style>{`
         .aw-landing {
-          --aw-slate-950: #020617;
+          --aw-slate-950: #1a1a1a;
           --aw-slate-900: #0f172a;
           --aw-slate-800: #1e293b;
           --aw-slate-700: #334155;
@@ -1020,9 +1020,6 @@ export default function BisagrasLanding({
                                 >
                                   Ahorras {formatCop(saving)}
                                 </span>
-                                <del className={`text-[10px] ${mutedLook}`}>
-                                  {formatCop(tier.regularTotal)}
-                                </del>
                               </>
                             ) : (
                               <span className={`text-[10px] ${mutedLook}`}>
