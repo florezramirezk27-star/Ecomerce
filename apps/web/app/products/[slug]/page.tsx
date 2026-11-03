@@ -18,6 +18,7 @@ import LandingFrame, { type LandingAddToCart } from "@/components/LandingFrame";
 import { getLineUnitPrice } from "@/lib/product-promotion";
 import AceiteOreganoLanding, { LANDING_SLUG } from "@/components/landings/AceiteOreganoLanding";
 import GlucoraLanding, { GLUCORA_SLUG } from "@/components/landings/GlucoraLanding";
+import ArbutinaLanding, { ARBUTINA_SLUG } from "@/components/landings/ArbutinaLanding";
 
 interface ProductVariation {
   id: number;
@@ -434,6 +435,9 @@ export default function ProductPage() {
   const isGlucoraProduct =
     product.slug === GLUCORA_SLUG ||
     /berberine|glucora|berberina/i.test(`${product.name} ${product.slug}`);
+  const isArbutinaProduct =
+    product.slug === ARBUTINA_SLUG ||
+    /arbutin|tosowoong/i.test(`${product.name} ${product.slug}`);
   const hasVariations = variations.length > 0;
   const selectedVariation =
     variations.find((v) => v.id === selectedVariationId) ?? null;
@@ -1071,6 +1075,30 @@ const isVideo = selectedMedia?.kind === "video";
         />
       )}
   
+      {isArbutinaProduct && (
+        <ArbutinaLanding
+          product={{
+            id: product.id,
+            name: product.name,
+            slug: product.slug,
+            price: product.price,
+            image: product.image,
+            stock: product.stock,
+          }}
+          onAddToCart={async (quantity, opts) =>
+            handleLandingAddToCart({
+              quantity,
+              promotion: opts?.promotion === true,
+            })
+          }
+          offerEndTime={
+            typeof offerEndTime === "number"
+              ? new Date(offerEndTime).toISOString()
+              : undefined
+          }
+        />
+      )}
+
       {hasLanding && (
         <section className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden">
           <LandingFrame
