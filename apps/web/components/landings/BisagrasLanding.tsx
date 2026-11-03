@@ -99,11 +99,11 @@ const GALLERY: readonly MediaImage[] = [
     alt: `${PRODUCT_SHORT_NAME}, pack de refuerzos metálicos`,
   },
   {
-    src: "/landings/bisagras/images/bisagras-2.png",
+    src: "/landings/bisagras/images/bisagras-2.jpg",
     alt: `${PRODUCT_SHORT_NAME}, instalación en bisagra de mueble`,
   },
   {
-    src: "/landings/bisagras/images/bisagras-3.jpg",
+    src: "/landings/bisagras/images/bisagras-3.png",
     alt: `Refuerzo metálico negro para bisagra`,
   },
   {
