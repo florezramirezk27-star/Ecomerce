@@ -67,7 +67,7 @@ const PRODUCT_BRAND = "TOSOWOONG";
  */
 const BULK_TOTALS: Readonly<Record<2 | 3, number | null>> = {
   2: 109_900,
-  3: null,
+  3: 139_800,
 };
 
 interface MediaVideo {
@@ -264,18 +264,68 @@ const SALES_BENEFITS: readonly string[] = [
   "Fácil de incorporar a tu rutina facial diaria.",
 ];
 
-const USAGE_STEPS: readonly { title: string; text: string }[] = [
+type ComparisonValue = "yes" | "varies" | "no";
+
+interface ComparisonRow {
+  feature: string;
+  ours: ComparisonValue;
+  otherAntiSpots: ComparisonValue;
+  basicCream: ComparisonValue;
+}
+
+/**
+ * Comparativa orientativa. Las columnas de la competencia usan "varía" en los
+ * atributos que dependen de cada marca; no se afirma nada que no se pueda
+ * comprobar en la etiqueta del producto.
+ */
+const COMPARISON_ROWS: readonly ComparisonRow[] = [
   {
-    title: "Limpia tu rostro",
-    text: "Aplica una pequeña cantidad sobre la piel limpia y seca.",
+    feature: "Arbutina 7.0",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "no",
   },
   {
-    title: "Mañana y noche",
-    text: "Distribuye la crema en el rostro e intégrala a tu rutina diaria.",
+    feature: "Ácido Tranexámico 4.0",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "no",
   },
   {
-    title: "Evita el contorno de ojos",
-    text: "No apliques sobre los ojos. Si notas irritación, suspende su uso.",
+    feature: "Dos activos en una sola crema",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "no",
+  },
+  {
+    feature: "Textura cremosa de rápida absorción",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "varies",
+  },
+  {
+    feature: "Enfoque en apariencia de manchas y tono uniforme",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "no",
+  },
+  {
+    feature: "Presentación de 50 g",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "varies",
+  },
+  {
+    feature: "Uso mañana y noche",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "varies",
+  },
+  {
+    feature: "Fácil de incorporar a la rutina facial",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "varies",
   },
 ];
 
@@ -368,6 +418,46 @@ function CheckIcon({ className }: { className?: string }) {
         clipRule="evenodd"
       />
     </svg>
+  );
+}
+
+function ComparisonCell({
+  value,
+  highlight = false,
+}: {
+  value: ComparisonValue;
+  highlight?: boolean;
+}) {
+  if (value === "yes") {
+    return (
+      <span
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${
+          highlight
+            ? "bg-[var(--aw-rose-700)] text-white shadow-sm"
+            : "bg-rose-100 text-[var(--aw-rose-700)]"
+        }`}
+      >
+        <CheckIcon className="h-4 w-4" />
+        <span className="sr-only">Sí</span>
+      </span>
+    );
+  }
+
+  if (value === "varies") {
+    return (
+      <span
+        className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-sm font-black text-gray-500"
+        title="Varía según la marca y la fórmula"
+      >
+        ≈<span className="sr-only">Varía según la marca y la fórmula</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-50 text-sm font-bold text-gray-400">
+      —<span className="sr-only">No</span>
+    </span>
   );
 }
 
@@ -1175,28 +1265,141 @@ export default function ArbutinaLanding({
 
       <WaveDivider from="var(--aw-blush)" to="#ffffff" />
 
-      {/* 5. Cómo usarlo */}
+      {/* 5. Comparativa con otras cremas */}
       <section className="bg-white px-4 py-14">
-        <div className="mx-auto max-w-4xl space-y-10">
+        <div className="mx-auto max-w-5xl space-y-8">
           <SectionHeading
-            eyebrow="Fácil de usar"
-            title="Cómo usarla"
-            subtitle="Dos aplicaciones al día y una rutina constante."
+            eyebrow="Comparativa"
+            title="¿Por qué elegir la Crema Arbutina?"
+            subtitle="Una fórmula con Arbutina 7.0 + TXA 4.0 y presentación de 50 g frente a otras opciones del mercado."
           />
-          <ol className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {USAGE_STEPS.map((step, index) => (
-              <li
-                key={step.title}
-                className="rounded-2xl border border-rose-200 bg-rose-50/50 p-5 text-center"
+
+          <div className="relative overflow-hidden rounded-3xl border border-rose-200 shadow-[0_24px_60px_-32px_rgba(179,37,97,0.55)]">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-rose-200/40 blur-3xl"
+            />
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] border-collapse text-left">
+                <caption className="sr-only">
+                  Comparación de la Crema Arbutina TOSOWOONG con otras cremas
+                </caption>
+                <thead>
+                  <tr>
+                    <th
+                      scope="col"
+                      className="w-[31%] bg-rose-50 px-4 py-5 text-[11px] font-black uppercase tracking-widest text-gray-500"
+                    >
+                      Característica
+                    </th>
+                    <th
+                      scope="col"
+                      className="relative w-[27%] bg-gradient-to-b from-[var(--aw-rose-800)] to-[var(--aw-rose-950)] px-4 py-4 text-center text-white"
+                    >
+                      <span className="mx-auto mb-1.5 block w-fit rounded-full bg-[var(--aw-gold)] px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-[var(--aw-rose-950)] shadow">
+                        La mejor opción
+                      </span>
+                      <span className="block text-sm font-extrabold leading-tight">
+                        Crema Arbutina
+                      </span>
+                      <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wider text-rose-100/80">
+                        TOSOWOONG · 50 g
+                      </span>
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[21%] bg-rose-50 px-3 py-5 text-center text-[11px] font-bold leading-snug text-gray-600"
+                    >
+                      Otras cremas
+                      <span className="block font-semibold text-gray-400">
+                        antimanchas
+                      </span>
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[21%] bg-rose-50 px-3 py-5 text-center text-[11px] font-bold leading-snug text-gray-600"
+                    >
+                      Cremas
+                      <span className="block font-semibold text-gray-400">
+                        básicas
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMPARISON_ROWS.map((row, index) => (
+                    <tr
+                      key={row.feature}
+                      className={index % 2 === 0 ? "bg-white" : "bg-rose-50/40"}
+                    >
+                      <th
+                        scope="row"
+                        className="border-t border-rose-100 px-4 py-3 text-xs font-semibold leading-snug text-gray-800 sm:text-sm"
+                      >
+                        {row.feature}
+                      </th>
+                      <td className="border-x-2 border-t border-rose-200 bg-rose-50/70 px-3 py-3 text-center">
+                        <ComparisonCell value={row.ours} highlight />
+                      </td>
+                      <td className="border-t border-rose-100 px-3 py-3 text-center">
+                        <ComparisonCell value={row.otherAntiSpots} />
+                      </td>
+                      <td className="border-t border-rose-100 px-3 py-3 text-center">
+                        <ComparisonCell value={row.basicCream} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] font-medium text-gray-500">
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-rose-100 text-[var(--aw-rose-700)]"
+                aria-hidden="true"
               >
-                <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--aw-rose-700)] text-lg font-extrabold text-white">
-                  {index + 1}
-                </span>
-                <h3 className="mb-1 font-bold text-gray-900">{step.title}</h3>
-                <p className="text-xs leading-relaxed text-gray-600">{step.text}</p>
-              </li>
-            ))}
-          </ol>
+                <CheckIcon className="h-3.5 w-3.5" />
+              </span>
+              Sí
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-sm font-black text-gray-500"
+                aria-hidden="true"
+              >
+                ≈
+              </span>
+              Varía según la marca
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-50 text-sm font-bold text-gray-400"
+                aria-hidden="true"
+              >
+                —
+              </span>
+              No
+            </span>
+            <span className="sm:hidden">Desliza para comparar →</span>
+          </div>
+
+          <p className="mx-auto max-w-3xl text-center text-[11px] leading-relaxed text-gray-500">
+            La información de las otras columnas es referencial y puede variar
+            según la marca y la fórmula. Verifica siempre la etiqueta del
+            producto antes de usarlo.
+          </p>
+
+          <div className="text-center">
+            <a
+              href="#ofertas"
+              className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[var(--aw-rose-600)] to-[var(--aw-rose-900)] px-8 py-3 text-base font-bold text-white shadow-lg transition-transform hover:-translate-y-0.5"
+            >
+              Quiero mi Crema Arbutina
+            </a>
+          </div>
         </div>
       </section>
 
