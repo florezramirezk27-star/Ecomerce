@@ -5,23 +5,17 @@ import { useRouter } from "next/navigation";
 import ProductImage from "@/components/ProductImage";
 
 /**
- * Landing de "Glucora" (gotas líquidas de berberina, canela de Ceilán, cromo,
- * melón amargo y cúrcuma, 50 ml).
+ * Landing de "Glucora" — cinco ingredientes en un solo gotero (50 ml).
  *
- * Mismo contrato que `AceiteOreganoLanding`: se monta en
- * `app/products/[slug]/page.tsx`, debajo de "Productos similares", cuando
- * `product.slug === GLUCORA_SLUG`.
+ * Reutiliza el diseño de `ArbutinaLanding` (marquesina, videos, hero, señales,
+ * ingredientes, comparativa, galería, reseñas con auto-scroll y CTA final) con
+ * las olas SVG animadas entre secciones y la paleta rosa/blanco de esa landing.
  *
- * Decisiones de diseño:
- * - La paleta sale del frasco (etiqueta granate, cúrcuma, canela, mármol).
- * - Los círculos de colores de la etiqueta (B, CR, C, BM, T) son el código
- *   visual de la página: reaparecen en los ingredientes.
- * - El selector de ofertas dibuja frascos: 1, 2 o 3, y en "paga 2 y lleva 3"
- *   el tercero va en dorado.
+ * Se monta en `app/products/[slug]/page.tsx` cuando el slug o el nombre del
+ * producto coinciden con `GLUCORA_SLUG` o con `/glucora|berberine|berberina/i`.
  *
- * Lo que no se puede afirmar sin respaldo (garantía, registro sanitario,
- * videos, dosis exacta) vive en constantes `TODO`. Una sección que depende de
- * un dato vacío no se pinta.
+ * Las ofertas por cantidad usan el esquema de Glucora y su precio coincide con
+ * el que cobra el carrito vía `lib/product-promotion.ts` y la API.
  */
 
 /* ------------------------------------------------------------------------- */
@@ -56,28 +50,25 @@ export const GLUCORA_SLUG = "glucora";
 /* CONTENIDO                                                                  */
 /* ------------------------------------------------------------------------- */
 
-const PRODUCT_NAME = "Glucora";
+const PRODUCT_SHORT_NAME = "Glucora";
+const PRODUCT_BRAND = "Glucora";
 
 /**
- * Total de la promoción por cantidad (COP). Unidad normal: $69.900.
- * - 2 frascos: $109.900.
- * - 3 frascos: "paga 2 y lleva 3" = 2 × $69.900 = $139.800.
+ * Totales de promoción por cantidad (COP). Unidad normal: $89.900.
+ * - 2 frascos: $149.900 en total.
+ * - 3 frascos: "paga 2 y lleva 3" = $179.799 (el mismo total que cobra la API
+ *   al aplicar $59.933 por unidad).
  *
- * TODO(PRECIOS): confirmar que estos precios aplican a Glucora.
- *
- * ADVERTENCIA: son los totales que se MUESTRAN. Lo que se cobra lo calculan
- * `getProductUnitPrice`/`getLineUnitPrice` (web) y su gemela en
- * `api/src/common/utils/product-promotion.ts`, que solo conocen Oftalmiel.
- * Hasta que conozcan este producto, el carrito cobra precio normal × cantidad
- * aunque se elija una oferta.
+ * Deben coincidir con `GLUCORA_OFFER_UNIT_PRICES` de `lib/product-promotion.ts`
+ * y con su gemela de la API; si no, la landing mostraría un precio que el
+ * carrito no cobra.
  */
 const BULK_TOTALS: Readonly<Record<2 | 3, number | null>> = {
   2: 149_900,
-  3: null,
+  3: 179_799,
 };
 
 interface MediaVideo {
-  /** URL de Cloudinary (se le agrega `q_auto,f_auto`). */
   src: string;
   poster?: string;
   title: string;
@@ -99,25 +90,20 @@ interface Review {
 
 const HERO_IMAGE: MediaImage = {
   src: "/landings/glucora/images/glucora-1.png",
-  alt: "Frasco gotero de Glucora de 50 ml",
+  alt: `${PRODUCT_SHORT_NAME} en gotero de 50 ml`,
 };
 
-/** Fotos de la galería (la primera carga con prioridad, el resto lazy). */
 const GALLERY: readonly MediaImage[] = [
   {
     src: "/landings/glucora/images/glucora-1.png",
-    alt: "Frasco gotero de Glucora de 50 ml",
+    alt: `Frasco gotero de ${PRODUCT_SHORT_NAME} de 50 ml`,
   },
   {
     src: "/landings/glucora/images/glucora-2.png",
-    alt: "Glucora ingredientes naturales",
+    alt: `${PRODUCT_SHORT_NAME} con sus ingredientes naturales`,
   },
 ];
 
-/** TODO(MEDIA): video del hero (Cloudinary). `null` = se usa la foto. */
-const HERO_VIDEO: MediaVideo | null = null;
-
-/** TODO(MEDIA): videos del producto. Vacío = sección oculta. */
 const VIDEOS: readonly MediaVideo[] = [
   {
     src: "/landings/glucora/videos/glucora-video-1.mp4",
@@ -131,7 +117,7 @@ const VIDEOS: readonly MediaVideo[] = [
   },
 ];
 
-/** TODO(RESULTADOS): fotos reales de clientes con su permiso. Vacío = oculta. */
+/** TODO(RESULTADOS): fotos o capturas de clientes reales con su permiso. */
 const RESULTS: readonly MediaImage[] = [];
 
 /** TODO(GARANTIA): texto de la garantía, solo si la tienda la ofrece de verdad. */
@@ -140,7 +126,6 @@ const GUARANTEE_TEXT: string | null = null;
 /** TODO(INVIMA): registro o notificación sanitaria, si aplica. */
 const SANITARY_REGISTRY: string | null = null;
 
-/** Reseñas entregadas por el cliente (tal cual, sin ciudad ni sello de verificación). */
 const REVIEWS: readonly Review[] = [
   {
     name: "Diana K.",
@@ -207,92 +192,135 @@ const REVIEWS: readonly Review[] = [
 const MARQUEE_ITEMS: readonly { strong: string; rest: string }[] = [
   { strong: "ENVÍO GRATIS", rest: "A TODA COLOMBIA" },
   { strong: "PAGO CONTRA ENTREGA:", rest: "paga al recibir en casa" },
-  { strong: "COMPRA SEGURA", rest: "Y RECIBE EN LA PUERTA DE TU CASA" },
-  { strong: "OFERTA ESPECIAL", rest: "POR TIEMPO LIMITADO" },
+  { strong: "CINCO INGREDIENTES", rest: "en un solo gotero de 50 ml" },
+  { strong: "FÓRMULA LÍQUIDA", rest: "sin pastillas grandes" },
 ];
 
-/** Los círculos de color de la etiqueta del frasco. */
-type DotId = "B" | "CR" | "C" | "BM" | "T";
-
-const DOTS: Readonly<
-  Record<DotId, { bg: string; fg: string; label: string }>
-> = {
-  B: { bg: "#D8283C", fg: "#FFFFFF", label: "Vitamina B" },
-  CR: { bg: "#6FA52E", fg: "#0F1F05", label: "Cromo" },
-  C: { bg: "#F0892A", fg: "#2B1200", label: "Vitamina C" },
-  BM: { bg: "#A8C23A", fg: "#1B2504", label: "Melón amargo" },
-  T: { bg: "#F0A21F", fg: "#2B1A00", label: "Cúrcuma" },
-};
-
-const QUICK_FACTS: readonly string[] = [
-  "Fórmula líquida, sin pastillas grandes",
-  "Incluye vitaminas B y C",
+const QUICK_BENEFITS: readonly string[] = [
+  "Berberina y canela de Ceilán",
+  "Cromo, melón amargo y cúrcuma",
+  "Vitaminas B y C",
   "Frasco gotero de 50 ml",
-  "Pago contra entrega",
 ];
 
-const SIGNS: readonly { dot: DotId; title: string; text: string }[] = [
+const SIGNS: readonly { icon: string; title: string; text: string }[] = [
   {
-    dot: "B",
+    icon: "⚡",
     title: "El bajón después de almorzar",
     text: "Comes y una hora después el cuerpo pide pausa. Un apoyo diario antes de la comida puede ayudarte a sentir un ritmo más parejo.",
   },
   {
-    dot: "T",
+    icon: "🍬",
     title: "Antojos de dulce a media tarde",
     text: "Cuando la tarde se alarga, el antojo aparece. Mantener hábitos constantes es más fácil con una rutina simple.",
   },
   {
-    dot: "C",
+    icon: "🔋",
     title: "Energía que sube y baja",
     text: "Empiezas bien el día y llegas a la noche sin fuerzas. El bienestar metabólico también se cuida a diario.",
   },
   {
-    dot: "CR",
+    icon: "💊",
     title: "Cápsulas y frascos por separado",
     text: "Tragar pastillas grandes o comprar cada ingrediente aparte complica la constancia. Aquí van cinco en un solo gotero.",
   },
 ];
 
-const INGREDIENT_GROUPS: readonly {
+const BENEFITS: readonly {
+  icon: string;
   title: string;
-  dots: readonly DotId[];
   text: string;
+  featured?: boolean;
 }[] = [
   {
+    icon: "🌿",
     title: "Berberina y canela de Ceilán",
-    dots: [],
     text: "El dúo que abre la etiqueta. La berberina es un compuesto vegetal muy usado en suplementos de bienestar metabólico; la canela de Ceilán es la variedad con menos cumarina que la canela común.",
   },
   {
-    title: "Cromo y vitaminas B y C",
-    dots: ["CR", "B", "C"],
-    text: "Micronutrientes de apoyo. El cromo es un mineral que participa en el metabolismo normal de los macronutrientes, y las vitaminas B y C completan el aporte diario.",
+    icon: "💧",
+    title: "Cinco ingredientes, un gotero",
+    text: "Berberina, canela de Ceilán, cromo, melón amargo y cúrcuma reunidos en una fórmula líquida de 50 ml, más vitaminas B y C.",
+    featured: true,
   },
   {
+    icon: "🌱",
     title: "Melón amargo y cúrcuma",
-    dots: ["BM", "T"],
     text: "Dos plantas de uso tradicional. El melón amargo se usa en la cocina y la herbolaria de varias regiones; la cúrcuma aporta curcuminoides con propiedades antioxidantes.",
   },
 ];
 
-/** TODO(USO): confirmar la porción exacta con la etiqueta del frasco. */
-const USAGE_STEPS: readonly { title: string; text: string }[] = [
+const SALES_BENEFITS: readonly string[] = [
+  "Cinco ingredientes principales en un solo frasco gotero.",
+  "Fórmula líquida, sin pastillas grandes ni cápsulas difíciles de tragar.",
+  "Incluye cromo y vitaminas B y C.",
+  "Presentación práctica de 50 ml para el uso diario.",
+  "Fácil de diluir en agua e incorporar a tu rutina.",
+  "Envío gratis y pago contra entrega en toda Colombia.",
+];
+
+type ComparisonValue = "yes" | "varies" | "no";
+
+interface ComparisonRow {
+  feature: string;
+  ours: ComparisonValue;
+  otherAntiSpots: ComparisonValue;
+  basicCream: ComparisonValue;
+}
+
+/**
+ * Comparativa orientativa. Las columnas de la competencia usan "varía" en los
+ * atributos que dependen de cada marca; no se afirma nada que no se pueda
+ * comprobar en la etiqueta del producto.
+ */
+const COMPARISON_ROWS: readonly ComparisonRow[] = [
   {
-    title: "Agita el frasco",
-    text: "Mezcla el contenido con un movimiento suave antes de abrir.",
+    feature: "Berberina",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "no",
   },
   {
-    title: "Mide la porción de la etiqueta",
-    text: "Llena el gotero hasta la cantidad indicada y no la superes.",
+    feature: "Canela de Ceilán",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "no",
   },
   {
-    title: "Diluye en agua",
-    text: "Si el sabor herbal te parece fuerte, usa un vaso lleno de agua.",
+    feature: "Cromo",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "no",
   },
   {
-    title: "Repite todos los días",
-    text: "Los beneficios dependen de la constancia, así que elige una hora fija.",
+    feature: "Melón amargo y cúrcuma",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "no",
+  },
+  {
+    feature: "Vitaminas B y C",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "no",
+  },
+  {
+    feature: "Cinco ingredientes en un solo producto",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "no",
+  },
+  {
+    feature: "Formato líquido con gotero",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "varies",
+  },
+  {
+    feature: "Frasco de 50 ml",
+    ours: "yes",
+    otherAntiSpots: "varies",
+    basicCream: "varies",
   },
 ];
 
@@ -325,54 +353,45 @@ function formatCop(value: number): string {
   return copFormatter.format(value);
 }
 
-function pad2(value: number): string {
-  return String(value).padStart(2, "0");
-}
-
 interface OfferTier {
   qty: 1 | 2 | 3;
-  /** Lo que se muestra como total. */
+  /** Lo que se muestra como total de la tarjeta. */
   total: number;
   /** `precio normal × cantidad`, para mostrar el ahorro. */
   regularTotal: number;
-  note: string;
+  label: string;
+  badge?: string;
+  /** Texto que reemplaza a "Ahorras $X" (p. ej. "Paga 2 y lleva 3"). */
+  note?: string;
 }
 
 function buildTiers(unitPrice: number): OfferTier[] {
   if (!Number.isFinite(unitPrice) || unitPrice <= 0) return [];
 
   const tiers: OfferTier[] = [
-    { qty: 1, total: unitPrice, regularTotal: unitPrice, note: "Precio normal" },
+    { qty: 1, total: unitPrice, regularTotal: unitPrice, label: "Prueba individual" },
   ];
   const double = BULK_TOTALS[2];
   if (double !== null) {
-    const saving = unitPrice * 2 - double;
     tiers.push({
       qty: 2,
       total: double,
       regularTotal: unitPrice * 2,
-      note: saving > 0 ? `Promoción: ahorras ${formatCop(saving)}` : "Promoción",
+      label: "Pack doble",
+      badge: "Más popular",
     });
   }
   const triple = BULK_TOTALS[3];
   if (triple !== null) {
-    const saving = unitPrice * 3 - triple;
     tiers.push({
       qty: 3,
       total: triple,
       regularTotal: unitPrice * 3,
-      note: saving > 0 ? `Promoción: ahorras ${formatCop(saving)}` : "Promoción",
+      label: "Paga 2 y lleva 3",
+      badge: "Máximo ahorro",
+      note: "¡Paga 2 y lleva 3!",
     });
   }
-  // Combo de 3: "paga 2 y lleve 3" -> total = 2 x precio unitario
-  const tripleTotal = unitPrice * 2;
-  const savingTriple = unitPrice * 3 - tripleTotal;
-  tiers.push({
-    qty: 3,
-    total: tripleTotal,
-    regularTotal: unitPrice * 3,
-    note: savingTriple > 0 ? `Paga 2 y lleva 3 (ahorras ${formatCop(savingTriple)})` : "Paga 2 y lleva 3",
-  });
   return tiers;
 }
 
@@ -380,120 +399,82 @@ function buildTiers(unitPrice: number): OfferTier[] {
 /* Piezas pequeñas                                                            */
 /* ------------------------------------------------------------------------- */
 
-function DotChip({
-  id,
-  size = "md",
-  decorative = false,
-}: {
-  id: DotId;
-  size?: "md" | "lg";
-  decorative?: boolean;
-}) {
-  const dot = DOTS[id];
-  return (
-    <span
-      role={decorative ? undefined : "img"}
-      aria-hidden={decorative ? true : undefined}
-      aria-label={decorative ? undefined : dot.label}
-      title={decorative ? undefined : dot.label}
-      className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold ring-1 ring-black/10 ${
-        size === "lg" ? "h-12 w-12 text-xs" : "h-7 w-7 text-[10px]"
-      }`}
-      style={{ backgroundColor: dot.bg, color: dot.fg }}
-    >
-      {id}
-    </span>
-  );
-}
-
-/** Frasco esquemático para el selector: `gold` marca el que va de regalo. */
-function BottleGlyph({ gold }: { gold?: boolean }) {
+function CheckIcon({ className }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 20 36"
-      className="h-9 w-5 shrink-0"
+      className={className}
+      viewBox="0 0 20 20"
+      fill="currentColor"
       aria-hidden="true"
-      focusable="false"
     >
-      <rect x="7.5" y="0.5" width="5" height="7" rx="1.5" fill="#15090C" />
-      <rect x="8.5" y="7" width="3" height="4" fill="#15090C" />
       <path
-        d="M4 14.5c0-2.2 1.8-3.5 3.5-3.5h5c1.7 0 3.5 1.3 3.5 3.5V32a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z"
-        fill={gold ? "#F6B21B" : "#B3122F"}
+        fillRule="evenodd"
+        d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4l3.8 3.8 6.8-6.8a1 1 0 0 1 1.4 0z"
+        clipRule="evenodd"
       />
-      <rect x="4" y="18" width="12" height="9" fill={gold ? "#FFF3D1" : "#F2E7E1"} opacity="0.92" />
     </svg>
   );
 }
 
-function Stars({ value }: { value: number }) {
+function ComparisonCell({
+  value,
+  highlight = false,
+}: {
+  value: ComparisonValue;
+  highlight?: boolean;
+}) {
+  if (value === "yes") {
+    return (
+      <span
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${
+          highlight
+            ? "bg-[var(--aw-rose-700)] text-white shadow-sm"
+            : "bg-rose-100 text-[var(--aw-rose-700)]"
+        }`}
+      >
+        <CheckIcon className="h-4 w-4" />
+        <span className="sr-only">Sí</span>
+      </span>
+    );
+  }
+
+  if (value === "varies") {
+    return (
+      <span
+        className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-sm font-black text-gray-500"
+        title="Varía según la marca y la fórmula"
+      >
+        ≈<span className="sr-only">Varía según la marca y la fórmula</span>
+      </span>
+    );
+  }
+
   return (
-    <span
-      role="img"
-      aria-label={`${value} de 5 estrellas`}
-      className="inline-flex gap-0.5 text-base leading-none"
-    >
-      {Array.from({ length: 5 }, (_, i) => (
-        <span
-          key={i}
-          aria-hidden="true"
-          className={i < value ? "text-[var(--gl-turmeric)]" : "text-black/15"}
-        >
-          ★
-        </span>
-      ))}
+    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-50 text-sm font-bold text-gray-400">
+      —<span className="sr-only">No</span>
     </span>
   );
 }
 
 function SectionHeading({
+  eyebrow,
   title,
   subtitle,
-  tone = "light",
-  index,
 }: {
+  eyebrow: string;
   title: string;
   subtitle?: string;
-  tone?: "light" | "dark";
-  /** Número de capítulo, solo decorativo. */
-  index?: string;
 }) {
-  const isDark = tone === "dark";
-
   return (
-    <div className="max-w-xl">
-      <div
-        aria-hidden="true"
-        className={`mb-5 flex items-center gap-3 ${
-          isDark ? "text-[var(--gl-turmeric)]" : "text-[var(--gl-garnet)]"
-        }`}
-      >
-        {index ? (
-          <span className="text-[11px] font-semibold tracking-[0.28em]">
-            {index}
-          </span>
-        ) : null}
-        <span
-          className={`h-px w-10 ${
-            isDark ? "bg-white/25" : "bg-[var(--gl-ink)]/20"
-          }`}
-        />
-      </div>
-      <h2
-        className={`gl-serif text-[1.9rem] font-semibold leading-[1.08] sm:text-[2.45rem] ${
-          isDark ? "text-[var(--gl-bone)]" : "text-[var(--gl-ink)]"
-        }`}
-      >
+    <div className="text-center">
+      <span className="inline-block rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold uppercase tracking-widest text-[var(--aw-rose-700)]">
+        {eyebrow}
+      </span>
+      <h2 className="mt-2 text-2xl font-extrabold text-gray-900 sm:text-3xl">
         {title}
       </h2>
       {subtitle ? (
-        <p
-          className={`mt-4 text-[15px] leading-relaxed ${
-            isDark ? "text-[var(--gl-bone)]/65" : "text-[var(--gl-ink)]/65"
-          }`}
-        >
-          {subtitle}
-        </p>
+        <p className="mx-auto mt-2 max-w-2xl text-sm text-gray-600">{subtitle}</p>
       ) : null}
     </div>
   );
@@ -503,21 +484,12 @@ function SectionHeading({
 function UrgencyMarquee() {
   const group = (hidden: boolean) => (
     <div
-      className="flex shrink-0 items-center"
+      className="flex shrink-0 items-center gap-10 pr-10"
       aria-hidden={hidden ? true : undefined}
     >
       {MARQUEE_ITEMS.map((item) => (
-        <span key={item.strong} className="flex items-center">
-          <span className="px-6 text-[10px] uppercase tracking-[0.18em] sm:text-[11px]">
-            <strong className="font-semibold text-[var(--gl-turmeric)]">
-              {item.strong}
-            </strong>{" "}
-            <span className="text-[var(--gl-bone)]/60">{item.rest}</span>
-          </span>
-          <span
-            aria-hidden="true"
-            className="h-1 w-1 shrink-0 rounded-full bg-[var(--gl-turmeric)]/50"
-          />
+        <span key={item.strong}>
+          <strong>{item.strong}</strong> {item.rest}
         </span>
       ))}
     </div>
@@ -525,7 +497,7 @@ function UrgencyMarquee() {
 
   return (
     <div
-      className="overflow-hidden whitespace-nowrap border-b border-white/10 bg-[var(--gl-wine-950)] py-2.5"
+      className="overflow-hidden whitespace-nowrap bg-[var(--aw-rose-900)] py-2.5 text-[11px] font-medium text-white sm:text-sm"
       aria-label="Información de envío y pago"
     >
       <div className="flex w-max animate-marquee will-change-transform">
@@ -536,7 +508,52 @@ function UrgencyMarquee() {
   );
 }
 
-/** 9. Reseñas: grid en escritorio, auto-scroll horizontal en móvil. */
+/**
+ * Ola decorativa entre secciones. Dos SVG idénticos dentro de una pista al
+ * 200%: al desplazarse un 50% el empalme es invisible y el movimiento no
+ * tiene saltos.
+ */
+function WaveDivider({
+  from,
+  to,
+  reverse = false,
+}: {
+  /** Color de fondo de la sección que termina. */
+  from: string;
+  /** Color de la sección que empieza. */
+  to: string;
+  reverse?: boolean;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative h-12 w-full overflow-hidden sm:h-16"
+      style={{ backgroundColor: from }}
+    >
+      <div
+        className={`absolute inset-y-0 left-0 flex w-[200%] will-change-transform ${
+          reverse ? "aw-wave-reverse" : "aw-wave"
+        }`}
+      >
+        {[0, 1].map((index) => (
+          <svg
+            key={index}
+            viewBox="0 0 1440 96"
+            preserveAspectRatio="none"
+            className="h-full w-1/2 shrink-0"
+          >
+            <path
+              d="M0,56 C180,96 360,16 540,40 C720,64 900,96 1080,64 C1260,32 1360,48 1440,56 L1440,96 L0,96 Z"
+              fill={to}
+            />
+          </svg>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Reseñas con auto-scroll horizontal continuo en todos los tamaños. */
 function ReviewsCarousel({ items }: { items: readonly Review[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(false);
@@ -546,25 +563,24 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
     const el = trackRef.current;
     if (!el) return;
 
-      const mobile = window.matchMedia("(max-width: 767px)");
-      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-      let raf = 0;
-      let last = 0;
-      let pos = el.scrollLeft;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let raf = 0;
+    let last = 0;
+    let pos = el.scrollLeft;
 
-      const step = (now: number) => {
-        raf = window.requestAnimationFrame(step);
-        const dt = last ? now - last : 0;
-        last = now;
-        if (reduced.matches || pausedRef.current) {
-          pos = el.scrollLeft;
-          return;
-        }
-        pos += dt * 0.035; // ≈ 35 px/s
-        const half = el.scrollWidth / 2;
-        if (half > 0 && pos >= half) pos -= half;
-        el.scrollLeft = pos;
-      };
+    const step = (now: number) => {
+      raf = window.requestAnimationFrame(step);
+      const dt = last ? now - last : 0;
+      last = now;
+      if (reduced.matches || pausedRef.current) {
+        pos = el.scrollLeft;
+        return;
+      }
+      pos += dt * 0.04; // ≈ 40 px/s
+      const half = el.scrollWidth / 2;
+      if (half > 0 && pos >= half) pos -= half;
+      el.scrollLeft = pos;
+    };
 
     raf = window.requestAnimationFrame(step);
     return () => {
@@ -594,23 +610,28 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
   const card = (item: Review, key: string) => (
     <figure
       key={key}
-      className="flex w-[19rem] shrink-0 flex-col justify-between rounded-xl border border-[var(--gl-stone-2)] bg-white p-6 transition-colors hover:border-[var(--gl-garnet)]/35 sm:w-80"
+      className="flex w-80 shrink-0 flex-col justify-between rounded-2xl border border-rose-200 bg-white p-5 shadow-sm"
     >
       <div>
-        <Stars value={item.stars} />
-        <h3 className="gl-serif mt-3 text-[1.15rem] font-semibold leading-snug text-[var(--gl-ink)]">
-          {item.title}
-        </h3>
-        <blockquote className="mt-2 text-[13.5px] leading-relaxed text-[var(--gl-ink)]/65">
-          {item.text}
+        <div
+          className="mb-3 flex text-yellow-500"
+          role="img"
+          aria-label={`${item.stars} de 5 estrellas`}
+        >
+          {Array.from({ length: item.stars }, (_, index) => (
+            <span key={index} aria-hidden="true">
+              ★
+            </span>
+          ))}
+        </div>
+        <h3 className="mb-2 text-sm font-bold text-gray-900">{item.title}</h3>
+        <blockquote className="text-sm italic text-gray-700">
+          “{item.text}”
         </blockquote>
       </div>
-      <figcaption className="mt-5 flex items-center gap-2.5 text-xs font-semibold tracking-wide text-[var(--gl-ink)]">
-        <span
-          aria-hidden="true"
-          className="h-px w-5 bg-[var(--gl-garnet)]/60"
-        />
-        {item.name}
+      <figcaption className="mt-4 flex items-center gap-2 border-t border-rose-200 pt-3 text-xs font-semibold text-[var(--aw-rose-700)]">
+        <span>{item.name}</span>
+        <span className="font-normal text-gray-400">· Opinión de cliente</span>
       </figcaption>
     </figure>
   );
@@ -618,7 +639,7 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
   return (
     <div
       ref={trackRef}
-      className="gl-hide-scrollbar flex overflow-x-auto gap-4"
+      className="aw-hide-scrollbar flex overflow-x-auto gap-4"
       onMouseEnter={pause}
       onMouseLeave={() => resume(0)}
       onTouchStart={pause}
@@ -629,10 +650,10 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
     >
       {/* Dos grupos idénticos: al terminar el primero el salto es invisible. */}
       <div className="flex shrink-0 gap-4 pr-4">
-        {items.map((item, i) => card(item, `a-${i}`))}
+        {items.map((item, index) => card(item, `a-${index}`))}
       </div>
       <div className="flex shrink-0 gap-4 pr-4" aria-hidden="true">
-        {items.map((item, i) => card(item, `b-${i}`))}
+        {items.map((item, index) => card(item, `b-${index}`))}
       </div>
     </div>
   );
@@ -640,8 +661,9 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
 
 function VideoCard({ video }: { video: MediaVideo }) {
   return (
-    <div className="space-y-3">
-      <div className="relative mx-auto aspect-[9/16] w-full max-w-[17rem] overflow-hidden rounded-xl bg-black ring-1 ring-black/10 sm:max-w-[18rem]">
+    <div className="space-y-3 rounded-3xl border border-rose-100 bg-rose-50/60 p-6 text-center transition-shadow hover:shadow-md sm:p-8">
+      <h3 className="text-lg font-bold text-gray-900">{video.title}</h3>
+      <div className="relative mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-3xl">
         <video
           controls
           playsInline
@@ -653,12 +675,7 @@ function VideoCard({ video }: { video: MediaVideo }) {
           Tu navegador no soporta el elemento de video.
         </video>
       </div>
-      <h3 className="gl-serif text-center text-lg font-semibold text-[var(--gl-ink)]">
-        {video.title}
-      </h3>
-      <p className="text-center text-[13px] leading-relaxed text-[var(--gl-ink)]/70">
-        {video.caption}
-      </p>
+      <p className="text-sm font-medium text-gray-600">{video.caption}</p>
     </div>
   );
 }
@@ -670,17 +687,27 @@ function VideoCard({ video }: { video: MediaVideo }) {
 export default function GlucoraLanding({
   product,
   onAddToCart,
-  offerEndTime,
 }: LandingProps) {
   const router = useRouter();
 
   const unitPrice = Number(product.price);
   const hasPrice = Number.isFinite(unitPrice) && unitPrice > 0;
   const tiers = useMemo(() => buildTiers(unitPrice), [unitPrice]);
+  const maxDiscount = useMemo(
+    () =>
+      tiers.reduce((max, tier) => {
+        if (tier.regularTotal <= 0) return max;
+        const pct = Math.round(
+          ((tier.regularTotal - tier.total) / tier.regularTotal) * 100,
+        );
+        return Math.max(max, pct);
+      }, 0),
+    [tiers],
+  );
 
   /**
-   * Oferta elegida en el selector (`null` = ninguna). SOLO una oferta elegida
-   * manda `promotion: true`; sin ella, la compra va a precio normal.
+   * Oferta elegida en el selector (`null` = ninguna). SOLO una tarjeta elegida
+   * manda `promotion: true`; sin tarjeta, la compra va a precio normal.
    */
   const [selectedQty, setSelectedQty] = useState<1 | 2 | 3 | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -694,12 +721,7 @@ export default function GlucoraLanding({
       ? Math.min(MAX_QUANTITY, stock)
       : MAX_QUANTITY;
 
-  const selectedTier = tiers.find((t) => t.qty === selectedQty) ?? null;
-
-  const average = useMemo(() => {
-    const sum = REVIEWS.reduce((acc, r) => acc + r.stars, 0);
-    return REVIEWS.length > 0 ? sum / REVIEWS.length : 0;
-  }, []);
+  const selectedTier = tiers.find((tier) => tier.qty === selectedQty) ?? null;
 
   const handleBuy = useCallback(async () => {
     if (pending || soldOut || !hasPrice) return;
@@ -726,73 +748,75 @@ export default function GlucoraLanding({
     if (pending) return "Agregando al carrito…";
     if (selectedTier) {
       const units = selectedTier.qty === 1 ? "frasco" : "frascos";
-      return `Pedir ${selectedTier.qty} ${units} por ${formatCop(selectedTier.total)}`;
+      return `Pedir ${selectedTier.qty} ${units} · ${formatCop(selectedTier.total)}`;
     }
     return hasPrice
-      ? `Agregar ${quantity} al carrito por ${formatCop(unitPrice * quantity)}`
+      ? `Agregar ${quantity} al carrito · ${formatCop(unitPrice * quantity)}`
       : "Agregar al carrito";
   })();
 
-  const heroMedia = HERO_VIDEO ? (
-    <video
-      controls
-      playsInline
-      preload="metadata"
-      poster={HERO_VIDEO.poster ? cld(HERO_VIDEO.poster) : undefined}
-      className="absolute inset-0 h-full w-full object-cover"
-    >
-      <source src={cld(HERO_VIDEO.src)} type="video/mp4" />
-      Tu navegador no soporta el elemento de video.
-    </video>
-  ) : (
+  const heroMedia = (
     <ProductImage
       src={HERO_IMAGE.src}
       alt={HERO_IMAGE.alt}
       priority
-      sizes="(max-width: 1024px) 100vw, 50vw"
-      className="absolute inset-0 h-full w-full object-cover"
+      sizes="(max-width: 1024px) 100vw, 40vw"
+      className="object-cover"
     />
   );
 
   return (
-    <div className="gl-landing bg-[var(--gl-stone)] text-[var(--gl-ink)] antialiased">
+    <div className="aw-landing bg-[var(--aw-blush)] text-gray-800 antialiased">
       <style>{`
-        .gl-landing {
-          --gl-wine-950: #150409;
-          --gl-wine-900: #290710;
-          --gl-wine-800: #480d1c;
-          --gl-garnet: #b3122f;
-          --gl-garnet-soft: #d24b60;
-          --gl-turmeric: #f6b21b;
-          --gl-turmeric-soft: #f8d488;
-          --gl-cinnamon: #a0643a;
-          --gl-bone: #f7f0e7;
-          --gl-stone: #faf8f4;
-          --gl-stone-2: #e8e1d6;
-          --gl-ink: #1c1115;
+        .aw-landing {
+          --aw-rose-950: #451025;
+          --aw-rose-900: #671635;
+          --aw-rose-800: #8d1c49;
+          --aw-rose-700: #b32561;
+          --aw-rose-600: #d43d7a;
+          --aw-rose-500: #ef6fa3;
+          --aw-rose-200: #f9c7da;
+          --aw-rose-100: #fde7f0;
+          --aw-blush: #fff6f9;
+          --aw-gold: #f6b21b;
         }
-        .gl-landing ::selection {
-          background: var(--gl-turmeric);
-          color: var(--gl-wine-950);
+        @keyframes aw-pulse {
+          0% { box-shadow: 0 0 0 0 rgba(212, 61, 122, 0.45); }
+          70% { box-shadow: 0 0 0 14px rgba(212, 61, 122, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(212, 61, 122, 0); }
         }
-        .gl-landing .gl-serif {
-          font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-          letter-spacing: -0.015em;
+        @keyframes aw-wave-shift {
+          from { transform: translate3d(0, 0, 0); }
+          to { transform: translate3d(-50%, 0, 0); }
         }
-        .gl-landing .gl-hero-glow {
-          background-color: var(--gl-wine-950);
-          background-image:
-            radial-gradient(55% 45% at 82% 12%, rgba(246, 178, 27, 0.14), transparent 68%),
-            radial-gradient(45% 40% at 4% 86%, rgba(179, 18, 47, 0.3), transparent 70%);
+        @keyframes aw-shine {
+          0%, 55% { transform: translateX(-130%) skewX(-12deg); }
+          100% { transform: translateX(130%) skewX(-12deg); }
         }
-        .gl-landing .gl-hide-scrollbar { scrollbar-width: none; }
-        .gl-landing .gl-hide-scrollbar::-webkit-scrollbar { display: none; }
-        .gl-landing :focus-visible {
-          outline: 2px solid var(--gl-turmeric);
-          outline-offset: 3px;
+        .aw-landing .aw-pulse { animation: aw-pulse 2s infinite; }
+        .aw-landing .aw-pulse:disabled { animation: none; }
+        .aw-landing .aw-wave { animation: aw-wave-shift 18s linear infinite; }
+        .aw-landing .aw-wave-reverse { animation: aw-wave-shift 24s linear infinite reverse; }
+        .aw-landing .aw-shine { position: relative; overflow: hidden; }
+        .aw-landing .aw-shine::after {
+          content: "";
+          position: absolute;
+          top: -20%;
+          bottom: -20%;
+          left: 0;
+          width: 45%;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+          animation: aw-shine 4.5s ease-in-out infinite;
+          pointer-events: none;
         }
+        .aw-landing .aw-hide-scrollbar { scrollbar-width: none; }
+        .aw-landing .aw-hide-scrollbar::-webkit-scrollbar { display: none; }
         @media (prefers-reduced-motion: reduce) {
-          .gl-landing { scroll-behavior: auto; }
+          .aw-landing .aw-pulse,
+          .aw-landing .aw-wave,
+          .aw-landing .aw-wave-reverse { animation: none; }
+          .aw-landing .aw-shine::after { animation: none; opacity: 0; }
+          .aw-landing { scroll-behavior: auto; }
         }
       `}</style>
 
@@ -800,417 +824,639 @@ export default function GlucoraLanding({
       <UrgencyMarquee />
 
       {/* 2. Hero */}
-      <section className="gl-hero-glow relative overflow-hidden px-5 pb-16 pt-10 text-[var(--gl-bone)] sm:px-6 sm:pt-14 lg:pb-24 lg:pt-16">
-        <div className="mx-auto grid max-w-6xl gap-x-12 gap-y-10 lg:grid-cols-12">
-          {/* Titular */}
-          <div className="lg:col-span-6 lg:col-start-1 lg:row-start-1">
-            <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.26em] text-[var(--gl-bone)]/60 sm:text-[11px]">
-              <span
-                aria-hidden="true"
-                className="h-1.5 w-1.5 rounded-full bg-[var(--gl-turmeric)]"
+      <section className="bg-[var(--aw-blush)] px-4 pb-12 pt-8 sm:pt-12 lg:pb-16 lg:pt-16">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-8 lg:grid-cols-12 lg:gap-10">
+          {/* Videos del producto */}
+          {VIDEOS.length > 0 ? (
+            <div className="col-span-1 space-y-4 lg:col-span-12">
+              <SectionHeading
+                eyebrow="Míralo en acción"
+                title={`Conoce ${PRODUCT_SHORT_NAME}`}
               />
-              <span className="text-[var(--gl-bone)]">{PRODUCT_NAME}</span>
-              <span
-                aria-hidden="true"
-                className="h-px w-8 bg-[var(--gl-turmeric)]/50"
-              />
-              <span>50 ml</span>
+              <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+                {VIDEOS.map((video) => (
+                  <VideoCard key={video.src} video={video} />
+                ))}
+              </div>
             </div>
-            <h1 className="gl-serif mt-6 text-balance text-[2.4rem] font-semibold leading-[1] sm:text-[3.4rem] lg:text-[3.2rem] xl:text-[3.75rem]">
-              Cinco ingredientes
-              <span className="mt-1 block italic text-[var(--gl-turmeric)]">
-                en un solo gotero
-              </span>
-            </h1>
-            <p className="mt-6 max-w-md text-[15px] leading-relaxed text-[var(--gl-bone)]/70 sm:text-base">
-              Berberina, canela de Ceilán, cromo, melón amargo y cúrcuma en
-              gotas líquidas de 50 ml, para acompañar tu bienestar metabólico
-              todos los días.
-            </p>
-            <ul className="mt-8 grid max-w-md grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-              {QUICK_FACTS.map((fact) => (
-                <li
-                  key={fact}
-                  className="flex items-start gap-2.5 border-t border-white/12 pt-3 text-[13px] leading-snug text-[var(--gl-bone)]/75"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[var(--gl-turmeric)]"
-                  />
-                  {fact}
-                </li>
-              ))}
-            </ul>
-          </div>
+          ) : null}
 
-          {/* Imagen o video */}
-          <div className="lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1">
-            <div className="relative mx-auto w-full max-w-[25rem] lg:max-w-none lg:pt-2">
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -inset-2.5 rounded-[1.75rem] border border-[var(--gl-turmeric)]/25"
-              />
-              <div className="relative aspect-[4/5] overflow-hidden rounded-[1.4rem] bg-[var(--gl-wine-900)] ring-1 ring-white/10">
+          <div className="lg:col-span-5">
+            <div className="relative mx-auto w-full max-w-sm rounded-3xl border border-rose-200 bg-white p-3 shadow-xl">
+              <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-rose-50">
                 {heroMedia}
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[var(--gl-wine-950)]/50 via-transparent to-transparent"
-                />
               </div>
+              <p className="mt-3 text-center text-xs font-medium text-gray-500">
+                Contenido 50 ml · Gotas líquidas
+              </p>
             </div>
           </div>
 
-          {/* Compra */}
-          <div
-            id="ofertas"
-            className="scroll-mt-24 space-y-3 lg:col-span-6 lg:col-start-1 lg:row-start-2"
-          >
-            {tiers.length > 1 ? (
-              <div
-                role="radiogroup"
-                aria-label="Elige cuántos frascos llevar"
-                className="space-y-2"
-              >
-                {tiers.map((tier) => {
-                  const isSelected = tier.qty === selectedQty;
-                  const unavailable =
-                    soldOut || (typeof stock === "number" && tier.qty > stock);
-                  return (
-                    <button
-                      key={tier.qty}
-                      type="button"
-                      role="radio"
-                      aria-checked={isSelected}
-                      disabled={unavailable}
-                      onClick={() => {
-                        setFailed(false);
-                        setSelectedQty(isSelected ? null : tier.qty);
-                      }}
-                      className={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-45 sm:gap-4 sm:px-4 ${
-                        isSelected
-                          ? "border-[var(--gl-turmeric)] bg-white/[0.06]"
-                          : "border-white/12 hover:border-white/30 hover:bg-white/[0.03]"
-                      }`}
-                    >
-                      <span className="flex w-16 items-end gap-0.5" aria-hidden="true">
-                        {Array.from({ length: tier.qty }, (_, i) => (
-                          <BottleGlyph key={i} gold={tier.qty === 3 && i === 2} />
-                        ))}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold sm:text-[15px]">
-                          {tier.qty} {tier.qty === 1 ? "frasco" : "frascos"}
-                        </span>
-                        <span className="mt-0.5 block text-[11px] leading-snug text-[var(--gl-bone)]/55">
-                          {tier.note}
-                        </span>
-                      </span>
-                      <span className="text-right">
-                        <span
-                          className={`gl-serif block text-lg font-semibold sm:text-xl ${
-                            isSelected
-                              ? "text-[var(--gl-turmeric)]"
-                              : "text-[var(--gl-bone)]"
-                          }`}
-                        >
-                          {formatCop(tier.total)}
-                        </span>
-                        {tier.regularTotal > tier.total ? (
-                          <del className="block text-[11px] text-[var(--gl-bone)]/55">
-                            {formatCop(tier.regularTotal)}
-                          </del>
-                        ) : null}
-                      </span>
-                    </button>
-                  );
-                })}
-                <p className="pt-1 text-[11px] leading-relaxed text-[var(--gl-bone)]/55">
-                  {selectedTier
-                    ? "Toca de nuevo la oferta para quitarla y comprar a precio normal."
-                    : "Sin oferta elegida pagas el precio normal por unidad."}
-                </p>
-              </div>
-            ) : null}
+          <div className="space-y-5 lg:col-span-7">
+            <div className="space-y-4 text-center lg:text-left">
+              <span className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--aw-rose-800)]">
+                ✨ {PRODUCT_BRAND} · Bienestar metabólico
+              </span>
+              <h1 className="text-3xl font-extrabold leading-tight text-gray-900 sm:text-4xl lg:text-5xl">
+                Cinco ingredientes{" "}
+                <span className="text-[var(--aw-rose-700)]">
+                  en un solo gotero
+                </span>
+              </h1>
+              <p className="mx-auto max-w-xl text-sm text-gray-600 sm:text-lg lg:mx-0">
+                Berberina, canela de Ceilán, cromo, melón amargo y cúrcuma en
+                gotas líquidas de 50 ml, para acompañar tu bienestar metabólico
+                todos los días.
+              </p>
+              <p className="mx-auto max-w-xl text-xs text-gray-500 sm:text-sm lg:mx-0">
+                Una fórmula líquida práctica, con vitaminas B y C, pensada para
+                quienes prefieren un gotero antes que cápsulas difíciles de
+                tragar.
+              </p>
+              <ul className="mx-auto grid max-w-md grid-cols-2 gap-2 text-left text-xs font-medium text-gray-700 sm:text-sm lg:mx-0">
+                {QUICK_BENEFITS.map((benefit) => (
+                  <li key={benefit} className="flex items-center gap-2">
+                    <CheckIcon className="h-4 w-4 shrink-0 text-[var(--aw-rose-600)]" />
+                    {benefit}
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-            {/* Cantidad: solo en compra normal (sin oferta elegida) */}
-            {!selectedTier && hasPrice ? (
-              <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-4">
-                <div>
-                  <span className="block text-[10px] uppercase tracking-[0.16em] text-[var(--gl-bone)]/55">
-                    Precio normal por frasco
-                  </span>
-                  <span className="gl-serif mt-1 block text-xl font-semibold text-[var(--gl-turmeric)]">
-                    {formatCop(unitPrice)}
-                  </span>
+            {/* Selector de ofertas por cantidad */}
+            <div id="ofertas" className="scroll-mt-24 space-y-3">
+              {tiers.length > 1 ? (
+                <div className="relative overflow-hidden rounded-3xl border border-rose-200 bg-gradient-to-b from-rose-50 via-white to-rose-50 p-4 shadow-[0_20px_55px_-28px_rgba(179,37,97,0.65)] sm:p-5">
+                  {/* Brillos decorativos del panel */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-rose-300/30 blur-3xl"
+                  />
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-rose-200/40 blur-3xl"
+                  />
+
+                  <div className="relative mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-base font-extrabold text-gray-900">
+                        🔥 Elige tu promoción
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        Lleva más y paga menos por cada frasco.
+                      </p>
+                    </div>
+                    {maxDiscount > 0 ? (
+                      <span className="rounded-full bg-gradient-to-r from-[var(--aw-rose-600)] to-[var(--aw-rose-800)] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white shadow">
+                        Hasta {maxDiscount}% OFF
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div
+                    role="radiogroup"
+                    aria-label="Ofertas por cantidad"
+                    className="relative grid grid-cols-1 gap-3 sm:grid-cols-3"
+                  >
+                    {tiers.map((tier) => {
+                      const isSelected = tier.qty === selectedQty;
+                      const unavailable =
+                        soldOut || (typeof stock === "number" && tier.qty > stock);
+                      const saving = tier.regularTotal - tier.total;
+                      const discount =
+                        tier.regularTotal > 0
+                          ? Math.round((saving / tier.regularTotal) * 100)
+                          : 0;
+                      const isBest = tier.qty === 3;
+                      const isFeatured = tier.qty === 2;
+
+                      const cardLook = isBest
+                        ? "border-[var(--aw-rose-800)] bg-gradient-to-br from-[var(--aw-rose-800)] via-[var(--aw-rose-900)] to-[var(--aw-rose-950)] text-white shadow-xl"
+                        : isFeatured
+                          ? "border-[var(--aw-rose-400)] bg-gradient-to-b from-white to-rose-100 shadow-lg"
+                          : "border-rose-200 bg-white hover:border-rose-400 hover:shadow-md";
+                      const stateLook = isSelected
+                        ? isBest
+                          ? "-translate-y-1 border-[var(--aw-gold)] ring-4 ring-[var(--aw-gold)]/30 shadow-2xl"
+                          : "-translate-y-1 border-[var(--aw-rose-600)] ring-4 ring-[var(--aw-rose-300)]/60 shadow-2xl"
+                        : "hover:-translate-y-0.5";
+                      const mutedLook = isBest ? "text-rose-100/80" : "text-gray-500";
+                      const titleLook = isBest ? "text-white" : "text-gray-900";
+                      const priceLook = isBest
+                        ? "text-white"
+                        : "text-[var(--aw-rose-700)]";
+                      const badgeLook = isBest
+                        ? "bg-[var(--aw-gold)] text-[var(--aw-rose-950)]"
+                        : isFeatured
+                          ? "bg-[var(--aw-rose-600)] text-white"
+                          : "bg-rose-100 text-[var(--aw-rose-800)]";
+                      const chipLook = isBest
+                        ? "bg-[var(--aw-gold)]/90 text-[var(--aw-rose-950)]"
+                        : "bg-rose-100 text-[var(--aw-rose-800)]";
+                      const radioLook = isBest
+                        ? isSelected
+                          ? "border-[var(--aw-gold)] bg-[var(--aw-gold)]"
+                          : "border-white/60"
+                        : isSelected
+                          ? "border-[var(--aw-rose-600)] bg-[var(--aw-rose-600)]"
+                          : "border-gray-300 bg-white";
+
+                      return (
+                        <button
+                          key={tier.qty}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          disabled={unavailable}
+                          onClick={() => {
+                            setFailed(false);
+                            setSelectedQty(isSelected ? null : tier.qty);
+                          }}
+                          className={`relative flex min-h-11 flex-col rounded-2xl border-2 p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--aw-rose-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${cardLook} ${stateLook} ${isBest ? "aw-shine" : ""}`}
+                        >
+                          <span
+                            className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors ${radioLook}`}
+                            aria-hidden="true"
+                          >
+                            {isSelected ? (
+                              <CheckIcon
+                                className={`h-3 w-3 ${
+                                  isBest
+                                    ? "text-[var(--aw-rose-950)]"
+                                    : "text-white"
+                                }`}
+                              />
+                            ) : null}
+                          </span>
+
+                          {tier.badge ? (
+                            <span
+                              className={`mb-2 inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] ${badgeLook}`}
+                            >
+                              {tier.badge}
+                            </span>
+                          ) : (
+                            <span
+                              className="mb-2 block h-[22px]"
+                              aria-hidden="true"
+                            />
+                          )}
+
+                          <span
+                            className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${mutedLook}`}
+                          >
+                            {tier.label}
+                          </span>
+                          <span className={`mt-0.5 block text-sm font-bold ${titleLook}`}>
+                            {tier.qty} {tier.qty === 1 ? "frasco" : "frascos"}
+                          </span>
+                          <span
+                            className={`mt-2 block text-2xl font-black leading-none tracking-tight sm:text-[1.6rem] ${priceLook}`}
+                          >
+                            {formatCop(tier.total)}
+                          </span>
+                          <span className={`mt-1 block text-[11px] font-medium ${mutedLook}`}>
+                            {tier.qty > 1
+                              ? `${formatCop(tier.total / tier.qty)} c/u`
+                              : "Precio por unidad"}
+                          </span>
+
+                          <span className="mt-3 flex flex-wrap items-center gap-1.5">
+                            {saving > 0 ? (
+                              <>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-black ${chipLook}`}
+                                >
+                                  Ahorras {formatCop(saving)}
+                                </span>
+                                <del className={`text-[10px] ${mutedLook}`}>
+                                  {formatCop(tier.regularTotal)}
+                                </del>
+                              </>
+                            ) : (
+                              <span className={`text-[10px] ${mutedLook}`}>
+                                Pago contra entrega
+                              </span>
+                            )}
+                          </span>
+
+                          {discount > 0 ? (
+                            <span
+                              className={`mt-2 inline-flex w-fit rounded-md px-1.5 py-0.5 text-[10px] font-black ${
+                                isBest
+                                  ? "bg-white/15 text-white"
+                                  : "bg-[var(--aw-rose-700)] text-white"
+                              }`}
+                            >
+                              -{discount}% OFF
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <p className="relative mt-3 text-center text-[11px] text-gray-500">
+                    {selectedTier
+                      ? "Toca de nuevo la oferta para quitarla y comprar a precio normal."
+                      : "Sin oferta elegida pagas el precio normal por unidad."}
+                  </p>
                 </div>
-                <div className="flex items-center gap-1.5" role="group" aria-label="Cantidad">
-                  <button
-                    type="button"
-                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                    disabled={quantity <= 1}
-                    aria-label="Disminuir cantidad"
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-lg font-semibold transition-colors hover:border-white/45 disabled:opacity-35"
+              ) : null}
+
+              {/* Cantidad: solo en compra normal (sin oferta elegida) */}
+              {!selectedTier && hasPrice ? (
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3">
+                  <div>
+                    <span className="block text-xs font-bold uppercase text-gray-500">
+                      Precio normal
+                    </span>
+                    <span className="text-xl font-extrabold text-[var(--aw-rose-700)]">
+                      {formatCop(unitPrice)}
+                    </span>
+                    <span className="ml-1 text-xs text-gray-500">c/u</span>
+                  </div>
+                  <div
+                    className="flex items-center gap-2"
+                    role="group"
+                    aria-label="Cantidad"
                   >
-                    −
-                  </button>
-                  <span
-                    className="w-8 text-center text-lg font-bold tabular-nums"
-                    aria-live="polite"
-                  >
-                    {quantity}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setQuantity((q) => Math.min(maxQuantity, q + 1))}
-                    disabled={quantity >= maxQuantity}
-                    aria-label="Aumentar cantidad"
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-lg font-semibold transition-colors hover:border-white/45 disabled:opacity-35"
-                  >
-                    +
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                      disabled={quantity <= 1}
+                      aria-label="Disminuir cantidad"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-rose-200 text-lg font-bold text-[var(--aw-rose-800)] disabled:opacity-40"
+                    >
+                      −
+                    </button>
+                    <span
+                      className="w-8 text-center text-lg font-bold tabular-nums"
+                      aria-live="polite"
+                    >
+                      {quantity}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQuantity((q) => Math.min(maxQuantity, q + 1))
+                      }
+                      disabled={quantity >= maxQuantity}
+                      aria-label="Aumentar cantidad"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-rose-200 text-lg font-bold text-[var(--aw-rose-800)] disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
 
             <div>
               <button
                 type="button"
                 onClick={() => void handleBuy()}
                 disabled={pending || soldOut || !hasPrice}
-                className={`group mt-1 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl px-5 py-4 text-[15px] font-bold tracking-wide transition-colors sm:text-base ${
+                className={`aw-pulse flex min-h-14 w-full items-center justify-center rounded-2xl px-5 py-4 text-base font-bold text-white shadow-lg transition-all sm:text-lg ${
                   soldOut || !hasPrice
-                    ? "cursor-not-allowed bg-white/15 text-white/50"
-                    : "bg-[var(--gl-turmeric)] text-[var(--gl-wine-950)] hover:bg-[var(--gl-turmeric-soft)]"
+                    ? "cursor-not-allowed bg-gray-400"
+                    : "bg-gradient-to-r from-[var(--aw-rose-600)] to-[var(--aw-rose-900)] hover:-translate-y-0.5"
                 } ${pending ? "cursor-wait opacity-75" : ""}`}
               >
                 {ctaLabel}
-                {!pending && !soldOut && hasPrice ? (
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    className="h-4 w-4 transition-transform group-hover:translate-x-1"
-                  >
-                    <path
-                      d="M4 10h11M11 5.5 15.5 10 11 14.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                ) : null}
               </button>
               {failed ? (
-                <p role="alert" className="mt-2 text-sm text-[#ff9aa5]">
+                <p role="alert" className="mt-2 text-center text-sm text-red-600">
                   No pudimos agregar el producto. Intenta de nuevo.
                 </p>
               ) : null}
-              <p className="mt-3 text-center text-[11px] text-[var(--gl-bone)]/55">
-                Paga al recibir en casa. Envío gratis a toda Colombia.
+              <p className="mt-2 text-center text-xs text-gray-500">
+                Pago contra entrega disponible en todo el país · Envío gratis
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 3. Señales de que necesitas Glucora */}
-      <section className="px-5 py-20 sm:px-6 sm:py-28">
-        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-12 lg:gap-16">
-          <div className="lg:col-span-5">
-            <SectionHeading
-              index="01"
-              title="Señales de que necesitas Glucora"
-              subtitle="Situaciones del día a día donde un apoyo constante y fácil de tomar hace la diferencia."
-            />
+      <WaveDivider from="var(--aw-blush)" to="#ffffff" />
+
+      {/* 3. Señales de que necesitas el producto */}
+      <section className="bg-white px-4 py-14">
+        <div className="mx-auto max-w-5xl space-y-10">
+          <SectionHeading
+            eyebrow="¿Te suena familiar?"
+            title={`¿Para quién es ${PRODUCT_SHORT_NAME}?`}
+            subtitle="Situaciones del día a día donde un apoyo constante y fácil de tomar hace la diferencia."
+          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {SIGNS.map((sign) => (
+              <div
+                key={sign.title}
+                className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5 transition-shadow hover:shadow-md"
+              >
+                <div
+                  className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg"
+                  aria-hidden="true"
+                >
+                  {sign.icon}
+                </div>
+                <h3 className="mb-1 font-bold text-gray-900">{sign.title}</h3>
+                <p className="text-xs leading-relaxed text-gray-600">{sign.text}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-[var(--aw-rose-700)] to-[var(--aw-rose-950)] p-6 text-white shadow-lg sm:flex-row">
+            <div className="text-center sm:text-left">
+              <h3 className="text-lg font-bold">Acompaña tu bienestar diario</h3>
+              <p className="text-xs text-rose-100 sm:text-sm">
+                Cinco ingredientes en un gotero de 50 ml, con envío gratis y
+                pago contra entrega.
+              </p>
+            </div>
             <a
               href="#ofertas"
-              className="group mt-8 inline-flex items-center gap-3 text-sm font-semibold text-[var(--gl-garnet)]"
+              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--aw-rose-800)] shadow transition-colors hover:bg-rose-50"
             >
-              Ver promociones
-              <span
-                aria-hidden="true"
-                className="h-px w-8 bg-current transition-all group-hover:w-12"
-              />
+              Quiero mi Glucora
             </a>
           </div>
-          <ul className="lg:col-span-7 lg:pt-2">
-            {SIGNS.map((sign, index) => (
-              <li
-                key={sign.title}
-                className="grid grid-cols-[auto_1fr] gap-4 border-t border-[var(--gl-stone-2)] py-6 last:border-b sm:gap-6 sm:py-7"
-              >
-                <DotChip id={sign.dot} decorative />
-                <div>
-                  <div className="flex items-baseline justify-between gap-4">
-                    <h3 className="gl-serif text-[1.2rem] font-semibold leading-snug text-[var(--gl-ink)] sm:text-[1.35rem]">
-                      {sign.title}
-                    </h3>
-                    <span
-                      aria-hidden="true"
-                      className="gl-serif text-xs text-[var(--gl-ink)]/30"
-                    >
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                  </div>
-                  <p className="mt-1.5 max-w-prose text-[13.5px] leading-relaxed text-[var(--gl-ink)]/70 sm:text-sm">
-                    {sign.text}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
         </div>
       </section>
 
-      {/* 4. Videos del producto (solo con videos cargados) */}
-      {VIDEOS.length > 0 ? (
-        <section className="border-y border-[var(--gl-stone-2)] bg-white px-5 py-20 sm:px-6 sm:py-24">
-          <div className="mx-auto max-w-6xl space-y-10">
-            <SectionHeading title="Mira Glucora en acción" />
-            <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
-              {VIDEOS.map((video) => (
-                <VideoCard key={video.src} video={video} />
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
+      <WaveDivider from="#ffffff" to="var(--aw-blush)" reverse />
 
-      {/* 5. Ingredientes */}
-      <section className="gl-hero-glow relative px-5 py-20 text-[var(--gl-bone)] sm:px-6 sm:py-28">
-        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-12 lg:gap-16">
-          <div className="lg:col-span-4">
-            <div className="lg:sticky lg:top-24">
-              <SectionHeading
-                tone="dark"
-                index="02"
-                title="Lo que dice la etiqueta, en palabras simples"
-                subtitle="Los cinco ingredientes principales y las vitaminas B y C, agrupados en tres ideas. Los círculos de color son los mismos que verás en el frasco."
-              />
-            </div>
-          </div>
-          <div className="lg:col-span-8">
-            <div className="border-t border-white/12">
-              {INGREDIENT_GROUPS.map((group, index) => (
-                <article
-                  key={group.title}
-                  className="grid gap-4 border-b border-white/12 py-7 sm:grid-cols-[1fr_auto] sm:items-start sm:gap-8 sm:py-8"
-                >
-                  <div>
-                    <span
-                      aria-hidden="true"
-                      className="gl-serif text-xs tracking-widest text-[var(--gl-turmeric)]/80"
-                    >
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <h3 className="gl-serif mt-2 text-[1.5rem] font-semibold leading-tight sm:text-[1.7rem]">
-                      {group.title}
-                    </h3>
-                    <p className="mt-3 max-w-prose text-[13.5px] leading-relaxed text-[var(--gl-bone)]/65 sm:text-sm">
-                      {group.text}
-                    </p>
-                  </div>
-                  {group.dots.length > 0 ? (
-                    <div className="flex items-center gap-2 sm:flex-col sm:items-end">
-                      {group.dots.map((id) => (
-                        <DotChip key={id} id={id} size="lg" />
-                      ))}
-                    </div>
-                  ) : null}
-                </article>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 6. Cómo usarlo */}
-      <section className="px-5 py-20 sm:px-6 sm:py-28">
-        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-12 lg:gap-16">
-          <div className="lg:col-span-5">
-            <SectionHeading
-              index="03"
-              title="Cómo usarlo"
-              subtitle="Un gotero, un vaso de agua y una hora fija. Eso es todo."
-            />
-          </div>
-          <ol className="lg:col-span-7">
-            {USAGE_STEPS.map((step, index) => (
-              <li
-                key={step.title}
-                className="grid grid-cols-[auto_1fr] gap-5 border-t border-[var(--gl-stone-2)] py-6 last:border-b sm:gap-7"
-              >
-                <span
-                  aria-hidden="true"
-                  className="gl-serif text-3xl font-semibold leading-none text-[var(--gl-garnet)]/80 sm:text-4xl"
-                >
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <div className="pt-0.5">
-                  <h3 className="gl-serif text-[1.2rem] font-semibold text-[var(--gl-ink)]">
-                    {step.title}
-                  </h3>
-                  <p className="mt-1.5 max-w-prose text-[13.5px] leading-relaxed text-[var(--gl-ink)]/70 sm:text-sm">
-                    {step.text}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      {/* 7. Resultados reales (solo con material real) */}
-      {RESULTS.length > 0 ? (
-        <section className="border-t border-[var(--gl-stone-2)] bg-white px-5 py-20 sm:px-6 sm:py-24">
-          <div className="mx-auto max-w-6xl space-y-10">
-            <SectionHeading
-              title="Resultados de clientes"
-              subtitle="Los resultados pueden variar de una persona a otra."
-            />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {RESULTS.map((result) => (
-                <figure
-                  key={result.src}
-                  className="overflow-hidden rounded-xl border border-[var(--gl-stone-2)] bg-[var(--gl-stone)]"
-                >
-                  <div className="relative aspect-[4/5]">
-                    <ProductImage
-                      src={cld(result.src)}
-                      alt={result.alt}
-                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      className="absolute inset-0 h-full w-full object-cover"
-                    />
-                  </div>
-                  {result.caption ? (
-                    <figcaption className="p-3 text-[13px] text-[var(--gl-ink)]/70">
-                      {result.caption}
-                    </figcaption>
-                  ) : null}
-                </figure>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {/* 8. Galería */}
-      <section className="bg-white px-5 py-20 sm:px-6 sm:py-28">
+      {/* 4. Ingredientes y beneficios */}
+      <section className="bg-[var(--aw-blush)] px-4 py-16">
         <div className="mx-auto max-w-6xl space-y-10">
-          <SectionHeading index="04" title="Mira el frasco de cerca" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-6">
+          <SectionHeading
+            eyebrow="Fórmula líquida"
+            title="Cinco ingredientes, un solo gotero"
+            subtitle="Una fórmula práctica con berberina, canela de Ceilán, cromo, melón amargo, cúrcuma y vitaminas B y C."
+          />
+          <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-3">
+            {BENEFITS.map((benefit) =>
+              benefit.featured ? (
+                <div
+                  key={benefit.title}
+                  className="relative space-y-3 rounded-3xl border-2 border-[var(--aw-rose-600)] bg-gradient-to-b from-white to-rose-100 p-8 text-center shadow-xl"
+                >
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--aw-rose-700)] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
+                    Fórmula principal
+                  </span>
+                  <div
+                    className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-4 border-white bg-rose-200 text-3xl shadow-md"
+                    aria-hidden="true"
+                  >
+                    {benefit.icon}
+                  </div>
+                  <h3 className="text-xl font-extrabold text-gray-900">
+                    {benefit.title}
+                  </h3>
+                  <p className="text-xs leading-relaxed text-gray-700">
+                    {benefit.text}
+                  </p>
+                </div>
+              ) : (
+                <div
+                  key={benefit.title}
+                  className="space-y-3 rounded-3xl border border-rose-200 bg-white p-6 text-center shadow-sm transition-colors hover:border-[var(--aw-rose-600)]"
+                >
+                  <div
+                    className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-100 text-2xl"
+                    aria-hidden="true"
+                  >
+                    {benefit.icon}
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {benefit.title}
+                  </h3>
+                  <p className="text-xs leading-relaxed text-gray-700">
+                    {benefit.text}
+                  </p>
+                </div>
+              ),
+            )}
+          </div>
+
+          <div className="rounded-3xl border border-rose-200 bg-white p-6 shadow-sm sm:p-8">
+            <h3 className="text-center text-lg font-extrabold text-gray-900">
+              Beneficios principales
+            </h3>
+            <ul className="mt-5 grid grid-cols-1 gap-3 text-left sm:grid-cols-2">
+              {SALES_BENEFITS.map((benefit) => (
+                <li
+                  key={benefit}
+                  className="flex items-start gap-2.5 text-xs leading-relaxed text-gray-700 sm:text-sm"
+                >
+                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--aw-rose-600)]" />
+                  {benefit}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <WaveDivider from="var(--aw-blush)" to="#ffffff" />
+
+      {/* 5. Comparativa con otros suplementos */}
+      <section className="bg-white px-4 py-14">
+        <div className="mx-auto max-w-5xl space-y-8">
+          <SectionHeading
+            eyebrow="Comparativa"
+            title="¿Por qué elegir Glucora?"
+            subtitle="Una fórmula líquida con cinco ingredientes y frasco gotero de 50 ml frente a otras opciones del mercado."
+          />
+
+          <div className="relative overflow-hidden rounded-3xl border border-rose-200 shadow-[0_24px_60px_-32px_rgba(179,37,97,0.55)]">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-rose-200/40 blur-3xl"
+            />
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] border-collapse text-left">
+                <caption className="sr-only">
+                  Comparación de Glucora con otros suplementos y con los
+                  ingredientes por separado
+                </caption>
+                <thead>
+                  <tr>
+                    <th
+                      scope="col"
+                      className="w-[31%] bg-rose-50 px-4 py-5 text-[11px] font-black uppercase tracking-widest text-gray-500"
+                    >
+                      Característica
+                    </th>
+                    <th
+                      scope="col"
+                      className="relative w-[27%] bg-gradient-to-b from-[var(--aw-rose-800)] to-[var(--aw-rose-950)] px-4 py-4 text-center text-white"
+                    >
+                      <span className="mx-auto mb-1.5 block w-fit rounded-full bg-[var(--aw-gold)] px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-[var(--aw-rose-950)] shadow">
+                        La mejor opción
+                      </span>
+                      <span className="block text-sm font-extrabold leading-tight">
+                        Glucora
+                      </span>
+                      <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wider text-rose-100/80">
+                        Cinco ingredientes · 50 ml
+                      </span>
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[21%] bg-rose-50 px-3 py-5 text-center text-[11px] font-bold leading-snug text-gray-600"
+                    >
+                      Otros suplementos
+                      <span className="block font-semibold text-gray-400">
+                        del mercado
+                      </span>
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[21%] bg-rose-50 px-3 py-5 text-center text-[11px] font-bold leading-snug text-gray-600"
+                    >
+                      Ingredientes
+                      <span className="block font-semibold text-gray-400">
+                        por separado
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMPARISON_ROWS.map((row, index) => (
+                    <tr
+                      key={row.feature}
+                      className={index % 2 === 0 ? "bg-white" : "bg-rose-50/40"}
+                    >
+                      <th
+                        scope="row"
+                        className="border-t border-rose-100 px-4 py-3 text-xs font-semibold leading-snug text-gray-800 sm:text-sm"
+                      >
+                        {row.feature}
+                      </th>
+                      <td className="border-x-2 border-t border-rose-200 bg-rose-50/70 px-3 py-3 text-center">
+                        <ComparisonCell value={row.ours} highlight />
+                      </td>
+                      <td className="border-t border-rose-100 px-3 py-3 text-center">
+                        <ComparisonCell value={row.otherAntiSpots} />
+                      </td>
+                      <td className="border-t border-rose-100 px-3 py-3 text-center">
+                        <ComparisonCell value={row.basicCream} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] font-medium text-gray-500">
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-rose-100 text-[var(--aw-rose-700)]"
+                aria-hidden="true"
+              >
+                <CheckIcon className="h-3.5 w-3.5" />
+              </span>
+              Sí
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-sm font-black text-gray-500"
+                aria-hidden="true"
+              >
+                ≈
+              </span>
+              Varía según la marca
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-50 text-sm font-bold text-gray-400"
+                aria-hidden="true"
+              >
+                —
+              </span>
+              No
+            </span>
+            <span className="sm:hidden">Desliza para comparar →</span>
+          </div>
+
+          <p className="mx-auto max-w-3xl text-center text-[11px] leading-relaxed text-gray-500">
+            La información de las otras columnas es referencial y puede variar
+            según la marca y la fórmula. Verifica siempre la etiqueta del
+            producto antes de usarlo.
+          </p>
+
+          <div className="text-center">
+            <a
+              href="#ofertas"
+              className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[var(--aw-rose-600)] to-[var(--aw-rose-900)] px-8 py-3 text-base font-bold text-white shadow-lg transition-transform hover:-translate-y-0.5"
+            >
+              Quiero mi Glucora
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. Resultados reales (solo con material real) */}
+      {RESULTS.length > 0 ? (
+        <>
+          <WaveDivider from="#ffffff" to="var(--aw-blush)" />
+          <section className="bg-[var(--aw-blush)] px-4 py-14">
+            <div className="mx-auto max-w-6xl space-y-8">
+              <SectionHeading
+                eyebrow="Resultados reales"
+                title="Clientes que ya lo usan"
+                subtitle="Los resultados pueden variar de una persona a otra."
+              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {RESULTS.map((result) => (
+                  <figure
+                    key={result.src}
+                    className="overflow-hidden rounded-2xl border border-rose-200 bg-white shadow-sm"
+                  >
+                    <div className="relative aspect-[4/5] bg-rose-50">
+                      <ProductImage
+                        src={cld(result.src)}
+                        alt={result.alt}
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        className="object-cover"
+                      />
+                    </div>
+                    {result.caption ? (
+                      <figcaption className="p-3 text-center text-xs text-gray-600">
+                        {result.caption}
+                      </figcaption>
+                    ) : null}
+                  </figure>
+                ))}
+              </div>
+            </div>
+          </section>
+        </>
+      ) : (
+        <WaveDivider from="#ffffff" to="var(--aw-blush)" reverse />
+      )}
+
+      {/* 7. Galería de imágenes */}
+      <section className="bg-[var(--aw-blush)] px-4 py-14">
+        <div className="mx-auto max-w-6xl space-y-8">
+          <SectionHeading
+            eyebrow="Galería"
+            title={`Conoce ${PRODUCT_SHORT_NAME}`}
+          />
+          <div className="mx-auto grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2">
             {GALLERY.map((image, index) => (
               <div
                 key={image.src}
-                className="group relative aspect-[4/5] overflow-hidden rounded-xl bg-[var(--gl-wine-900)] ring-1 ring-black/5"
+                className="group relative aspect-square overflow-hidden rounded-xl border border-rose-200 bg-rose-50"
               >
                 <ProductImage
                   src={cld(image.src)}
                   alt={image.alt}
                   priority={index === 0}
                   sizes="(max-width: 640px) 100vw, 50vw"
-                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
                 />
               </div>
             ))}
@@ -1218,73 +1464,51 @@ export default function GlucoraLanding({
         </div>
       </section>
 
-      {/* 9. Reseñas */}
-      <section className="overflow-hidden bg-[var(--gl-stone)] px-5 py-20 sm:px-6 sm:py-28">
-        <div className="mx-auto max-w-6xl space-y-10">
-          <div className="flex flex-col gap-6 border-b border-[var(--gl-stone-2)] pb-8 sm:flex-row sm:items-end sm:justify-between">
-            <SectionHeading
-              index="05"
-              title="Lo que dicen quienes lo usan"
-            />
-            <div className="flex items-end gap-4">
-              <span className="gl-serif text-5xl font-semibold leading-none">
-                {average.toLocaleString("es-CO", {
-                  minimumFractionDigits: 1,
-                  maximumFractionDigits: 1,
-                })}
-              </span>
-              <div className="pb-1">
-                <Stars value={Math.floor(average)} />
-                <span className="mt-1 block text-xs text-[var(--gl-ink)]/65">
-                  {REVIEWS.length} reseñas
-                </span>
-              </div>
-            </div>
-          </div>
-          <ReviewsCarousel items={REVIEWS} />
-        </div>
-      </section>
+      <WaveDivider from="var(--aw-blush)" to="#ffffff" />
 
-      {/* 10. CTA final + garantía */}
-      <section className="gl-hero-glow relative overflow-hidden px-5 py-20 text-[var(--gl-bone)] sm:px-6 sm:py-28">
-        <div className="mx-auto max-w-4xl text-center">
-          <span
-            aria-hidden="true"
-            className="mx-auto mb-8 block h-px w-16 bg-[var(--gl-turmeric)]/50"
-          />
-          <h2 className="gl-serif text-[2.1rem] font-semibold leading-[1.05] sm:text-5xl">
-            Empieza hoy con Glucora y paga al recibir
+      {/* 8. Reseñas de clientes (auto-scroll horizontal) */}
+      {REVIEWS.length > 0 ? (
+        <section className="overflow-hidden bg-white px-4 py-14">
+          <div className="mx-auto max-w-6xl space-y-8">
+            <SectionHeading
+              eyebrow="Reseñas de clientes"
+              title="Lo que dicen quienes ya lo probaron"
+              subtitle="Opiniones de personas que incorporaron Glucora a su rutina diaria."
+            />
+            <ReviewsCarousel items={REVIEWS} />
+          </div>
+        </section>
+      ) : null}
+
+      <WaveDivider from="#ffffff" to="var(--aw-rose-900)" />
+
+      {/* 9. CTA final + garantía */}
+      <section className="bg-gradient-to-b from-[var(--aw-rose-900)] to-[var(--aw-rose-950)] px-4 py-14 text-center text-white">
+        <div className="mx-auto max-w-3xl space-y-5">
+          <h2 className="text-2xl font-extrabold sm:text-4xl">
+            Tu bienestar diario, en un solo gotero
           </h2>
-          <p className="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed text-[var(--gl-bone)]/70 sm:text-base">
-            Elige tu promoción, recibe el frasco en la puerta de tu casa y paga
-            cuando llegue. El envío es gratis a toda Colombia.
+          <p className="text-sm text-rose-100 sm:text-base">
+            Pide hoy tu {PRODUCT_SHORT_NAME} con envío gratis y paga al recibir
+            en la puerta de tu casa.
           </p>
           <a
             href="#ofertas"
-            className="group mt-8 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[var(--gl-turmeric)] px-8 py-4 text-base font-bold tracking-wide text-[var(--gl-wine-950)] transition-colors hover:bg-[var(--gl-turmeric-soft)] sm:w-auto"
+            className="aw-pulse inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-white px-8 py-4 text-lg font-bold text-[var(--aw-rose-800)] shadow-lg transition-transform hover:-translate-y-0.5 sm:w-auto"
           >
-            Elegir mi promoción
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              className="h-4 w-4 transition-transform group-hover:translate-x-1"
-            >
-              <path
-                d="M4 10h11M11 5.5 15.5 10 11 14.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            Quiero mi {PRODUCT_SHORT_NAME}
           </a>
           {GUARANTEE_TEXT ? (
-            <p className="mx-auto mt-8 max-w-xl rounded-xl border border-white/15 bg-white/[0.04] p-4 text-sm">
+            <p className="mx-auto max-w-xl rounded-2xl border border-white/20 bg-white/10 p-4 text-sm">
               {GUARANTEE_TEXT}
             </p>
           ) : null}
-          <p className="mx-auto mt-12 max-w-2xl border-t border-white/10 pt-6 text-left text-[11px] leading-relaxed text-[var(--gl-bone)]/60">
+          <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-2 text-xs font-medium text-rose-100">
+            <li>🚚 Envío gratis</li>
+            <li>🤝 Pago contra entrega</li>
+            <li>🔒 Compra segura</li>
+          </ul>
+          <p className="mx-auto max-w-2xl pt-4 text-[11px] leading-relaxed text-rose-200/80">
             {DISCLAIMER}
             {SANITARY_REGISTRY ? ` ${SANITARY_REGISTRY}` : ""}
           </p>
