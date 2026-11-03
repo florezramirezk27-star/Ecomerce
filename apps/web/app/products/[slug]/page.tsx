@@ -19,6 +19,7 @@ import { getLineUnitPrice } from "@/lib/product-promotion";
 import AceiteOreganoLanding, { LANDING_SLUG } from "@/components/landings/AceiteOreganoLanding";
 import GlucoraLanding, { GLUCORA_SLUG } from "@/components/landings/GlucoraLanding";
 import ArbutinaLanding, { ARBUTINA_SLUG } from "@/components/landings/ArbutinaLanding";
+import BisagrasLanding, { BISAGRAS_SLUG } from "@/components/landings/BisagrasLanding";
 
 interface ProductVariation {
   id: number;
@@ -370,7 +371,7 @@ export default function ProductPage() {
     if (
       !Number.isInteger(requestedQuantity) ||
       requestedQuantity < 1 ||
-      requestedQuantity > 3
+      requestedQuantity > 16
     ) {
       mostrarAviso("error", "Selecciona una promoción válida.");
       return false;
@@ -438,6 +439,9 @@ export default function ProductPage() {
   const isArbutinaProduct =
     product.slug === ARBUTINA_SLUG ||
     /arbutin|tosowoong/i.test(`${product.name} ${product.slug}`);
+  const isBisagrasProduct =
+    product.slug === BISAGRAS_SLUG ||
+    /bisagra/i.test(`${product.name} ${product.slug}`);
   const hasVariations = variations.length > 0;
   const selectedVariation =
     variations.find((v) => v.id === selectedVariationId) ?? null;
@@ -1077,6 +1081,30 @@ const isVideo = selectedMedia?.kind === "video";
   
       {isArbutinaProduct && (
         <ArbutinaLanding
+          product={{
+            id: product.id,
+            name: product.name,
+            slug: product.slug,
+            price: product.price,
+            image: product.image,
+            stock: product.stock,
+          }}
+          onAddToCart={async (quantity, opts) =>
+            handleLandingAddToCart({
+              quantity,
+              promotion: opts?.promotion === true,
+            })
+          }
+          offerEndTime={
+            typeof offerEndTime === "number"
+              ? new Date(offerEndTime).toISOString()
+              : undefined
+          }
+        />
+      )}
+
+      {isBisagrasProduct && (
+        <BisagrasLanding
           product={{
             id: product.id,
             name: product.name,
