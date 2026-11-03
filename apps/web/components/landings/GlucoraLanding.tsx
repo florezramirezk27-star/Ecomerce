@@ -428,8 +428,8 @@ function ComparisonCell({
       <span
         className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${
           highlight
-            ? "bg-[var(--aw-rose-700)] text-white shadow-sm"
-            : "bg-rose-100 text-[var(--aw-rose-700)]"
+            ? "bg-[var(--gl-garnet)] text-white shadow-sm"
+            : "bg-[var(--gl-bone)] text-[var(--gl-garnet)]"
         }`}
       >
         <CheckIcon className="h-4 w-4" />
@@ -467,14 +467,14 @@ function SectionHeading({
 }) {
   return (
     <div className="text-center">
-      <span className="inline-block rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold uppercase tracking-widest text-[var(--aw-rose-700)]">
+      <span className="inline-block rounded-full border border-[var(--gl-stone-2)] bg-[var(--gl-bone)] px-3 py-1 text-xs font-bold uppercase tracking-widest text-[var(--gl-garnet)]">
         {eyebrow}
       </span>
-      <h2 className="mt-2 text-2xl font-extrabold text-gray-900 sm:text-3xl">
+      <h2 className="mt-2 text-2xl font-extrabold text-[var(--gl-ink)] sm:text-3xl">
         {title}
       </h2>
       {subtitle ? (
-        <p className="mx-auto mt-2 max-w-2xl text-sm text-gray-600">{subtitle}</p>
+        <p className="mx-auto mt-2 max-w-2xl text-sm text-[var(--gl-ink)]/65">{subtitle}</p>
       ) : null}
     </div>
   );
@@ -497,7 +497,7 @@ function UrgencyMarquee() {
 
   return (
     <div
-      className="overflow-hidden whitespace-nowrap bg-[var(--aw-rose-900)] py-2.5 text-[11px] font-medium text-white sm:text-sm"
+      className="overflow-hidden whitespace-nowrap bg-[var(--gl-wine-950)] py-2.5 text-[11px] font-medium text-[var(--gl-bone)] sm:text-sm"
       aria-label="Información de envío y pago"
     >
       <div className="flex w-max animate-marquee will-change-transform">
@@ -532,7 +532,7 @@ function WaveDivider({
     >
       <div
         className={`absolute inset-y-0 left-0 flex w-[200%] will-change-transform ${
-          reverse ? "aw-wave-reverse" : "aw-wave"
+          reverse ? "gl-wave-reverse" : "gl-wave"
         }`}
       >
         {[0, 1].map((index) => (
@@ -610,7 +610,7 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
   const card = (item: Review, key: string) => (
     <figure
       key={key}
-      className="flex w-80 shrink-0 flex-col justify-between rounded-2xl border border-rose-200 bg-white p-5 shadow-sm"
+      className="flex w-80 shrink-0 flex-col justify-between rounded-2xl border border-[var(--gl-stone-2)] bg-white p-5 shadow-sm"
     >
       <div>
         <div
@@ -624,14 +624,14 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
             </span>
           ))}
         </div>
-        <h3 className="mb-2 text-sm font-bold text-gray-900">{item.title}</h3>
-        <blockquote className="text-sm italic text-gray-700">
+        <h3 className="mb-2 text-sm font-bold text-[var(--gl-ink)]">{item.title}</h3>
+        <blockquote className="text-sm italic text-[var(--gl-ink)]/65">
           “{item.text}”
         </blockquote>
       </div>
-      <figcaption className="mt-4 flex items-center gap-2 border-t border-rose-200 pt-3 text-xs font-semibold text-[var(--aw-rose-700)]">
+      <figcaption className="mt-4 flex items-center gap-2 border-t border-[var(--gl-stone-2)] pt-3 text-xs font-semibold text-[var(--gl-garnet)]">
         <span>{item.name}</span>
-        <span className="font-normal text-gray-400">· Opinión de cliente</span>
+        <span className="font-normal text-[var(--gl-ink)]/40">· Opinión de cliente</span>
       </figcaption>
     </figure>
   );
@@ -639,7 +639,7 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
   return (
     <div
       ref={trackRef}
-      className="aw-hide-scrollbar flex overflow-x-auto gap-4"
+      className="gl-hide-scrollbar flex overflow-x-auto gap-4"
       onMouseEnter={pause}
       onMouseLeave={() => resume(0)}
       onTouchStart={pause}
@@ -661,8 +661,8 @@ function ReviewsCarousel({ items }: { items: readonly Review[] }) {
 
 function VideoCard({ video }: { video: MediaVideo }) {
   return (
-    <div className="space-y-3 rounded-3xl border border-rose-100 bg-rose-50/60 p-6 text-center transition-shadow hover:shadow-md sm:p-8">
-      <h3 className="text-lg font-bold text-gray-900">{video.title}</h3>
+    <div className="space-y-3 rounded-3xl border border-[var(--gl-stone-2)] bg-[var(--gl-bone)]/60 p-6 text-center transition-shadow hover:shadow-md sm:p-8">
+      <h3 className="text-lg font-bold text-[var(--gl-ink)]">{video.title}</h3>
       <div className="relative mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-3xl">
         <video
           controls
@@ -675,7 +675,7 @@ function VideoCard({ video }: { video: MediaVideo }) {
           Tu navegador no soporta el elemento de video.
         </video>
       </div>
-      <p className="text-sm font-medium text-gray-600">{video.caption}</p>
+      <p className="text-sm font-medium text-[var(--gl-ink)]/70">{video.caption}</p>
     </div>
   );
 }
@@ -766,57 +766,59 @@ export default function GlucoraLanding({
   );
 
   return (
-    <div className="aw-landing bg-[var(--aw-blush)] text-gray-800 antialiased">
+    <div className="gl-landing bg-[var(--gl-stone)] text-[var(--gl-ink)] antialiased">
       <style>{`
-        .aw-landing {
-          --aw-rose-950: #451025;
-          --aw-rose-900: #671635;
-          --aw-rose-800: #8d1c49;
-          --aw-rose-700: #b32561;
-          --aw-rose-600: #d43d7a;
-          --aw-rose-500: #ef6fa3;
-          --aw-rose-200: #f9c7da;
-          --aw-rose-100: #fde7f0;
-          --aw-blush: #fff6f9;
-          --aw-gold: #f6b21b;
+        .gl-landing {
+          --gl-wine-950: #150409;
+          --gl-wine-900: #290710;
+          --gl-wine-800: #480d1c;
+          --gl-garnet: #b3122f;
+          --gl-garnet-soft: #d24b60;
+          --gl-turmeric: #f6b21b;
+          --gl-turmeric-soft: #f8d488;
+          --gl-cinnamon: #a0643a;
+          --gl-bone: #f7f0e7;
+          --gl-stone: #faf8f4;
+          --gl-stone-2: #e8e1d6;
+          --gl-ink: #1c1115;
         }
-        @keyframes aw-pulse {
-          0% { box-shadow: 0 0 0 0 rgba(212, 61, 122, 0.45); }
-          70% { box-shadow: 0 0 0 14px rgba(212, 61, 122, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(212, 61, 122, 0); }
+        @keyframes gl-pulse {
+          0% { box-shadow: 0 0 0 0 rgba(210, 75, 96, 0.45); }
+          70% { box-shadow: 0 0 0 14px rgba(210, 75, 96, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(210, 75, 96, 0); }
         }
-        @keyframes aw-wave-shift {
+        @keyframes gl-wave-shift {
           from { transform: translate3d(0, 0, 0); }
           to { transform: translate3d(-50%, 0, 0); }
         }
-        @keyframes aw-shine {
+        @keyframes gl-shine {
           0%, 55% { transform: translateX(-130%) skewX(-12deg); }
           100% { transform: translateX(130%) skewX(-12deg); }
         }
-        .aw-landing .aw-pulse { animation: aw-pulse 2s infinite; }
-        .aw-landing .aw-pulse:disabled { animation: none; }
-        .aw-landing .aw-wave { animation: aw-wave-shift 18s linear infinite; }
-        .aw-landing .aw-wave-reverse { animation: aw-wave-shift 24s linear infinite reverse; }
-        .aw-landing .aw-shine { position: relative; overflow: hidden; }
-        .aw-landing .aw-shine::after {
+        .gl-landing .gl-pulse { animation: gl-pulse 2s infinite; }
+        .gl-landing .gl-pulse:disabled { animation: none; }
+        .gl-landing .gl-wave { animation: gl-wave-shift 18s linear infinite; }
+        .gl-landing .gl-wave-reverse { animation: gl-wave-shift 24s linear infinite reverse; }
+        .gl-landing .gl-shine { position: relative; overflow: hidden; }
+        .gl-landing .gl-shine::after {
           content: "";
           position: absolute;
           top: -20%;
           bottom: -20%;
           left: 0;
           width: 45%;
-          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
-          animation: aw-shine 4.5s ease-in-out infinite;
+          background: linear-gradient(90deg, transparent, rgba(246, 178, 27, 0.28), transparent);
+          animation: gl-shine 4.5s ease-in-out infinite;
           pointer-events: none;
         }
-        .aw-landing .aw-hide-scrollbar { scrollbar-width: none; }
-        .aw-landing .aw-hide-scrollbar::-webkit-scrollbar { display: none; }
+        .gl-landing .gl-hide-scrollbar { scrollbar-width: none; }
+        .gl-landing .gl-hide-scrollbar::-webkit-scrollbar { display: none; }
         @media (prefers-reduced-motion: reduce) {
-          .aw-landing .aw-pulse,
-          .aw-landing .aw-wave,
-          .aw-landing .aw-wave-reverse { animation: none; }
-          .aw-landing .aw-shine::after { animation: none; opacity: 0; }
-          .aw-landing { scroll-behavior: auto; }
+          .gl-landing .gl-pulse,
+          .gl-landing .gl-wave,
+          .gl-landing .gl-wave-reverse { animation: none; }
+          .gl-landing .gl-shine::after { animation: none; opacity: 0; }
+          .gl-landing { scroll-behavior: auto; }
         }
       `}</style>
 
@@ -824,7 +826,7 @@ export default function GlucoraLanding({
       <UrgencyMarquee />
 
       {/* 2. Hero */}
-      <section className="bg-[var(--aw-blush)] px-4 pb-12 pt-8 sm:pt-12 lg:pb-16 lg:pt-16">
+      <section className="bg-[var(--gl-stone)] px-4 pb-12 pt-8 sm:pt-12 lg:pb-16 lg:pt-16">
         <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-8 lg:grid-cols-12 lg:gap-10">
           {/* Videos del producto */}
           {VIDEOS.length > 0 ? (
@@ -842,11 +844,11 @@ export default function GlucoraLanding({
           ) : null}
 
           <div className="lg:col-span-5">
-            <div className="relative mx-auto w-full max-w-sm rounded-3xl border border-rose-200 bg-white p-3 shadow-xl">
-              <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-rose-50">
+            <div className="relative mx-auto w-full max-w-sm rounded-3xl border border-[var(--gl-stone-2)] bg-white p-3 shadow-xl">
+              <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[var(--gl-bone)]">
                 {heroMedia}
               </div>
-              <p className="mt-3 text-center text-xs font-medium text-gray-500">
+              <p className="mt-3 text-center text-xs font-medium text-[var(--gl-ink)]/50">
                 Contenido 50 ml · Gotas líquidas
               </p>
             </div>
@@ -854,29 +856,29 @@ export default function GlucoraLanding({
 
           <div className="space-y-5 lg:col-span-7">
             <div className="space-y-4 text-center lg:text-left">
-              <span className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--aw-rose-800)]">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[var(--gl-stone-2)] bg-[var(--gl-bone)] px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--gl-wine-800)]">
                 ✨ {PRODUCT_BRAND} · Bienestar metabólico
               </span>
-              <h1 className="text-3xl font-extrabold leading-tight text-gray-900 sm:text-4xl lg:text-5xl">
+              <h1 className="text-3xl font-extrabold leading-tight text-[var(--gl-ink)] sm:text-4xl lg:text-5xl">
                 Cinco ingredientes{" "}
-                <span className="text-[var(--aw-rose-700)]">
+                <span className="text-[var(--gl-garnet)]">
                   en un solo gotero
                 </span>
               </h1>
-              <p className="mx-auto max-w-xl text-sm text-gray-600 sm:text-lg lg:mx-0">
+              <p className="mx-auto max-w-xl text-sm text-[var(--gl-ink)]/70 sm:text-lg lg:mx-0">
                 Berberina, canela de Ceilán, cromo, melón amargo y cúrcuma en
                 gotas líquidas de 50 ml, para acompañar tu bienestar metabólico
                 todos los días.
               </p>
-              <p className="mx-auto max-w-xl text-xs text-gray-500 sm:text-sm lg:mx-0">
+              <p className="mx-auto max-w-xl text-xs text-[var(--gl-ink)]/60 sm:text-sm lg:mx-0">
                 Una fórmula líquida práctica, con vitaminas B y C, pensada para
                 quienes prefieren un gotero antes que cápsulas difíciles de
                 tragar.
               </p>
-              <ul className="mx-auto grid max-w-md grid-cols-2 gap-2 text-left text-xs font-medium text-gray-700 sm:text-sm lg:mx-0">
+              <ul className="mx-auto grid max-w-md grid-cols-2 gap-2 text-left text-xs font-medium text-[var(--gl-ink)]/75 sm:text-sm lg:mx-0">
                 {QUICK_BENEFITS.map((benefit) => (
                   <li key={benefit} className="flex items-center gap-2">
-                    <CheckIcon className="h-4 w-4 shrink-0 text-[var(--aw-rose-600)]" />
+                    <CheckIcon className="h-4 w-4 shrink-0 text-[var(--gl-garnet)]" />
                     {benefit}
                   </li>
                 ))}
@@ -886,28 +888,28 @@ export default function GlucoraLanding({
             {/* Selector de ofertas por cantidad */}
             <div id="ofertas" className="scroll-mt-24 space-y-3">
               {tiers.length > 1 ? (
-                <div className="relative overflow-hidden rounded-3xl border border-rose-200 bg-gradient-to-b from-rose-50 via-white to-rose-50 p-4 shadow-[0_20px_55px_-28px_rgba(179,37,97,0.65)] sm:p-5">
+                <div className="relative overflow-hidden rounded-3xl border border-[var(--gl-stone-2)] bg-gradient-to-b from-[var(--gl-bone)] via-white to-[var(--gl-bone)] p-4 shadow-[0_20px_55px_-28px_rgba(179,18,47,0.65)] sm:p-5">
                   {/* Brillos decorativos del panel */}
                   <div
                     aria-hidden="true"
-                    className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-rose-300/30 blur-3xl"
+                    className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[var(--gl-garnet-soft)]/30 blur-3xl"
                   />
                   <div
                     aria-hidden="true"
-                    className="pointer-events-none absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-rose-200/40 blur-3xl"
+                    className="pointer-events-none absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-[var(--gl-stone-2)]/40 blur-3xl"
                   />
 
                   <div className="relative mb-4 flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="text-base font-extrabold text-gray-900">
+                      <p className="text-base font-extrabold text-[var(--gl-ink)]">
                         🔥 Elige tu promoción
                       </p>
-                      <p className="text-[11px] text-gray-500">
+                      <p className="text-[11px] text-[var(--gl-ink)]/50">
                         Lleva más y paga menos por cada frasco.
                       </p>
                     </div>
                     {maxDiscount > 0 ? (
-                      <span className="rounded-full bg-gradient-to-r from-[var(--aw-rose-600)] to-[var(--aw-rose-800)] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white shadow">
+                      <span className="rounded-full bg-gradient-to-r from-[var(--gl-garnet-soft)] to-[var(--gl-wine-800)] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white shadow">
                         Hasta {maxDiscount}% OFF
                       </span>
                     ) : null}
@@ -931,35 +933,35 @@ export default function GlucoraLanding({
                       const isFeatured = tier.qty === 2;
 
                       const cardLook = isBest
-                        ? "border-[var(--aw-rose-800)] bg-gradient-to-br from-[var(--aw-rose-800)] via-[var(--aw-rose-900)] to-[var(--aw-rose-950)] text-white shadow-xl"
+                        ? "border-[var(--gl-wine-800)] bg-gradient-to-br from-[var(--gl-wine-800)] via-[var(--gl-wine-900)] to-[var(--gl-wine-950)] text-white shadow-xl"
                         : isFeatured
-                          ? "border-[var(--aw-rose-400)] bg-gradient-to-b from-white to-rose-100 shadow-lg"
-                          : "border-rose-200 bg-white hover:border-rose-400 hover:shadow-md";
+                          ? "border-[var(--gl-garnet-soft)] bg-gradient-to-b from-white to-[var(--gl-bone)] shadow-lg"
+                          : "border-[var(--gl-stone-2)] bg-white hover:border-[var(--gl-garnet-soft)] hover:shadow-md";
                       const stateLook = isSelected
                         ? isBest
-                          ? "-translate-y-1 border-[var(--aw-gold)] ring-4 ring-[var(--aw-gold)]/30 shadow-2xl"
-                          : "-translate-y-1 border-[var(--aw-rose-600)] ring-4 ring-[var(--aw-rose-300)]/60 shadow-2xl"
+                          ? "-translate-y-1 border-[var(--gl-turmeric)] ring-4 ring-[var(--gl-turmeric)]/30 shadow-2xl"
+                          : "-translate-y-1 border-[var(--gl-garnet-soft)] ring-4 ring-[var(--gl-garnet)]/60 shadow-2xl"
                         : "hover:-translate-y-0.5";
-                      const mutedLook = isBest ? "text-rose-100/80" : "text-gray-500";
-                      const titleLook = isBest ? "text-white" : "text-gray-900";
+                      const mutedLook = isBest ? "text-[var(--gl-bone)]/80" : "text-[var(--gl-ink)]/50";
+                      const titleLook = isBest ? "text-white" : "text-[var(--gl-ink)]";
                       const priceLook = isBest
                         ? "text-white"
-                        : "text-[var(--aw-rose-700)]";
+                        : "text-[var(--gl-garnet)]";
                       const badgeLook = isBest
-                        ? "bg-[var(--aw-gold)] text-[var(--aw-rose-950)]"
+                        ? "bg-[var(--gl-turmeric)] text-[var(--gl-wine-950)]"
                         : isFeatured
-                          ? "bg-[var(--aw-rose-600)] text-white"
-                          : "bg-rose-100 text-[var(--aw-rose-800)]";
+                          ? "bg-[var(--gl-garnet-soft)] text-white"
+                          : "bg-[var(--gl-bone)] text-[var(--gl-wine-800)]";
                       const chipLook = isBest
-                        ? "bg-[var(--aw-gold)]/90 text-[var(--aw-rose-950)]"
-                        : "bg-rose-100 text-[var(--aw-rose-800)]";
+                        ? "bg-[var(--gl-turmeric)]/90 text-[var(--gl-wine-950)]"
+                        : "bg-[var(--gl-bone)] text-[var(--gl-wine-800)]";
                       const radioLook = isBest
                         ? isSelected
-                          ? "border-[var(--aw-gold)] bg-[var(--aw-gold)]"
+                          ? "border-[var(--gl-turmeric)] bg-[var(--gl-turmeric)]"
                           : "border-white/60"
                         : isSelected
-                          ? "border-[var(--aw-rose-600)] bg-[var(--aw-rose-600)]"
-                          : "border-gray-300 bg-white";
+                          ? "border-[var(--gl-garnet-soft)] bg-[var(--gl-garnet-soft)]"
+                          : "border-[var(--gl-stone-2)] bg-white";
 
                       return (
                         <button
@@ -972,7 +974,7 @@ export default function GlucoraLanding({
                             setFailed(false);
                             setSelectedQty(isSelected ? null : tier.qty);
                           }}
-                          className={`relative flex min-h-11 flex-col rounded-2xl border-2 p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--aw-rose-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${cardLook} ${stateLook} ${isBest ? "aw-shine" : ""}`}
+                          className={`relative flex min-h-11 flex-col rounded-2xl border-2 p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gl-garnet)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${cardLook} ${stateLook} ${isBest ? "gl-shine" : ""}`}
                         >
                           <span
                             className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors ${radioLook}`}
@@ -982,7 +984,7 @@ export default function GlucoraLanding({
                               <CheckIcon
                                 className={`h-3 w-3 ${
                                   isBest
-                                    ? "text-[var(--aw-rose-950)]"
+                                    ? "text-[var(--gl-wine-950)]"
                                     : "text-white"
                                 }`}
                               />
@@ -1045,7 +1047,7 @@ export default function GlucoraLanding({
                               className={`mt-2 inline-flex w-fit rounded-md px-1.5 py-0.5 text-[10px] font-black ${
                                 isBest
                                   ? "bg-white/15 text-white"
-                                  : "bg-[var(--aw-rose-700)] text-white"
+                                  : "bg-[var(--gl-garnet)] text-white"
                               }`}
                             >
                               -{discount}% OFF
@@ -1056,7 +1058,7 @@ export default function GlucoraLanding({
                     })}
                   </div>
 
-                  <p className="relative mt-3 text-center text-[11px] text-gray-500">
+                  <p className="relative mt-3 text-center text-[11px] text-[var(--gl-ink)]/50">
                     {selectedTier
                       ? "Toca de nuevo la oferta para quitarla y comprar a precio normal."
                       : "Sin oferta elegida pagas el precio normal por unidad."}
@@ -1066,15 +1068,15 @@ export default function GlucoraLanding({
 
               {/* Cantidad: solo en compra normal (sin oferta elegida) */}
               {!selectedTier && hasPrice ? (
-                <div className="flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3">
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--gl-stone-2)] bg-white px-4 py-3">
                   <div>
-                    <span className="block text-xs font-bold uppercase text-gray-500">
+                    <span className="block text-xs font-bold uppercase text-[var(--gl-ink)]/50">
                       Precio normal
                     </span>
-                    <span className="text-xl font-extrabold text-[var(--aw-rose-700)]">
+                    <span className="text-xl font-extrabold text-[var(--gl-garnet)]">
                       {formatCop(unitPrice)}
                     </span>
-                    <span className="ml-1 text-xs text-gray-500">c/u</span>
+                    <span className="ml-1 text-xs text-[var(--gl-ink)]/50">c/u</span>
                   </div>
                   <div
                     className="flex items-center gap-2"
@@ -1086,7 +1088,7 @@ export default function GlucoraLanding({
                       onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                       disabled={quantity <= 1}
                       aria-label="Disminuir cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-rose-200 text-lg font-bold text-[var(--aw-rose-800)] disabled:opacity-40"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-[var(--gl-stone-2)] text-lg font-bold text-[var(--gl-wine-800)] disabled:opacity-40"
                     >
                       −
                     </button>
@@ -1103,7 +1105,7 @@ export default function GlucoraLanding({
                       }
                       disabled={quantity >= maxQuantity}
                       aria-label="Aumentar cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-rose-200 text-lg font-bold text-[var(--aw-rose-800)] disabled:opacity-40"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-[var(--gl-stone-2)] text-lg font-bold text-[var(--gl-wine-800)] disabled:opacity-40"
                     >
                       +
                     </button>
@@ -1117,10 +1119,10 @@ export default function GlucoraLanding({
                 type="button"
                 onClick={() => void handleBuy()}
                 disabled={pending || soldOut || !hasPrice}
-                className={`aw-pulse flex min-h-14 w-full items-center justify-center rounded-2xl px-5 py-4 text-base font-bold text-white shadow-lg transition-all sm:text-lg ${
+                className={`gl-pulse flex min-h-14 w-full items-center justify-center rounded-2xl px-5 py-4 text-base font-bold text-white shadow-lg transition-all sm:text-lg ${
                   soldOut || !hasPrice
                     ? "cursor-not-allowed bg-gray-400"
-                    : "bg-gradient-to-r from-[var(--aw-rose-600)] to-[var(--aw-rose-900)] hover:-translate-y-0.5"
+                    : "bg-gradient-to-r from-[var(--gl-garnet-soft)] to-[var(--gl-wine-900)] hover:-translate-y-0.5"
                 } ${pending ? "cursor-wait opacity-75" : ""}`}
               >
                 {ctaLabel}
@@ -1130,7 +1132,7 @@ export default function GlucoraLanding({
                   No pudimos agregar el producto. Intenta de nuevo.
                 </p>
               ) : null}
-              <p className="mt-2 text-center text-xs text-gray-500">
+              <p className="mt-2 text-center text-xs text-[var(--gl-ink)]/50">
                 Pago contra entrega disponible en todo el país · Envío gratis
               </p>
             </div>
@@ -1138,7 +1140,7 @@ export default function GlucoraLanding({
         </div>
       </section>
 
-      <WaveDivider from="var(--aw-blush)" to="#ffffff" />
+      <WaveDivider from="var(--gl-stone)" to="#ffffff" />
 
       {/* 3. Señales de que necesitas el producto */}
       <section className="bg-white px-4 py-14">
@@ -1152,7 +1154,7 @@ export default function GlucoraLanding({
             {SIGNS.map((sign) => (
               <div
                 key={sign.title}
-                className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5 transition-shadow hover:shadow-md"
+                className="rounded-2xl border border-[var(--gl-stone-2)] bg-[var(--gl-bone)]/60 p-5 transition-shadow hover:shadow-md"
               >
                 <div
                   className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg"
@@ -1160,22 +1162,22 @@ export default function GlucoraLanding({
                 >
                   {sign.icon}
                 </div>
-                <h3 className="mb-1 font-bold text-gray-900">{sign.title}</h3>
-                <p className="text-xs leading-relaxed text-gray-600">{sign.text}</p>
+                <h3 className="mb-1 font-bold text-[var(--gl-ink)]">{sign.title}</h3>
+                <p className="text-xs leading-relaxed text-[var(--gl-ink)]/65">{sign.text}</p>
               </div>
             ))}
           </div>
-          <div className="flex flex-col items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-[var(--aw-rose-700)] to-[var(--aw-rose-950)] p-6 text-white shadow-lg sm:flex-row">
+          <div className="flex flex-col items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-[var(--gl-garnet)] to-[var(--gl-wine-950)] p-6 text-white shadow-lg sm:flex-row">
             <div className="text-center sm:text-left">
               <h3 className="text-lg font-bold">Acompaña tu bienestar diario</h3>
-              <p className="text-xs text-rose-100 sm:text-sm">
+              <p className="text-xs text-[var(--gl-bone)]/80 sm:text-sm">
                 Cinco ingredientes en un gotero de 50 ml, con envío gratis y
                 pago contra entrega.
               </p>
             </div>
             <a
               href="#ofertas"
-              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--aw-rose-800)] shadow transition-colors hover:bg-rose-50"
+              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--gl-wine-800)] shadow transition-colors hover:bg-[var(--gl-bone)]"
             >
               Quiero mi Glucora
             </a>
@@ -1183,10 +1185,10 @@ export default function GlucoraLanding({
         </div>
       </section>
 
-      <WaveDivider from="#ffffff" to="var(--aw-blush)" reverse />
+      <WaveDivider from="#ffffff" to="var(--gl-stone)" reverse />
 
       {/* 4. Ingredientes y beneficios */}
-      <section className="bg-[var(--aw-blush)] px-4 py-16">
+      <section className="bg-[var(--gl-stone)] px-4 py-16">
         <div className="mx-auto max-w-6xl space-y-10">
           <SectionHeading
             eyebrow="Fórmula líquida"
@@ -1198,39 +1200,39 @@ export default function GlucoraLanding({
               benefit.featured ? (
                 <div
                   key={benefit.title}
-                  className="relative space-y-3 rounded-3xl border-2 border-[var(--aw-rose-600)] bg-gradient-to-b from-white to-rose-100 p-8 text-center shadow-xl"
+                  className="relative space-y-3 rounded-3xl border-2 border-[var(--gl-garnet-soft)] bg-gradient-to-b from-white to-[var(--gl-bone)] p-8 text-center shadow-xl"
                 >
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--aw-rose-700)] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--gl-garnet)] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
                     Fórmula principal
                   </span>
                   <div
-                    className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-4 border-white bg-rose-200 text-3xl shadow-md"
+                    className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-4 border-white bg-[var(--gl-stone-2)] text-3xl shadow-md"
                     aria-hidden="true"
                   >
                     {benefit.icon}
                   </div>
-                  <h3 className="text-xl font-extrabold text-gray-900">
+                  <h3 className="text-xl font-extrabold text-[var(--gl-ink)]">
                     {benefit.title}
                   </h3>
-                  <p className="text-xs leading-relaxed text-gray-700">
+                  <p className="text-xs leading-relaxed text-[var(--gl-ink)]/70">
                     {benefit.text}
                   </p>
                 </div>
               ) : (
                 <div
                   key={benefit.title}
-                  className="space-y-3 rounded-3xl border border-rose-200 bg-white p-6 text-center shadow-sm transition-colors hover:border-[var(--aw-rose-600)]"
+                  className="space-y-3 rounded-3xl border border-[var(--gl-stone-2)] bg-white p-6 text-center shadow-sm transition-colors hover:border-[var(--gl-garnet-soft)]"
                 >
                   <div
-                    className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-100 text-2xl"
+                    className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--gl-bone)] text-2xl"
                     aria-hidden="true"
                   >
                     {benefit.icon}
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900">
+                  <h3 className="text-lg font-bold text-[var(--gl-ink)]">
                     {benefit.title}
                   </h3>
-                  <p className="text-xs leading-relaxed text-gray-700">
+                  <p className="text-xs leading-relaxed text-[var(--gl-ink)]/70">
                     {benefit.text}
                   </p>
                 </div>
@@ -1238,17 +1240,17 @@ export default function GlucoraLanding({
             )}
           </div>
 
-          <div className="rounded-3xl border border-rose-200 bg-white p-6 shadow-sm sm:p-8">
-            <h3 className="text-center text-lg font-extrabold text-gray-900">
+          <div className="rounded-3xl border border-[var(--gl-stone-2)] bg-white p-6 shadow-sm sm:p-8">
+            <h3 className="text-center text-lg font-extrabold text-[var(--gl-ink)]">
               Beneficios principales
             </h3>
             <ul className="mt-5 grid grid-cols-1 gap-3 text-left sm:grid-cols-2">
               {SALES_BENEFITS.map((benefit) => (
                 <li
                   key={benefit}
-                  className="flex items-start gap-2.5 text-xs leading-relaxed text-gray-700 sm:text-sm"
+                  className="flex items-start gap-2.5 text-xs leading-relaxed text-[var(--gl-ink)]/70 sm:text-sm"
                 >
-                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--aw-rose-600)]" />
+                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--gl-garnet)]" />
                   {benefit}
                 </li>
               ))}
@@ -1257,7 +1259,7 @@ export default function GlucoraLanding({
         </div>
       </section>
 
-      <WaveDivider from="var(--aw-blush)" to="#ffffff" />
+      <WaveDivider from="var(--gl-stone)" to="#ffffff" />
 
       {/* 5. Comparativa con otros suplementos */}
       <section className="bg-white px-4 py-14">
@@ -1268,10 +1270,10 @@ export default function GlucoraLanding({
             subtitle="Una fórmula líquida con cinco ingredientes y frasco gotero de 50 ml frente a otras opciones del mercado."
           />
 
-          <div className="relative overflow-hidden rounded-3xl border border-rose-200 shadow-[0_24px_60px_-32px_rgba(179,37,97,0.55)]">
+          <div className="relative overflow-hidden rounded-3xl border border-[var(--gl-stone-2)] shadow-[0_24px_60px_-32px_rgba(179,18,47,0.55)]">
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-rose-200/40 blur-3xl"
+              className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-[var(--gl-stone-2)]/40 blur-3xl"
             />
 
             <div className="overflow-x-auto">
@@ -1284,39 +1286,39 @@ export default function GlucoraLanding({
                   <tr>
                     <th
                       scope="col"
-                      className="w-[31%] bg-rose-50 px-4 py-5 text-[11px] font-black uppercase tracking-widest text-gray-500"
+                      className="w-[31%] bg-[var(--gl-bone)] px-4 py-5 text-[11px] font-black uppercase tracking-widest text-[var(--gl-ink)]/50"
                     >
                       Característica
                     </th>
                     <th
                       scope="col"
-                      className="relative w-[27%] bg-gradient-to-b from-[var(--aw-rose-800)] to-[var(--aw-rose-950)] px-4 py-4 text-center text-white"
+                      className="relative w-[27%] bg-gradient-to-b from-[var(--gl-wine-800)] to-[var(--gl-wine-950)] px-4 py-4 text-center text-white"
                     >
-                      <span className="mx-auto mb-1.5 block w-fit rounded-full bg-[var(--aw-gold)] px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-[var(--aw-rose-950)] shadow">
+                      <span className="mx-auto mb-1.5 block w-fit rounded-full bg-[var(--gl-turmeric)] px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-[var(--gl-wine-950)] shadow">
                         La mejor opción
                       </span>
                       <span className="block text-sm font-extrabold leading-tight">
                         Glucora
                       </span>
-                      <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wider text-rose-100/80">
+                      <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wider text-[var(--gl-bone)]/80">
                         Cinco ingredientes · 50 ml
                       </span>
                     </th>
                     <th
                       scope="col"
-                      className="w-[21%] bg-rose-50 px-3 py-5 text-center text-[11px] font-bold leading-snug text-gray-600"
+                      className="w-[21%] bg-[var(--gl-bone)] px-3 py-5 text-center text-[11px] font-bold leading-snug text-[var(--gl-ink)]/60"
                     >
                       Otros suplementos
-                      <span className="block font-semibold text-gray-400">
+                      <span className="block font-semibold text-[var(--gl-ink)]/40">
                         del mercado
                       </span>
                     </th>
                     <th
                       scope="col"
-                      className="w-[21%] bg-rose-50 px-3 py-5 text-center text-[11px] font-bold leading-snug text-gray-600"
+                      className="w-[21%] bg-[var(--gl-bone)] px-3 py-5 text-center text-[11px] font-bold leading-snug text-[var(--gl-ink)]/60"
                     >
                       Ingredientes
-                      <span className="block font-semibold text-gray-400">
+                      <span className="block font-semibold text-[var(--gl-ink)]/40">
                         por separado
                       </span>
                     </th>
@@ -1326,21 +1328,21 @@ export default function GlucoraLanding({
                   {COMPARISON_ROWS.map((row, index) => (
                     <tr
                       key={row.feature}
-                      className={index % 2 === 0 ? "bg-white" : "bg-rose-50/40"}
+                      className={index % 2 === 0 ? "bg-white" : "bg-[var(--gl-bone)]/40"}
                     >
                       <th
                         scope="row"
-                        className="border-t border-rose-100 px-4 py-3 text-xs font-semibold leading-snug text-gray-800 sm:text-sm"
+                        className="border-t border-[var(--gl-stone-2)] px-4 py-3 text-xs font-semibold leading-snug text-[var(--gl-ink)] sm:text-sm"
                       >
                         {row.feature}
                       </th>
-                      <td className="border-x-2 border-t border-rose-200 bg-rose-50/70 px-3 py-3 text-center">
+                      <td className="border-x-2 border-t border-[var(--gl-stone-2)] bg-[var(--gl-bone)]/70 px-3 py-3 text-center">
                         <ComparisonCell value={row.ours} highlight />
                       </td>
-                      <td className="border-t border-rose-100 px-3 py-3 text-center">
+                      <td className="border-t border-[var(--gl-stone-2)] px-3 py-3 text-center">
                         <ComparisonCell value={row.otherAntiSpots} />
                       </td>
-                      <td className="border-t border-rose-100 px-3 py-3 text-center">
+                      <td className="border-t border-[var(--gl-stone-2)] px-3 py-3 text-center">
                         <ComparisonCell value={row.basicCream} />
                       </td>
                     </tr>
@@ -1350,10 +1352,10 @@ export default function GlucoraLanding({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] font-medium text-gray-500">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] font-medium text-[var(--gl-ink)]/50">
             <span className="inline-flex items-center gap-1.5">
               <span
-                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-rose-100 text-[var(--aw-rose-700)]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[var(--gl-bone)] text-[var(--gl-garnet)]"
                 aria-hidden="true"
               >
                 <CheckIcon className="h-3.5 w-3.5" />
@@ -1381,7 +1383,7 @@ export default function GlucoraLanding({
             <span className="sm:hidden">Desliza para comparar →</span>
           </div>
 
-          <p className="mx-auto max-w-3xl text-center text-[11px] leading-relaxed text-gray-500">
+          <p className="mx-auto max-w-3xl text-center text-[11px] leading-relaxed text-[var(--gl-ink)]/50">
             La información de las otras columnas es referencial y puede variar
             según la marca y la fórmula. Verifica siempre la etiqueta del
             producto antes de usarlo.
@@ -1390,7 +1392,7 @@ export default function GlucoraLanding({
           <div className="text-center">
             <a
               href="#ofertas"
-              className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[var(--aw-rose-600)] to-[var(--aw-rose-900)] px-8 py-3 text-base font-bold text-white shadow-lg transition-transform hover:-translate-y-0.5"
+              className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[var(--gl-garnet-soft)] to-[var(--gl-wine-900)] px-8 py-3 text-base font-bold text-white shadow-lg transition-transform hover:-translate-y-0.5"
             >
               Quiero mi Glucora
             </a>
@@ -1401,8 +1403,8 @@ export default function GlucoraLanding({
       {/* 6. Resultados reales (solo con material real) */}
       {RESULTS.length > 0 ? (
         <>
-          <WaveDivider from="#ffffff" to="var(--aw-blush)" />
-          <section className="bg-[var(--aw-blush)] px-4 py-14">
+          <WaveDivider from="#ffffff" to="var(--gl-stone)" />
+          <section className="bg-[var(--gl-stone)] px-4 py-14">
             <div className="mx-auto max-w-6xl space-y-8">
               <SectionHeading
                 eyebrow="Resultados reales"
@@ -1413,9 +1415,9 @@ export default function GlucoraLanding({
                 {RESULTS.map((result) => (
                   <figure
                     key={result.src}
-                    className="overflow-hidden rounded-2xl border border-rose-200 bg-white shadow-sm"
+                    className="overflow-hidden rounded-2xl border border-[var(--gl-stone-2)] bg-white shadow-sm"
                   >
-                    <div className="relative aspect-[4/5] bg-rose-50">
+                    <div className="relative aspect-[4/5] bg-[var(--gl-bone)]">
                       <ProductImage
                         src={cld(result.src)}
                         alt={result.alt}
@@ -1424,7 +1426,7 @@ export default function GlucoraLanding({
                       />
                     </div>
                     {result.caption ? (
-                      <figcaption className="p-3 text-center text-xs text-gray-600">
+                      <figcaption className="p-3 text-center text-xs text-[var(--gl-ink)]/60">
                         {result.caption}
                       </figcaption>
                     ) : null}
@@ -1435,11 +1437,11 @@ export default function GlucoraLanding({
           </section>
         </>
       ) : (
-        <WaveDivider from="#ffffff" to="var(--aw-blush)" reverse />
+        <WaveDivider from="#ffffff" to="var(--gl-stone)" reverse />
       )}
 
       {/* 7. Galería de imágenes */}
-      <section className="bg-[var(--aw-blush)] px-4 py-14">
+      <section className="bg-[var(--gl-stone)] px-4 py-14">
         <div className="mx-auto max-w-6xl space-y-8">
           <SectionHeading
             eyebrow="Galería"
@@ -1449,7 +1451,7 @@ export default function GlucoraLanding({
             {GALLERY.map((image, index) => (
               <div
                 key={image.src}
-                className="group relative aspect-square overflow-hidden rounded-xl border border-rose-200 bg-rose-50"
+                className="group relative aspect-square overflow-hidden rounded-xl border border-[var(--gl-stone-2)] bg-[var(--gl-bone)]"
               >
                 <ProductImage
                   src={cld(image.src)}
@@ -1464,7 +1466,7 @@ export default function GlucoraLanding({
         </div>
       </section>
 
-      <WaveDivider from="var(--aw-blush)" to="#ffffff" />
+      <WaveDivider from="var(--gl-stone)" to="#ffffff" />
 
       {/* 8. Reseñas de clientes (auto-scroll horizontal) */}
       {REVIEWS.length > 0 ? (
@@ -1480,21 +1482,21 @@ export default function GlucoraLanding({
         </section>
       ) : null}
 
-      <WaveDivider from="#ffffff" to="var(--aw-rose-900)" />
+      <WaveDivider from="#ffffff" to="var(--gl-wine-950)" />
 
       {/* 9. CTA final + garantía */}
-      <section className="bg-gradient-to-b from-[var(--aw-rose-900)] to-[var(--aw-rose-950)] px-4 py-14 text-center text-white">
+      <section className="bg-gradient-to-b from-[var(--gl-wine-900)] to-[var(--gl-wine-950)] px-4 py-14 text-center text-white">
         <div className="mx-auto max-w-3xl space-y-5">
           <h2 className="text-2xl font-extrabold sm:text-4xl">
             Tu bienestar diario, en un solo gotero
           </h2>
-          <p className="text-sm text-rose-100 sm:text-base">
+          <p className="text-sm text-[var(--gl-bone)]/80 sm:text-base">
             Pide hoy tu {PRODUCT_SHORT_NAME} con envío gratis y paga al recibir
             en la puerta de tu casa.
           </p>
           <a
             href="#ofertas"
-            className="aw-pulse inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-white px-8 py-4 text-lg font-bold text-[var(--aw-rose-800)] shadow-lg transition-transform hover:-translate-y-0.5 sm:w-auto"
+            className="gl-pulse inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-white px-8 py-4 text-lg font-bold text-[var(--gl-wine-800)] shadow-lg transition-transform hover:-translate-y-0.5 sm:w-auto"
           >
             Quiero mi {PRODUCT_SHORT_NAME}
           </a>
@@ -1503,12 +1505,12 @@ export default function GlucoraLanding({
               {GUARANTEE_TEXT}
             </p>
           ) : null}
-          <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-2 text-xs font-medium text-rose-100">
+          <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-2 text-xs font-medium text-[var(--gl-bone)]/80">
             <li>🚚 Envío gratis</li>
             <li>🤝 Pago contra entrega</li>
             <li>🔒 Compra segura</li>
           </ul>
-          <p className="mx-auto max-w-2xl pt-4 text-[11px] leading-relaxed text-rose-200/80">
+          <p className="mx-auto max-w-2xl pt-4 text-[11px] leading-relaxed text-[var(--gl-bone)]/60">
             {DISCLAIMER}
             {SANITARY_REGISTRY ? ` ${SANITARY_REGISTRY}` : ""}
           </p>
