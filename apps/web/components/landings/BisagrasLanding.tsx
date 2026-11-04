@@ -702,7 +702,7 @@ export default function BisagrasLanding({
    * Oferta elegida en el selector (`null` = ninguna). SOLO una tarjeta elegida
    * manda `promotion: true`; sin tarjeta, la compra va a precio normal.
    */
-  const [selectedQty, setSelectedQty] = useState<4 | 8 | 16 | null>(null);
+  const [selectedQty, setSelectedQty] = useState<4 | 8 | 12 | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -918,7 +918,7 @@ export default function BisagrasLanding({
                         tier.regularTotal > 0
                           ? Math.round((saving / tier.regularTotal) * 100)
                           : 0;
-                      const isBest = tier.qty === 16;
+                      const isBest = tier.qty === 12;
                       const isFeatured = tier.qty === 8;
 
                       const cardLook = isBest
