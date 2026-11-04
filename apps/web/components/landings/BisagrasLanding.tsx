@@ -56,9 +56,9 @@ const PRODUCT_BRAND = "Premium Negro";
 
 /**
  * Totales de promoción por cantidad (COP).
- * - 4 unidades: $159.900 en total. (promo 1: 1 paquete x 4)
- * - 8 unidades: $299.900 en total. (promo 2: 2 paquetes x 4)
- * - 12 unidades: $399.900 en total. (promo 3: 3 paquetes x 4)
+ * - 2 unidades: $89.900 en total. (promo 1)
+ * - 3 unidades: $119.900 en total. (promo 2)
+ * - 4 unidades: $159.900 en total. (promo 3)
  *
  * Deben coincidir con `BISAGRAS_OFFER_UNIT_PRICES` de
  * `lib/product-promotion.ts` y con su gemela de la API.
@@ -66,10 +66,10 @@ const PRODUCT_BRAND = "Premium Negro";
  * Nota: el precio unitario de promocion nunca baja de $18.725 (50% del precio
  * sugerido de Dropi: $37.450) para que el proveedor acepte el pedido.
  */
-const BULK_TOTALS: Readonly<Record<4 | 8 | 12, number | null>> = {
+const BULK_TOTALS: Readonly<Record<2 | 3 | 4, number | null>> = {
+  2: 89_900,
+  3: 119_900,
   4: 159_900,
-  8: 299_900,
-  12: 399_900,
 };
 
 interface MediaVideo {
@@ -191,7 +191,7 @@ const MARQUEE_ITEMS: readonly { strong: string; rest: string }[] = [
   { strong: "ENVÍO GRATIS", rest: "A TODA COLOMBIA" },
   { strong: "PAGO CONTRA ENTREGA:", rest: "paga al recibir en casa" },
   { strong: "KIT BISAGRAS PREMIUM NEGRO", rest: "repara sin reemplazar muebles" },
-  { strong: "4 X $159.900 · 8 X $299.900 · 12 X $399.900", rest: "ahorra en packs" },
+  { strong: "2 X $89.900 · 3 X $119.900 · 4 X $159.900", rest: "ahorra en packs" },
 ];
 
 const QUICK_BENEFITS: readonly string[] = [
@@ -350,7 +350,7 @@ function formatCop(value: number): string {
 }
 
 interface OfferTier {
-  qty: 4 | 8 | 12;
+  qty: 2 | 3 | 4;
   /** Lo que se muestra como total de la tarjeta. */
   total: number;
   /** `precio normal × cantidad`, para mostrar el ahorro. */
@@ -365,24 +365,24 @@ function buildTiers(unitPrice: number): OfferTier[] {
   if (!Number.isFinite(unitPrice) || unitPrice <= 0) return [];
 
   const tiers: OfferTier[] = [
-    { qty: 4, total: BULK_TOTALS[4] ?? 0, regularTotal: unitPrice * 4, label: "Pack inicial" },
+    { qty: 2, total: BULK_TOTALS[2] ?? 0, regularTotal: unitPrice * 2, label: "Pack inicial" },
   ];
-  const eight = BULK_TOTALS[8];
-  if (eight !== null) {
+  const three = BULK_TOTALS[3];
+  if (three !== null) {
     tiers.push({
-      qty: 8,
-      total: eight,
-      regularTotal: unitPrice * 8,
+      qty: 3,
+      total: three,
+      regularTotal: unitPrice * 3,
       label: "Pack familiar",
       badge: "Más popular",
     });
   }
-  const twelve = BULK_TOTALS[12];
-  if (twelve !== null) {
+  const four = BULK_TOTALS[4];
+  if (four !== null) {
     tiers.push({
-      qty: 12,
-      total: twelve,
-      regularTotal: unitPrice * 12,
+      qty: 4,
+      total: four,
+      regularTotal: unitPrice * 4,
       label: "Pack master",
       badge: "Máximo ahorro",
       note: "Mejor precio por unidad",
@@ -705,7 +705,7 @@ export default function BisagrasLanding({
    * Oferta elegida en el selector (`null` = ninguna). SOLO una tarjeta elegida
    * manda `promotion: true`; sin tarjeta, la compra va a precio normal.
    */
-  const [selectedQty, setSelectedQty] = useState<4 | 8 | 12 | null>(null);
+  const [selectedQty, setSelectedQty] = useState<2 | 3 | 4 | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -921,8 +921,8 @@ export default function BisagrasLanding({
                         tier.regularTotal > 0
                           ? Math.round((saving / tier.regularTotal) * 100)
                           : 0;
-                      const isBest = tier.qty === 12;
-                      const isFeatured = tier.qty === 8;
+                      const isBest = tier.qty === 4;
+                      const isFeatured = tier.qty === 3;
 
                       const cardLook = isBest
                         ? "border-[var(--aw-gold)] bg-gradient-to-br from-[var(--aw-slate-800)] via-[var(--aw-slate-900)] to-[var(--aw-slate-950)] text-white shadow-xl"
