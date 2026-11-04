@@ -52,17 +52,17 @@ const ARBUTINA_OFFER_UNIT_PRICES = {
 /**
  * Precios unitarios de la promoción por cantidad de Kit Bisagras Premium
  * Negro (COP).
- * - 4 unidades: $109.900 en total -> $27.475 c/u.
- * - 8 unidades: $149.900 en total -> $18.7375 c/u.
- * - 16 unidades: $139.900 en total -> ~$8.744 c/u.
+ * - 4 unidades: $64.900 en total -> $16.225 c/u.
+ * - 8 unidades: $109.900 en total -> ~$13.738 c/u.
+ * - 12 unidades: $149.900 en total -> ~$12.492 c/u.
  *
  * Coinciden con `BULK_TOTALS` de
  * `components/landings/BisagrasLanding.tsx`.
  */
 const BISAGRAS_OFFER_UNIT_PRICES = {
-  four: 27_475,
-  eight: 18_738,
-  sixteen: 8_744,
+  four: 16_225,
+  eight: 13_738,
+  twelve: 12_492,
 };
 
 function normalize(text: string): string {
@@ -142,8 +142,8 @@ export function getProductUnitPrice(
 
   if (isBisagrasProduct(product)) {
     const offerPrice =
-      quantity >= 16
-        ? BISAGRAS_OFFER_UNIT_PRICES.sixteen
+      quantity >= 12
+        ? BISAGRAS_OFFER_UNIT_PRICES.twelve
         : quantity >= 8
           ? BISAGRAS_OFFER_UNIT_PRICES.eight
           : quantity >= 4

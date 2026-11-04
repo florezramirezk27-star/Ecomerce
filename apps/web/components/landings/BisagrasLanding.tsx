@@ -56,17 +56,17 @@ const PRODUCT_BRAND = "Premium Negro";
 
 /**
  * Totales de promoción por cantidad (COP).
- * - 4 unidades: $109.900 en total.
- * - 8 unidades: $149.900 en total.
- * - 16 unidades: $139.900 en total.
+ * - 4 unidades: $64.900 en total.
+ * - 8 unidades: $109.900 en total.
+ * - 12 unidades: $149.900 en total.
  *
  * Deben coincidir con `BISAGRAS_OFFER_UNIT_PRICES` de
  * `lib/product-promotion.ts` y con su gemela de la API.
  */
-const BULK_TOTALS: Readonly<Record<4 | 8 | 16, number | null>> = {
-  4: 109_900,
-  8: 149_900,
-  16: 139_900,
+const BULK_TOTALS: Readonly<Record<4 | 8 | 12, number | null>> = {
+  4: 64_900,
+  8: 109_900,
+  12: 149_900,
 };
 
 interface MediaVideo {
@@ -188,7 +188,7 @@ const MARQUEE_ITEMS: readonly { strong: string; rest: string }[] = [
   { strong: "ENVÍO GRATIS", rest: "A TODA COLOMBIA" },
   { strong: "PAGO CONTRA ENTREGA:", rest: "paga al recibir en casa" },
   { strong: "KIT BISAGRAS PREMIUM NEGRO", rest: "repara sin reemplazar muebles" },
-  { strong: "4 X $109.900 · 8 X $149.900 · 16 X $139.900", rest: "ahorra en packs" },
+  { strong: "4 X $64.900 · 8 X $109.900 · 12 X $149.900", rest: "ahorra en packs" },
 ];
 
 const QUICK_BENEFITS: readonly string[] = [
@@ -347,7 +347,7 @@ function formatCop(value: number): string {
 }
 
 interface OfferTier {
-  qty: 4 | 8 | 16;
+  qty: 4 | 8 | 12;
   /** Lo que se muestra como total de la tarjeta. */
   total: number;
   /** `precio normal × cantidad`, para mostrar el ahorro. */
@@ -374,12 +374,12 @@ function buildTiers(unitPrice: number): OfferTier[] {
       badge: "Más popular",
     });
   }
-  const sixteen = BULK_TOTALS[16];
-  if (sixteen !== null) {
+  const twelve = BULK_TOTALS[12];
+  if (twelve !== null) {
     tiers.push({
-      qty: 16,
-      total: sixteen,
-      regularTotal: unitPrice * 16,
+      qty: 12,
+      total: twelve,
+      regularTotal: unitPrice * 12,
       label: "Pack master",
       badge: "Máximo ahorro",
       note: "Mejor precio por unidad",
