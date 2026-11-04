@@ -899,6 +899,10 @@ export default function BisagrasLanding({
                       <p className="text-[11px] text-slate-400">
                         Lleva más y paga menos por cada refuerzo.
                       </p>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Cada unidad del paquete incluye 4 refuerzos: 1 = 4, 2 = 8,
+                        3 = 12, 4 = 16 unidades.
+                      </p>
                     </div>
                     {maxDiscount > 0 ? (
                       <span className="rounded-full bg-gradient-to-r from-[var(--aw-gold)] to-[var(--aw-slate-700)] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white shadow">
