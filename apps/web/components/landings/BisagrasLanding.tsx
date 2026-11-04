@@ -764,8 +764,8 @@ export default function BisagrasLanding({
     <div className="aw-landing bg-[var(--aw-slate-950)] text-gray-200 antialiased">
       <style>{`
         .aw-landing {
-          --aw-slate-950: #1a1a1a;
-          --aw-slate-900: #0f172a;
+          --aw-slate-950: #2d2d2d;
+          --aw-slate-900: #1f2937;
           --aw-slate-800: #1e293b;
           --aw-slate-700: #334155;
           --aw-slate-600: #475569;
@@ -928,36 +928,40 @@ export default function BisagrasLanding({
                       const isBest = tier.qty === 4;
                       const isFeatured = tier.qty === 3;
 
+                      /* Colores distintivos por tarjeta de promoción */
+                      const tierColors: Record<number, { bg: string; border: string; text: string; badge: string; chip: string }> = {
+                        2: { bg: "bg-gradient-to-br from-blue-600/20 via-blue-700/30 to-blue-800/40", border: "border-blue-500", text: "text-blue-200", badge: "bg-blue-500 text-white", chip: "bg-blue-500 text-white" },
+                        3: { bg: "bg-gradient-to-br from-emerald-600/20 via-emerald-700/30 to-emerald-800/40", border: "border-emerald-500", text: "text-emerald-200", badge: "bg-emerald-500 text-white", chip: "bg-emerald-500 text-white" },
+                        4: { bg: "bg-gradient-to-br from-amber-600/20 via-amber-700/30 to-amber-800/40", border: "border-amber-500", text: "text-amber-200", badge: "bg-amber-500 text-[var(--aw-slate-950)]", chip: "bg-amber-500 text-[var(--aw-slate-950)]" },
+                      };
+                      const tc = tierColors[tier.qty];
+
                       const cardLook = isBest
-                        ? "border-[var(--aw-gold)] bg-gradient-to-br from-[var(--aw-slate-800)] via-[var(--aw-slate-900)] to-[var(--aw-slate-950)] text-white shadow-xl"
+                        ? `border-[var(--aw-gold)] ${tc.bg} text-white shadow-xl aw-shine`
                         : isFeatured
-                          ? "border-[var(--aw-slate-600)] bg-gradient-to-b from-white/10 to-slate-800/30 shadow-lg"
-                          : "border-slate-700 bg-white/5 hover:border-slate-500 hover:shadow-md";
+                          ? `border-[var(--aw-gold)] ${tc.bg} ${tc.text} shadow-lg`
+                          : `${tc.border} ${tc.bg} ${tc.text} hover:border-[var(--aw-gold)] hover:shadow-md`;
                       const stateLook = isSelected
                         ? isBest
                           ? "-translate-y-1 border-[var(--aw-gold)] ring-4 ring-[var(--aw-gold)]/30 shadow-2xl"
                           : "-translate-y-1 border-[var(--aw-slate-500)] ring-4 ring-[var(--aw-slate-400)]/60 shadow-2xl"
                         : "hover:-translate-y-0.5";
                       const mutedLook = isBest ? "text-slate-300/80" : "text-slate-400";
-                      const titleLook = isBest ? "text-white" : "text-slate-100";
-                      const priceLook = isBest
-                        ? "text-white"
-                        : "text-[var(--aw-gold)]";
+                      const titleLook = isBest ? "text-white" : tc.text;
+                      const priceLook = isBest ? "text-white" : "text-[var(--aw-gold)]";
                       const badgeLook = isBest
                         ? "bg-[var(--aw-gold)] text-[var(--aw-slate-950)]"
-                        : isFeatured
-                          ? "bg-[var(--aw-slate-500)] text-white"
-                          : "bg-slate-800 text-[var(--aw-gold)]";
+                        : tc.badge;
                       const chipLook = isBest
                         ? "bg-[var(--aw-gold)]/20 text-[var(--aw-gold)]"
-                        : "bg-slate-800 text-[var(--aw-gold)]";
+                        : tc.chip;
                       const radioLook = isBest
                         ? isSelected
                           ? "border-[var(--aw-gold)] bg-[var(--aw-gold)]"
                           : "border-white/20"
                         : isSelected
-                          ? "border-[var(--aw-slate-500)] bg-[var(--aw-slate-500)]"
-                          : "border-slate-600 bg-white/5";
+                          ? "border-[var(--aw-gold)] bg-[var(--aw-gold)]"
+                          : `${tc.border} bg-white/10`;
 
                       return (
                         <button
