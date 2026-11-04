@@ -56,20 +56,20 @@ const PRODUCT_BRAND = "Premium Negro";
 
 /**
  * Totales de promoción por cantidad (COP).
- * - 4 unidades: $79.900 en total. (promo 1: 1 paquete x 4)
- * - 8 unidades: $149.900 en total. (promo 2: 2 paquetes x 4)
- * - 12 unidades: $224.900 en total. (promo 3: 3 paquetes x 4)
+ * - 4 unidades: $159.900 en total. (promo 1: 1 paquete x 4)
+ * - 8 unidades: $299.900 en total. (promo 2: 2 paquetes x 4)
+ * - 12 unidades: $399.900 en total. (promo 3: 3 paquetes x 4)
  *
  * Deben coincidir con `BISAGRAS_OFFER_UNIT_PRICES` de
  * `lib/product-promotion.ts` y con su gemela de la API.
  *
- * Nota: el precio unitario nunca baja de $18.725 (50% del precio sugerido de
- * Dropi: $37.450) para que el proveedor acepte el pedido.
+ * Nota: el precio unitario de promocion nunca baja de $18.725 (50% del precio
+ * sugerido de Dropi: $37.450) para que el proveedor acepte el pedido.
  */
 const BULK_TOTALS: Readonly<Record<4 | 8 | 12, number | null>> = {
-  4: 79_900,
-  8: 149_900,
-  12: 224_900,
+  4: 159_900,
+  8: 299_900,
+  12: 399_900,
 };
 
 interface MediaVideo {
@@ -191,7 +191,7 @@ const MARQUEE_ITEMS: readonly { strong: string; rest: string }[] = [
   { strong: "ENVÍO GRATIS", rest: "A TODA COLOMBIA" },
   { strong: "PAGO CONTRA ENTREGA:", rest: "paga al recibir en casa" },
   { strong: "KIT BISAGRAS PREMIUM NEGRO", rest: "repara sin reemplazar muebles" },
-  { strong: "4 X $79.900 · 8 X $149.900 · 12 X $224.900", rest: "ahorra en packs" },
+  { strong: "4 X $159.900 · 8 X $299.900 · 12 X $399.900", rest: "ahorra en packs" },
 ];
 
 const QUICK_BENEFITS: readonly string[] = [

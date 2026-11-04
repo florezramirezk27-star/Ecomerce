@@ -9,7 +9,7 @@ const oftalmiel = {
 const bisagras = {
   name: 'Kit Reparador de Bisagras Premium Negro',
   slug: 'kit-reparador-bisagras-premium-negro',
-  price: 30_000,
+  price: 64_900,
 };
 
 describe('getProductUnitPrice', () => {
@@ -52,10 +52,10 @@ describe('getProductUnitPrice', () => {
   });
 
   it.each([
-    [1, 19_975],
-    [4, 19_975],
-    [8, 18_738],
-    [12, 18_742],
+    [1, 39_975],
+    [4, 39_975],
+    [8, 37_488],
+    [12, 33_325],
   ])('applies the Bisagras offer for quantity %i', (quantity, price) => {
     expect(getProductUnitPrice(bisagras, quantity)).toBe(price);
   });
@@ -102,8 +102,8 @@ describe('getLineUnitPrice', () => {
   });
 
   it('applies the Bisagras offer only when the line chose the promotion', () => {
-    expect(getLineUnitPrice(bisagras, 8, true)).toBe(18_738);
-    expect(getLineUnitPrice(bisagras, 8, false)).toBe(30_000);
-    expect(getLineUnitPrice(bisagras, 8, undefined)).toBe(30_000);
+    expect(getLineUnitPrice(bisagras, 8, true)).toBe(37_488);
+    expect(getLineUnitPrice(bisagras, 8, false)).toBe(64_900);
+    expect(getLineUnitPrice(bisagras, 8, undefined)).toBe(64_900);
   });
 });
