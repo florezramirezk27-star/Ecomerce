@@ -372,7 +372,7 @@ export default function ProductPage() {
     if (
       !Number.isInteger(requestedQuantity) ||
       requestedQuantity < 1 ||
-      requestedQuantity > 16
+      requestedQuantity > 24
     ) {
       mostrarAviso("error", "Selecciona una promoción válida.");
       return false;
