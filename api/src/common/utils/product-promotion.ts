@@ -51,6 +51,22 @@ const ARBUTINA_OFFER_UNIT_PRICES = {
   family: 46_600,
 };
 
+/**
+ * Precios unitarios de la promocion por cantidad de Kit Bisagras Premium
+ * Negro (COP).
+ * - 4 unidades: $64.900 en total -> $16.225 c/u.
+ * - 8 unidades: $99.000 en total -> $12.375 c/u.
+ * - 16 unidades: $139.900 en total -> ~$8.744 c/u.
+ *
+ * Coinciden con `BULK_TOTALS` de
+ * `apps/web/components/landings/BisagrasLanding.tsx`.
+ */
+const BISAGRAS_OFFER_UNIT_PRICES = {
+  four: 16_225,
+  eight: 12_375,
+  sixteen: 8_744,
+};
+
 function normalize(text: string): string {
   return text
     .normalize('NFD')
@@ -76,6 +92,11 @@ function isGlucoraProduct(product: PricedProduct): boolean {
 function isArbutinaProduct(product: PricedProduct): boolean {
   const text = normalize(`${product.name} ${product.slug}`);
   return text.includes('arbutin') || text.includes('tosowoong');
+}
+
+function isBisagrasProduct(product: PricedProduct): boolean {
+  const text = normalize(`${product.name} ${product.slug}`);
+  return text.includes('bisagra');
 }
 
 /**
@@ -129,6 +150,18 @@ export function getProductUnitPrice(
         : quantity >= 2
           ? ARBUTINA_OFFER_UNIT_PRICES.double
           : ARBUTINA_OFFER_UNIT_PRICES.single;
+    return Math.min(regularPrice, offerPrice);
+  }
+
+  if (isBisagrasProduct(product)) {
+    const offerPrice =
+      quantity >= 16
+        ? BISAGRAS_OFFER_UNIT_PRICES.sixteen
+        : quantity >= 8
+          ? BISAGRAS_OFFER_UNIT_PRICES.eight
+          : quantity >= 4
+            ? BISAGRAS_OFFER_UNIT_PRICES.four
+            : BISAGRAS_OFFER_UNIT_PRICES.four;
     return Math.min(regularPrice, offerPrice);
   }
 

@@ -6,6 +6,12 @@ const oftalmiel = {
   price: 64_900,
 };
 
+const bisagras = {
+  name: 'Kit Reparador de Bisagras Premium Negro',
+  slug: 'kit-reparador-bisagras-premium-negro',
+  price: 30_000,
+};
+
 describe('getProductUnitPrice', () => {
   it.each([
     [1, 64_900],
@@ -44,6 +50,20 @@ describe('getProductUnitPrice', () => {
     };
     expect(getProductUnitPrice(arbutina, quantity)).toBe(price);
   });
+
+  it.each([
+    [1, 16_225],
+    [4, 16_225],
+    [8, 12_375],
+    [16, 8_744],
+  ])('applies the Bisagras offer for quantity %i', (quantity, price) => {
+    expect(getProductUnitPrice(bisagras, quantity)).toBe(price);
+  });
+
+  it('does not raise a Bisagras price above its regular price', () => {
+    const barato = { ...bisagras, price: 10_000 };
+    expect(getProductUnitPrice(barato, 4)).toBe(10_000);
+  });
 });
 
 describe('getLineUnitPrice', () => {
@@ -79,5 +99,11 @@ describe('getLineUnitPrice', () => {
     const barato = { ...oftalmiel, price: 40_000 };
     expect(getLineUnitPrice(barato, 2, true)).toBe(40_000);
     expect(getLineUnitPrice(barato, 2, false)).toBe(40_000);
+  });
+
+  it('applies the Bisagras offer only when the line chose the promotion', () => {
+    expect(getLineUnitPrice(bisagras, 8, true)).toBe(12_375);
+    expect(getLineUnitPrice(bisagras, 8, false)).toBe(30_000);
+    expect(getLineUnitPrice(bisagras, 8, undefined)).toBe(30_000);
   });
 });
