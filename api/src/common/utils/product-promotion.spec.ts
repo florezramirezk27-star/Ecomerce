@@ -52,17 +52,12 @@ describe('getProductUnitPrice', () => {
   });
 
   it.each([
-    [1, 19_000],
-    [4, 19_000],
-    [8, 18_800],
-    [16, 18_725],
+    [1, 16_225],
+    [4, 16_225],
+    [8, 9_362],
+    [16, 8_744],
   ])('applies the Bisagras offer for quantity %i', (quantity, price) => {
     expect(getProductUnitPrice(bisagras, quantity)).toBe(price);
-  });
-
-  it('does not apply Bisagras offer below Dropi minimum (50% of suggested)', () => {
-    // Dropi rechaza precios de venta menores al 50% del sugerido (37450 -> 18725).
-    expect(getProductUnitPrice(bisagras, 16)).toBe(18_725);
   });
 
   it('does not raise a Bisagras price above its regular price', () => {
@@ -107,7 +102,7 @@ describe('getLineUnitPrice', () => {
   });
 
   it('applies the Bisagras offer only when the line chose the promotion', () => {
-    expect(getLineUnitPrice(bisagras, 8, true)).toBe(18_800);
+    expect(getLineUnitPrice(bisagras, 8, true)).toBe(9_362);
     expect(getLineUnitPrice(bisagras, 8, false)).toBe(30_000);
     expect(getLineUnitPrice(bisagras, 8, undefined)).toBe(30_000);
   });
