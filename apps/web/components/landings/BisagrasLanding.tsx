@@ -56,17 +56,19 @@ const PRODUCT_BRAND = "Premium Negro";
 
 /**
  * Totales de promoción por cantidad (COP).
- * - 4 unidades: $64.900 en total.
- * - 8 unidades: $99.000 en total.
- * - 16 unidades: $139.900 en total.
+ * - 4 unidades: $76.000 en total.
+ * - 8 unidades: $150.400 en total.
+ * - 16 unidades: $299.600 en total.
  *
  * Deben coincidir con `BISAGRAS_OFFER_UNIT_PRICES` de
  * `lib/product-promotion.ts` y con su gemela de la API.
+ * El precio unitario nunca baja de $18.725 (50% del precio sugerido de
+ * Dropi: $37.450) para que el proveedor acepte el pedido.
  */
 const BULK_TOTALS: Readonly<Record<4 | 8 | 16, number | null>> = {
-  4: 64_900,
-  8: 99_000,
-  16: 139_900,
+  4: 76_000,
+  8: 150_400,
+  16: 299_600,
 };
 
 interface MediaVideo {
@@ -188,7 +190,7 @@ const MARQUEE_ITEMS: readonly { strong: string; rest: string }[] = [
   { strong: "ENVÍO GRATIS", rest: "A TODA COLOMBIA" },
   { strong: "PAGO CONTRA ENTREGA:", rest: "paga al recibir en casa" },
   { strong: "KIT BISAGRAS PREMIUM NEGRO", rest: "repara sin reemplazar muebles" },
-  { strong: "4 X $64.900 · 8 X $99.000 · 16 X $139.900", rest: "ahorra en packs" },
+  { strong: "4 X $76.000 · 8 X $150.400 · 16 X $299.600", rest: "ahorra en packs" },
 ];
 
 const QUICK_BENEFITS: readonly string[] = [
