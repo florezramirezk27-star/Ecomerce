@@ -54,20 +54,16 @@ const ARBUTINA_OFFER_UNIT_PRICES = {
 /**
  * Precios unitarios de la promocion por cantidad de Kit Bisagras Premium
  * Negro (COP).
- * - 4 unidades: $64.900 en total -> $16.225 c/u. (precio sugerido de Dropi ID 2414445)
- * - 8 unidades: $74.900 en total -> $9.362 c/u. (precio sugerido de Dropi ID 2414444)
+ * - 4 unidades: $109.900 en total -> $27.475 c/u.
+ * - 8 unidades: $149.900 en total -> $18.7375 c/u.
  * - 16 unidades: $139.900 en total -> ~$8.744 c/u.
  *
  * Coinciden con `BULK_TOTALS` de
  * `apps/web/components/landings/BisagrasLanding.tsx`.
- *
- * Nota: Dropi rechaza precios de venta menores al 50% del precio sugerido.
- * Estos totales coinciden con el precio sugerido de Dropi para los packs de 4
- * y 8, por lo que el proveedor acepta el pedido.
  */
 const BISAGRAS_OFFER_UNIT_PRICES = {
-  four: 16_225,
-  eight: 9_362,
+  four: 27_475,
+  eight: 18_738,
   sixteen: 8_744,
 };
 

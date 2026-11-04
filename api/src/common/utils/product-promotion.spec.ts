@@ -52,9 +52,9 @@ describe('getProductUnitPrice', () => {
   });
 
   it.each([
-    [1, 16_225],
-    [4, 16_225],
-    [8, 9_362],
+    [1, 27_475],
+    [4, 27_475],
+    [8, 18_738],
     [16, 8_744],
   ])('applies the Bisagras offer for quantity %i', (quantity, price) => {
     expect(getProductUnitPrice(bisagras, quantity)).toBe(price);
@@ -102,7 +102,7 @@ describe('getLineUnitPrice', () => {
   });
 
   it('applies the Bisagras offer only when the line chose the promotion', () => {
-    expect(getLineUnitPrice(bisagras, 8, true)).toBe(9_362);
+    expect(getLineUnitPrice(bisagras, 8, true)).toBe(18_738);
     expect(getLineUnitPrice(bisagras, 8, false)).toBe(30_000);
     expect(getLineUnitPrice(bisagras, 8, undefined)).toBe(30_000);
   });
