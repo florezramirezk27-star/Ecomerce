@@ -54,17 +54,20 @@ const ARBUTINA_OFFER_UNIT_PRICES = {
 /**
  * Precios unitarios de la promocion por cantidad de Kit Bisagras Premium
  * Negro (COP).
- * - 8 unidades: $109.900 en total -> ~$13.738 c/u. (promo 1: 2 paquetes x 4)
- * - 16 unidades: $159.900 en total -> ~$9.994 c/u. (promo 2: 4 paquetes x 4)
- * - 24 unidades: $209.900 en total -> ~$8.746 c/u. (promo 3: 6 paquetes x 4)
+ * - 4 unidades: $79.900 en total -> $19.975 c/u. (promo 1: 1 paquete x 4)
+ * - 8 unidades: $149.900 en total -> ~$18.738 c/u. (promo 2: 2 paquetes x 4)
+ * - 12 unidades: $224.900 en total -> ~$18.742 c/u. (promo 3: 3 paquetes x 4)
  *
  * Coinciden con `BULK_TOTALS` de
  * `apps/web/components/landings/BisagrasLanding.tsx`.
+ *
+ * Nota: el precio unitario nunca baja de $18.725 (50% del precio sugerido de
+ * Dropi: $37.450) para que el proveedor acepte el pedido.
  */
 const BISAGRAS_OFFER_UNIT_PRICES = {
-  eight: 13_738,
-  sixteen: 9_994,
-  twentyfour: 8_746,
+  four: 19_975,
+  eight: 18_738,
+  twelve: 18_742,
 };
 
 function normalize(text: string): string {
@@ -155,13 +158,13 @@ export function getProductUnitPrice(
 
   if (isBisagrasProduct(product)) {
     const offerPrice =
-      quantity >= 24
-        ? BISAGRAS_OFFER_UNIT_PRICES.twentyfour
-        : quantity >= 16
-          ? BISAGRAS_OFFER_UNIT_PRICES.sixteen
-          : quantity >= 8
-            ? BISAGRAS_OFFER_UNIT_PRICES.eight
-            : BISAGRAS_OFFER_UNIT_PRICES.eight;
+      quantity >= 12
+        ? BISAGRAS_OFFER_UNIT_PRICES.twelve
+        : quantity >= 8
+          ? BISAGRAS_OFFER_UNIT_PRICES.eight
+          : quantity >= 4
+            ? BISAGRAS_OFFER_UNIT_PRICES.four
+            : BISAGRAS_OFFER_UNIT_PRICES.four;
     return Math.min(regularPrice, offerPrice);
   }
 
