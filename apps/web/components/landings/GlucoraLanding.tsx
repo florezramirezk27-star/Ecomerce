@@ -663,7 +663,7 @@ function VideoCard({ video }: { video: MediaVideo }) {
   return (
     <div className="space-y-3 rounded-3xl border border-[var(--gl-stone-2)] bg-[var(--gl-bone)]/60 p-6 text-center transition-shadow hover:shadow-md sm:p-8">
       <h3 className="text-lg font-bold text-[var(--gl-ink)]">{video.title}</h3>
-      <div className="relative mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-3xl">
+      <div className="relative mx-auto aspect-video w-full max-w-full overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-5xl lg:max-w-6xl">
         <video
           controls
           playsInline
@@ -974,7 +974,7 @@ export default function GlucoraLanding({
                             setFailed(false);
                             setSelectedQty(isSelected ? null : tier.qty);
                           }}
-                          className={`relative flex min-h-11 flex-col rounded-2xl border-2 p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gl-garnet)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${cardLook} ${stateLook} ${isBest ? "gl-shine" : ""}`}
+                          className={`relative flex min-h-11 flex-col rounded-2xl border-2 p-4 text-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gl-garnet)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${cardLook} ${stateLook} ${isBest ? "gl-shine" : ""}`}
                         >
                           <span
                             className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors ${radioLook}`}
@@ -993,7 +993,7 @@ export default function GlucoraLanding({
 
                           {tier.badge ? (
                             <span
-                              className={`mb-2 inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] ${badgeLook}`}
+                              className={`mb-2 inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-[0.14em] ${badgeLook}`}
                             >
                               {tier.badge}
                             </span>
@@ -1005,19 +1005,19 @@ export default function GlucoraLanding({
                           )}
 
                           <span
-                            className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${mutedLook}`}
+                            className={`block text-sm font-bold uppercase tracking-[0.14em] ${mutedLook}`}
                           >
                             {tier.label}
                           </span>
-                          <span className={`mt-0.5 block text-sm font-bold ${titleLook}`}>
+                          <span className={`mt-0.5 block text-base font-bold ${titleLook}`}>
                             {tier.qty} {tier.qty === 1 ? "frasco" : "frascos"}
                           </span>
                           <span
-                            className={`mt-2 block text-2xl font-black leading-none tracking-tight sm:text-[1.6rem] ${priceLook}`}
+                            className={`mt-2 block text-3xl font-black leading-none tracking-tight sm:text-[2rem] ${priceLook}`}
                           >
                             {formatCop(tier.total)}
                           </span>
-                          <span className={`mt-1 block text-[11px] font-medium ${mutedLook}`}>
+                          <span className={`mt-1 block text-sm font-medium ${mutedLook}`}>
                             {tier.qty > 1
                               ? `${formatCop(tier.total / tier.qty)} c/u`
                               : "Precio por unidad"}
@@ -1027,16 +1027,16 @@ export default function GlucoraLanding({
                             {saving > 0 ? (
                               <>
                                 <span
-                                  className={`rounded-full px-2 py-0.5 text-[10px] font-black ${chipLook}`}
+                                  className={`rounded-full px-2 py-0.5 text-sm font-black ${chipLook}`}
                                 >
                                   Ahorras {formatCop(saving)}
                                 </span>
-                                <del className={`text-[10px] ${mutedLook}`}>
+                                <del className={`text-sm ${mutedLook}`}>
                                   {formatCop(tier.regularTotal)}
                                 </del>
                               </>
                             ) : (
-                              <span className={`text-[10px] ${mutedLook}`}>
+                              <span className={`text-sm ${mutedLook}`}>
                                 Pago contra entrega
                               </span>
                             )}
@@ -1044,7 +1044,7 @@ export default function GlucoraLanding({
 
                           {discount > 0 ? (
                             <span
-                              className={`mt-2 inline-flex w-fit rounded-md px-1.5 py-0.5 text-[10px] font-black ${
+                              className={`mt-2 inline-flex w-fit rounded-md px-1.5 py-0.5 text-sm font-black ${
                                 isBest
                                   ? "bg-white/15 text-white"
                                   : "bg-[var(--gl-garnet)] text-white"

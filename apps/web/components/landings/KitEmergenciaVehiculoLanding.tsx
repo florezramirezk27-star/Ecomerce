@@ -496,7 +496,7 @@ function VideoCard({ video }: { video: MediaVideo }) {
   return (
     <div className="space-y-3 rounded-3xl border border-orange-100 bg-orange-50/60 p-6 text-center transition-shadow hover:shadow-md sm:p-8">
       <h3 className="text-lg font-bold text-gray-900">{video.title}</h3>
-      <div className="relative mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-3xl">
+      <div className="relative mx-auto aspect-video w-full max-w-full overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-5xl lg:max-w-6xl">
         <video
           controls
           playsInline

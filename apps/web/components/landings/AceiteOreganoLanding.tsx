@@ -644,7 +644,7 @@ function VideoCard({ video }: { video: MediaVideo }) {
   return (
     <div className="space-y-3 rounded-3xl border border-green-100 bg-green-50/50 p-6 text-center transition-shadow hover:shadow-md sm:p-8">
       <h3 className="text-lg font-bold text-gray-900">{video.title}</h3>
-      <div className="relative mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-3xl">
+      <div className="relative mx-auto aspect-video w-full max-w-full overflow-hidden rounded-2xl border-2 border-white bg-black shadow-lg sm:max-w-5xl lg:max-w-6xl">
         <video
           controls
           playsInline
@@ -864,14 +864,14 @@ export default function AceiteOreganoLanding({
                             setFailed(false);
                             setSelectedQty(isSelected ? null : tier.qty);
                           }}
-                          className={`relative min-h-11 rounded-2xl border-2 p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                          className={`relative min-h-11 rounded-2xl border-2 p-4 text-center transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                             isSelected
                               ? "border-[var(--nb-green-600)] bg-green-50 shadow-lg"
                               : "border-green-200 bg-white hover:border-[var(--nb-green-600)] hover:shadow-md"
                           }`}
                         >
                           {tier.badge ? (
-                            <span className="absolute -top-3 left-4 rounded-full bg-[var(--nb-green-700)] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
+                            <span className="absolute -top-3 left-4 rounded-full bg-[var(--nb-green-700)] px-3 py-1 text-sm font-bold uppercase tracking-widest text-white">
                               {tier.badge}
                             </span>
                           ) : null}
@@ -889,16 +889,16 @@ export default function AceiteOreganoLanding({
                               }`}
                             />
                           </span>
-                          <span className="block text-[11px] font-bold uppercase text-gray-500">
+                          <span className="block text-sm font-bold uppercase text-gray-500">
                             {tier.label}
                           </span>
-                          <span className="mt-1 block text-base font-bold text-gray-900">
+                          <span className="mt-1 block text-lg font-bold text-gray-900">
                             {tier.qty} {tier.qty === 1 ? "frasco" : "frascos"}
                           </span>
-                          <span className="mt-2 block text-2xl font-extrabold text-[var(--nb-green-700)]">
+                          <span className="mt-2 block text-3xl font-extrabold text-[var(--nb-green-700)]">
                             {formatCop(tier.total)}
                           </span>
-                          <span className="block text-xs text-gray-500">
+                          <span className="block text-sm text-gray-500">
                             {saving > 0 ? (
                               <>
                                 <del>{formatCop(tier.regularTotal)}</del> ·{" "}
