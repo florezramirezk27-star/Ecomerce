@@ -771,8 +771,10 @@ export default function AceiteOreganoLanding({
           100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
         }
         @keyframes nb-bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-4px); }
+          0%, 100% { transform: rotate(0deg); }
+          25% { transform: rotate(-8deg); }
+          50% { transform: rotate(8deg); }
+          75% { transform: rotate(-8deg); }
         }
         .nb-landing .nb-bounce { animation: nb-bounce 1.5s infinite ease-in-out; }
         .nb-landing .nb-pulse { animation: nb-pulse 2s infinite; }

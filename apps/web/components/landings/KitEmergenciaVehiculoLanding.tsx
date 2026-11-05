@@ -599,8 +599,10 @@ export default function KitEmergenciaVehiculoLanding({
           100% { transform: translateX(130%) skewX(-12deg); }
         }
         @keyframes aw-bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-4px); }
+          0%, 100% { transform: rotate(0deg); }
+          25% { transform: rotate(-8deg); }
+          50% { transform: rotate(8deg); }
+          75% { transform: rotate(-8deg); }
         }
         .aw-landing .aw-bounce { animation: aw-bounce 1.5s infinite ease-in-out; }
         .aw-landing .aw-pulse { animation: aw-pulse 2s infinite; }

@@ -27,6 +27,7 @@ import { RedisModule } from './common/redis/redis.module';
 import { RedisService } from './common/redis/redis.service';
 import { RedisThrottlerStorage } from './common/redis/redis-throttler.storage';
 import { CacheModule } from './common/cache/cache.module';
+import { PushNotificationModule } from './modules/push-notification/push-notification.module';
 
 /**
  * Lee un entero positivo de la configuración. Los valores predeterminados
@@ -86,6 +87,7 @@ function positiveIntegerEnv(name: string, fallback: number): number {
     PresenceModule,
     AIModule,
     MetaModule,
+    PushNotificationModule,
   ],
   controllers: [AppController],
   providers: [

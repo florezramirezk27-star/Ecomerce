@@ -796,8 +796,10 @@ export default function GlucoraLanding({
           100% { transform: translateX(130%) skewX(-12deg); }
         }
         @keyframes gl-bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-4px); }
+          0%, 100% { transform: rotate(0deg); }
+          25% { transform: rotate(-8deg); }
+          50% { transform: rotate(8deg); }
+          75% { transform: rotate(-8deg); }
         }
         .gl-landing .gl-bounce { animation: gl-bounce 1.5s infinite ease-in-out; }
         .gl-landing .gl-pulse { animation: gl-pulse 2s infinite; }
