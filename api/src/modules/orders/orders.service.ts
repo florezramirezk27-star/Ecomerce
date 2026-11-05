@@ -8,9 +8,10 @@ import {
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
-import { Prisma, OrderStatus } from '@prisma/client';
+import { Prisma, OrderStatus, PrismaClient } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
+import { PushNotificationService } from '../push-notification/push-notification.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import {
   effectiveStock,
@@ -94,6 +95,7 @@ export class OrdersService {
     private readonly mailService: MailService,
     private readonly dropiService: DropiService,
     private readonly cache: CatalogCacheService,
+    private readonly pushNotifications: PushNotificationService,
   ) {}
 
   async checkout(userId: string | null, dto: CheckoutDto) {
@@ -263,8 +265,24 @@ export class OrdersService {
           });
         }
 
+        // Notificacion de nuevo pedido dentro de la misma transaccion:
+        // atomicidad garantizada entre el pedido y el evento de notificacion.
+        await this.pushNotifications.createEvent(
+          tx as unknown as PrismaClient,
+          `order-created-${created.id}`,
+          'ORDER_CREATED',
+          created.id,
+          created.numericId,
+          {
+            orderId: created.id,
+            numericId: created.numericId,
+          },
+        );
+
         return created;
       });
+
+    // Notificacion de nuevo pedido ya creada dentro de la transaccion arriba.
     } catch (err: unknown) {
       if ((err as { code?: string })?.code === 'P2002' && dto.idempotencyKey) {
         // Mismo acotado por `userId` que la busqueda previa: esta rama tambien
@@ -625,7 +643,7 @@ export class OrdersService {
   ): Promise<OrderStatus> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      select: { status: true },
+      select: { status: true, numericId: true },
     });
 
     if (!order) {
@@ -642,6 +660,25 @@ export class OrdersService {
         select: { status: true },
       });
       this.logger.log(`Pedido ${orderId}: Dropi lo aceptó → Confirmado`);
+
+      // Notificacion de cambio de estado a Confirmado (PAID).
+      try {
+        await this.pushNotifications.createEventStandalone(
+          `order-status-changed-${orderId}`,
+          'ORDER_STATUS_CHANGED',
+          orderId,
+          order.numericId || 0,
+          {
+            orderId,
+            numericId: order.numericId || 0,
+          },
+        );
+      } catch (err) {
+        this.logger.error(
+          `No se pudo crear evento de notificacion para ${orderId}: ${(err as Error).message}`,
+        );
+      }
+
       return updated.status;
     }
 
@@ -1330,6 +1367,30 @@ export class OrdersService {
             },
           );
       }
+    }
+
+    // Notificacion de cambio de estado o cancelacion al administrador.
+    // Los errores de Firebase nunca interrumpen el flujo: se atrapan dentro
+    // de PushNotificationService.
+    const eventType =
+      status === 'CANCELLED'
+        ? 'ORDER_CANCELLED'
+        : 'ORDER_STATUS_CHANGED';
+    try {
+      await this.pushNotifications.createEventStandalone(
+        `order-${eventType.toLowerCase()}-${order.id}`,
+        eventType,
+        order.id,
+        order.numericId,
+        {
+          orderId: order.id,
+          numericId: order.numericId,
+        },
+      );
+    } catch (err) {
+      this.logger.error(
+        `No se pudo crear evento de notificacion para ${order.id}: ${(err as Error).message}`,
+      );
     }
 
     try {
