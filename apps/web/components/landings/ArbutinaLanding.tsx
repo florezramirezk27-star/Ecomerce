@@ -803,6 +803,11 @@ export default function ArbutinaLanding({
           0%, 55% { transform: translateX(-130%) skewX(-12deg); }
           100% { transform: translateX(130%) skewX(-12deg); }
         }
+        @keyframes aw-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        .aw-landing .aw-bounce { animation: aw-bounce 3s infinite ease-in-out; }
         .aw-landing .aw-pulse { animation: aw-pulse 2s infinite; }
         .aw-landing .aw-pulse:disabled { animation: none; }
         .aw-landing .aw-wave { animation: aw-wave-shift 18s linear infinite; }
@@ -908,7 +913,7 @@ export default function ArbutinaLanding({
                     className="pointer-events-none absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-rose-200/40 blur-3xl"
                   />
 
-                  <div className="relative mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div className="relative mb-4 flex flex-wrap items-center justify-center gap-2 text-center">
                     <div>
                       <p className="text-base font-extrabold text-gray-900">
                         🔥 Elige tu promoción
@@ -983,7 +988,7 @@ export default function ArbutinaLanding({
                             setFailed(false);
                             setSelectedQty(isSelected ? null : tier.qty);
                           }}
-                          className={`relative flex min-h-11 flex-col rounded-2xl border-2 p-4 text-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--aw-rose-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${cardLook} ${stateLook} ${isBest ? "aw-shine" : ""}`}
+                          className={`relative flex min-h-10 sm:min-h-11 flex-col rounded-2xl border-2 p-3 sm:p-4 text-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--aw-rose-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${cardLook} ${stateLook} aw-bounce ${isBest ? "aw-shine" : ""}`}
                         >
                           <span
                             className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors ${radioLook}`}

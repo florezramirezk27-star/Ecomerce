@@ -770,6 +770,11 @@ export default function AceiteOreganoLanding({
           70% { box-shadow: 0 0 0 14px rgba(22, 163, 74, 0); }
           100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
         }
+        @keyframes nb-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        .nb-landing .nb-bounce { animation: nb-bounce 3s infinite ease-in-out; }
         .nb-landing .nb-pulse { animation: nb-pulse 2s infinite; }
         .nb-landing .nb-pulse:disabled { animation: none; }
         .nb-landing .nb-hide-scrollbar { scrollbar-width: none; }
@@ -840,7 +845,7 @@ export default function AceiteOreganoLanding({
             <div id="ofertas" className="scroll-mt-24 space-y-3">
               {tiers.length > 1 ? (
                 <>
-                  <p className="text-center text-sm font-bold text-gray-900 lg:text-left">
+                  <p className="text-center text-sm font-bold text-gray-900">
                     Elige tu promoción
                   </p>
                   <div
@@ -864,7 +869,7 @@ export default function AceiteOreganoLanding({
                             setFailed(false);
                             setSelectedQty(isSelected ? null : tier.qty);
                           }}
-                          className={`relative min-h-11 rounded-2xl border-2 p-4 text-center transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                          className={`relative min-h-10 sm:min-h-11 rounded-2xl border-2 p-3 sm:p-4 text-center transition-all disabled:cursor-not-allowed disabled:opacity-50 nb-bounce ${
                             isSelected
                               ? "border-[var(--nb-green-600)] bg-green-50 shadow-lg"
                               : "border-green-200 bg-white hover:border-[var(--nb-green-600)] hover:shadow-md"

@@ -795,6 +795,11 @@ export default function GlucoraLanding({
           0%, 55% { transform: translateX(-130%) skewX(-12deg); }
           100% { transform: translateX(130%) skewX(-12deg); }
         }
+        @keyframes gl-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        .gl-landing .gl-bounce { animation: gl-bounce 3s infinite ease-in-out; }
         .gl-landing .gl-pulse { animation: gl-pulse 2s infinite; }
         .gl-landing .gl-pulse:disabled { animation: none; }
         .gl-landing .gl-wave { animation: gl-wave-shift 18s linear infinite; }
@@ -899,7 +904,7 @@ export default function GlucoraLanding({
                     className="pointer-events-none absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-[var(--gl-stone-2)]/40 blur-3xl"
                   />
 
-                  <div className="relative mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div className="relative mb-4 flex flex-wrap items-center justify-center gap-2 text-center">
                     <div>
                       <p className="text-base font-extrabold text-[var(--gl-ink)]">
                         🔥 Elige tu promoción
@@ -974,7 +979,7 @@ export default function GlucoraLanding({
                             setFailed(false);
                             setSelectedQty(isSelected ? null : tier.qty);
                           }}
-                          className={`relative flex min-h-11 flex-col rounded-2xl border-2 p-4 text-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gl-garnet)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${cardLook} ${stateLook} ${isBest ? "gl-shine" : ""}`}
+                          className={`relative flex min-h-10 sm:min-h-11 flex-col rounded-2xl border-2 p-3 sm:p-4 text-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gl-garnet)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${cardLook} ${stateLook} gl-bounce ${isBest ? "gl-shine" : ""}`}
                         >
                           <span
                             className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors ${radioLook}`}
