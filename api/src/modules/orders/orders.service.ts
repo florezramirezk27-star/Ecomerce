@@ -11,6 +11,7 @@ import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 import { Prisma, OrderStatus } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
+import { PushNotificationService } from '../push-notification/push-notification.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import {
   effectiveStock,
@@ -94,6 +95,7 @@ export class OrdersService {
     private readonly mailService: MailService,
     private readonly dropiService: DropiService,
     private readonly cache: CatalogCacheService,
+    private readonly pushNotifications: PushNotificationService,
   ) {}
 
   async checkout(userId: string | null, dto: CheckoutDto) {
@@ -625,7 +627,7 @@ export class OrdersService {
   ): Promise<OrderStatus> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      select: { status: true },
+      select: { status: true, numericId: true },
     });
 
     if (!order) {
@@ -642,6 +644,28 @@ export class OrdersService {
         select: { status: true },
       });
       this.logger.log(`Pedido ${orderId}: Dropi lo aceptó → Confirmado`);
+
+      // Notificacion de cambio de estado a Confirmado (PAID).
+      // eventId incluye el estado destino y un timestamp para evitar
+      // deduplicar transiciones distintas (PAID, SHIPPED, DELIVERED).
+      try {
+        await this.pushNotifications.createEventStandalone(
+          `order-status-changed-${orderId}-paid-${Date.now()}`,
+          'ORDER_STATUS_CHANGED',
+          orderId,
+          order.numericId || 0,
+          {
+            orderId,
+            numericId: order.numericId || 0,
+            targetStatus: 'PAID',
+          },
+        );
+      } catch (err) {
+        this.logger.error(
+          `No se pudo crear evento de notificacion para ${orderId}: ${(err as Error).message}`,
+        );
+      }
+
       return updated.status;
     }
 
@@ -1330,6 +1354,32 @@ export class OrdersService {
             },
           );
       }
+    }
+
+    // Notificacion de cambio de estado o cancelacion al administrador.
+    // eventId incluye el estado destino y un timestamp para que cada
+    // transición (PAID, SHIPPED, DELIVERED, CANCELLED) tenga un identificador
+    // único y no se deduplique entre sí.
+    const eventType =
+      status === 'CANCELLED'
+        ? 'ORDER_CANCELLED'
+        : 'ORDER_STATUS_CHANGED';
+    try {
+      await this.pushNotifications.createEventStandalone(
+        `order-${eventType.toLowerCase()}-${status.toLowerCase()}-${order.id}-${Date.now()}`,
+        eventType,
+        order.id,
+        order.numericId,
+        {
+          orderId: order.id,
+          numericId: order.numericId,
+          targetStatus: status,
+        },
+      );
+    } catch (err) {
+      this.logger.error(
+        `No se pudo crear evento de notificacion para ${order.id}: ${(err as Error).message}`,
+      );
     }
 
     try {

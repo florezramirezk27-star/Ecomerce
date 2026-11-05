@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
 import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
+import { PushNotificationService } from '../push-notification/push-notification.service';
 import type { CheckoutDto } from './dto/checkout.dto';
 
 /**
@@ -143,6 +144,13 @@ describe('OrdersService', () => {
           provide: CatalogCacheService,
           useValue: {
             invalidate: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: PushNotificationService,
+          useValue: {
+            createEvent: jest.fn().mockResolvedValue(undefined),
+            createEventStandalone: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

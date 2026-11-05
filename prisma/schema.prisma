@@ -55,6 +55,7 @@ model User {
 
   cart      Cart?
   orders    Order[]
+  pushDevices PushDevice[]
 
   sessions      Session[]
   chatSessions  ChatSession[]
@@ -233,6 +234,7 @@ model Order {
 
   items      OrderItem[]
   tracking   OrderTracking?
+  notificationEvents NotificationEvent[] @relation("OrderNotificationEvents")
 
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
@@ -326,4 +328,44 @@ model AppSetting {
   key       String   @id
   value     String   @db.Text
   updatedAt DateTime @updatedAt
+}
+
+/// Dispositivo movil registrado para recibir notificaciones push de FCM.
+/// Un administrador asocia su token FCM con su cuenta para recibir alertas
+/// de pedidos, cambios de estado y cancelaciones.
+model PushDevice {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String   // "android" | "ios"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([token])
+}
+
+/// Evento de notificacion pendiente (patron Outbox) para envio fiable via FCM.
+/// Se persiste dentro de la misma transacción que modifica el pedido, de modo
+/// que una caida temporal de Firebase nunca pierde una notificacion.
+model NotificationEvent {
+  id           String   @id @default(cuid())
+  eventId      String   @unique // Identificador unico para deduplicacion
+  type         String   // ORDER_CREATED | ORDER_STATUS_CHANGED | ORDER_CANCELLED
+  orderId      String   // ID del pedido relacionado
+  numericId    Int      // Numero de pedido para mostrar en la notificacion
+  payload      Json     // Datos adicionales enviados a FCM
+  status       String   @default("PENDING") // PENDING | SENT | FAILED | DEAD
+  attempts     Int      @default(0)
+  maxAttempts  Int      @default(5)
+  lastError    String?
+  processedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  order  Order @relation("OrderNotificationEvents", fields: [orderId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([eventId])
 }
