@@ -233,6 +233,31 @@ export class OrdersService {
           },
         });
 
+        // El evento se escribe dentro de la misma transacción del pedido.
+        // Si la transacción revierte, tampoco queda una notificación huérfana.
+        const outbox = (
+          tx as unknown as {
+            outboxEvent?: {
+              create: (args: {
+                data: {
+                  type: string;
+                  aggregateId: string;
+                  payload: { orderId: string };
+                };
+              }) => Promise<unknown>;
+            };
+          }
+        ).outboxEvent;
+        if (outbox?.create) {
+          await outbox.create({
+            data: {
+              type: 'ORDER_CREATED',
+              aggregateId: created.id,
+              payload: { orderId: created.id },
+            },
+          });
+        }
+
         for (const item of items) {
           const updated = await tx.product.updateMany({
             where: {

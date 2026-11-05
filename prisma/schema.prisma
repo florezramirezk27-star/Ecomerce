@@ -58,6 +58,8 @@ model User {
 
   sessions      Session[]
   chatSessions  ChatSession[]
+  pushDevices   PushDevice[]
+  notifications Notification[]
   createdAt     DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -233,6 +235,7 @@ model Order {
 
   items      OrderItem[]
   tracking   OrderTracking?
+  notifications Notification[]
 
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
@@ -326,4 +329,57 @@ model AppSetting {
   key       String   @id
   value     String   @db.Text
   updatedAt DateTime @updatedAt
+}
+
+/// Dispositivos autorizados para recibir notificaciones push del administrador.
+model PushDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique @db.Text
+  platform   String   @default("android")
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+}
+
+/// Historial de notificaciones visible en el panel móvil del administrador.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId   String?
+  order     Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  eventKey  String
+  type      String
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, eventKey])
+  @@index([userId, createdAt])
+  @@index([orderId])
+}
+
+/// Bandeja transaccional para que una caída de FCM no pierda eventos de pedidos.
+model OutboxEvent {
+  id          String   @id @default(cuid())
+  type        String
+  aggregateId String
+  payload     Json
+  status      String   @default("PENDING")
+  attempts    Int      @default(0)
+  availableAt DateTime @default(now())
+  lockedAt    DateTime?
+  processedAt DateTime?
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, availableAt])
+  @@index([aggregateId])
 }

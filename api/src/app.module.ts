@@ -22,6 +22,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { PresenceModule } from './modules/presence/presence.module';
 import { AIModule } from './modules/ai/ai.module';
 import { MetaModule } from './modules/meta/meta.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { RedisModule } from './common/redis/redis.module';
 import { RedisService } from './common/redis/redis.service';
@@ -86,6 +87,7 @@ function positiveIntegerEnv(name: string, fallback: number): number {
     PresenceModule,
     AIModule,
     MetaModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

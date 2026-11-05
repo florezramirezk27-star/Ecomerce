@@ -390,3 +390,28 @@ Documentacion detallada de despliegue en `docs/deployment/vercel-neon.md`.
 ## Licencia
 
 ISC
+
+
+## Notificaciones push para el administrador móvil
+
+El backend registra dispositivos únicamente para usuarios con rol `ADMIN`:
+
+- `POST /notifications/devices` registra el token FCM del dispositivo.
+- `DELETE /notifications/devices` revoca el token del usuario autenticado.
+- `GET /notifications` devuelve el historial y el total sin leer.
+- `PATCH /notifications/:id/read` marca una notificación como leída.
+
+Cuando se crea un pedido, `OutboxEvent` se inserta en la misma transacción
+PostgreSQL. Un worker reintenta el procesamiento y crea una notificación
+persistente por administrador antes de intentar el envío FCM. Así el historial
+no depende de que Firebase esté configurado o disponible.
+
+### Configuración FCM en producción
+
+1. Crea una cuenta de servicio en Firebase Console para el proyecto de la app.
+2. Guarda el JSON completo como variable secreta `FIREBASE_SERVICE_ACCOUNT_JSON`
+   en Railway/Render. No guardes el archivo JSON en Git.
+3. Ejecuta la migración Prisma de este cambio y despliega la API.
+4. Configura los identificadores Firebase del cliente Flutter y vuelve a compilar
+   el APK. Sin esa configuración el backend conserva las alertas en la bandeja,
+   pero no puede enviarlas como push al dispositivo.
