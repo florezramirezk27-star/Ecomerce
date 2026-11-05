@@ -180,5 +180,91 @@ describe('FirebaseMessagingService', () => {
       expect(result.invalidToken).toBe(false);
       expect(result.error).toContain('Network error');
     });
+
+    it('marca token como inválido con respuesta FCM HTTP v1 realista (details[].errorCode = UNREGISTERED)', async () => {
+      fetchMock.mockResolvedValue({
+        status: 404,
+        ok: false,
+        headers: new Map([['Retry-After', null]]),
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            error: {
+              code: 404,
+              status: 'NOT_FOUND',
+              message: 'Requested entity was not found.',
+              details: [
+                {
+                  '@type': 'type.googleapis.com/google.firebase.fcm.v1.FcmError',
+                  errorCode: 'UNREGISTERED',
+                },
+              ],
+            },
+          }),
+        ),
+      });
+
+      const result = await service.sendToToken('invalid-token', 'Título', 'Cuerpo');
+
+      expect(result.success).toBe(false);
+      expect(result.invalidToken).toBe(true);
+      expect(result.fcmErrorCode).toBe('UNREGISTERED');
+      expect(result.firebaseErrorCode).toBe('UNREGISTERED');
+    });
+
+    it('NO marca token como inválido cuando FCM HTTP v1 devuelve errorCode diferente a UNREGISTERED', async () => {
+      fetchMock.mockResolvedValue({
+        status: 400,
+        ok: false,
+        headers: new Map([['Retry-After', null]]),
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            error: {
+              code: 400,
+              status: 'INVALID_ARGUMENT',
+              message: 'Invalid payload',
+              details: [
+                {
+                  '@type': 'type.googleapis.com/google.firebase.fcm.v1.FcmError',
+                  errorCode: 'INVALID_ARGUMENT',
+                },
+              ],
+            },
+          }),
+        ),
+      });
+
+      const result = await service.sendToToken('token-123', 'Título', 'Cuerpo');
+
+      expect(result.success).toBe(false);
+      expect(result.invalidToken).toBe(false);
+      expect(result.fcmErrorCode).toBe('INVALID_ARGUMENT');
+      expect(result.firebaseErrorCode).toBe('INVALID_ARGUMENT');
+    });
+
+    it('extrae Retry-After header para errores temporales', async () => {
+      const headers = new Map([['Retry-After', '60']]);
+      fetchMock.mockResolvedValue({
+        status: 503,
+        ok: false,
+        headers: {
+          get: (name: string) => headers.get(name) ?? null,
+        },
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            error: {
+              code: 503,
+              status: 'UNAVAILABLE',
+              message: 'Service unavailable',
+            },
+          }),
+        ),
+      });
+
+      const result = await service.sendToToken('token-123', 'Título', 'Cuerpo');
+
+      expect(result.success).toBe(false);
+      expect(result.retryable).toBe(true);
+      expect(result.retryAfterSeconds).toBe(60);
+    });
   });
 });

@@ -265,6 +265,30 @@ export class OrdersService {
           });
         }
 
+        // Evento OUTBOX ORDER_CREATED dentro de la misma transaccion que
+        // crea el pedido. Identificador deterministico basado en el ID del
+        // pedido para evitar duplicados. Si falla la creacion del evento
+        // (p. ej. Firebase no disponible), no se interrumpe el checkout:
+        // el evento se reintentara por el worker de forma asincronica.
+        try {
+          await this.pushNotifications.createEvent(
+            tx,
+            `order-created-${created.id}`,
+            'ORDER_CREATED',
+            created.id,
+            created.numericId,
+            {
+              orderId: created.id,
+              numericId: created.numericId,
+              targetStatus: 'PENDING',
+            },
+          );
+        } catch (err) {
+          this.logger.error(
+            `No se pudo crear evento OUTBOX ORDER_CREATED para ${created.id}: ${(err as Error).message}`,
+          );
+        }
+
         return created;
       });
     } catch (err: unknown) {
@@ -638,33 +662,27 @@ export class OrdersService {
     if (dropiResult.success === true) {
       if (order.status !== OrderStatus.PENDING) return order.status;
 
-      const updated = await this.prisma.order.update({
-        where: { id: orderId },
-        data: { status: OrderStatus.PAID },
-        select: { status: true },
-      });
-      this.logger.log(`Pedido ${orderId}: Dropi lo aceptó → Confirmado`);
-
-      // Notificacion de cambio de estado a Confirmado (PAID).
-      // eventId incluye el estado destino y un timestamp para evitar
-      // deduplicar transiciones distintas (PAID, SHIPPED, DELIVERED).
-      try {
-        await this.pushNotifications.createEventStandalone(
-          `order-status-changed-${orderId}-paid-${Date.now()}`,
+      const updated = await this.prisma.$transaction(async (tx) => {
+        const updatedOrder = await tx.order.update({
+          where: { id: orderId },
+          data: { status: OrderStatus.PAID },
+          select: { status: true, numericId: true },
+        });
+        await this.pushNotifications.createEvent(
+          tx,
+          `order-status-changed-${orderId}-paid`,
           'ORDER_STATUS_CHANGED',
           orderId,
-          order.numericId || 0,
+          updatedOrder.numericId || 0,
           {
             orderId,
-            numericId: order.numericId || 0,
+            numericId: updatedOrder.numericId || 0,
             targetStatus: 'PAID',
           },
         );
-      } catch (err) {
-        this.logger.error(
-          `No se pudo crear evento de notificacion para ${orderId}: ${(err as Error).message}`,
-        );
-      }
+        return updatedOrder;
+      });
+      this.logger.log(`Pedido ${orderId}: Dropi lo aceptó → Confirmado`);
 
       return updated.status;
     }
@@ -1248,7 +1266,7 @@ export class OrdersService {
           });
         }
 
-        return tx.order.update({
+        const updated = await tx.order.update({
           where: { id },
           data: {
             status: status,
@@ -1262,21 +1280,57 @@ export class OrdersService {
             },
           },
         });
+
+        // Evento OUTBOX ORDER_CANCELLED dentro de la misma transaccion.
+        await this.pushNotifications.createEvent(
+          tx,
+          `order-cancelled-${id}-cancelled`,
+          'ORDER_CANCELLED',
+          id,
+          order.numericId,
+          {
+            orderId: id,
+            numericId: order.numericId,
+            targetStatus: 'CANCELLED',
+          },
+        );
+
+        return updated;
       });
     } else {
-      updatedOrder = await this.prisma.order.update({
-        where: { id },
-        data: {
-          status: status as OrderStatus,
-        },
-        include: {
-          user: true,
-          items: {
-            include: {
-              product: true,
+      updatedOrder = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.order.update({
+          where: { id },
+          data: {
+            status: status as OrderStatus,
+          },
+          include: {
+            user: true,
+            items: {
+              include: {
+                product: true,
+              },
             },
           },
-        },
+        });
+
+        // Evento OUTBOX ORDER_STATUS_CHANGED dentro de la misma transaccion.
+        // Identificador deterministico basado en pedido y estado destino
+        // para evitar duplicados si la transición se procesa más de una vez.
+        await this.pushNotifications.createEvent(
+          tx,
+          `order-status-changed-${id}-${status.toLowerCase()}`,
+          'ORDER_STATUS_CHANGED',
+          id,
+          order.numericId,
+          {
+            orderId: id,
+            numericId: order.numericId,
+            targetStatus: status,
+          },
+        );
+
+        return updated;
       });
     }
 
@@ -1357,30 +1411,8 @@ export class OrdersService {
     }
 
     // Notificacion de cambio de estado o cancelacion al administrador.
-    // eventId incluye el estado destino y un timestamp para que cada
-    // transición (PAID, SHIPPED, DELIVERED, CANCELLED) tenga un identificador
-    // único y no se deduplique entre sí.
-    const eventType =
-      status === 'CANCELLED'
-        ? 'ORDER_CANCELLED'
-        : 'ORDER_STATUS_CHANGED';
-    try {
-      await this.pushNotifications.createEventStandalone(
-        `order-${eventType.toLowerCase()}-${status.toLowerCase()}-${order.id}-${Date.now()}`,
-        eventType,
-        order.id,
-        order.numericId,
-        {
-          orderId: order.id,
-          numericId: order.numericId,
-          targetStatus: status,
-        },
-      );
-    } catch (err) {
-      this.logger.error(
-        `No se pudo crear evento de notificacion para ${order.id}: ${(err as Error).message}`,
-      );
-    }
+    // El evento OUTBOX ya se creó dentro de la transacción de actualización de
+    // estado (arriba), con identificador determinístico para evitar duplicados.
 
     try {
       await this.cache.invalidate('product');

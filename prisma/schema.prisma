@@ -349,6 +349,9 @@ model PushDevice {
 /// Evento de notificacion pendiente (patron Outbox) para envio fiable via FCM.
 /// Se persiste dentro de la misma transacción que modifica el pedido, de modo
 /// que una caida temporal de Firebase nunca pierde una notificacion.
+/// Soporta bloqueo distribuido (lockedAt/lockedBy/lockedUntil) para evitar que
+/// dos instancias de Railway procesen el mismo evento simultaneamente, y
+/// nextAttemptAt para reintentos con backoff exponencial.
 model NotificationEvent {
   id           String   @id @default(cuid())
   eventId      String   @unique // Identificador unico para deduplicacion
@@ -356,16 +359,22 @@ model NotificationEvent {
   orderId      String   // ID del pedido relacionado
   numericId    Int      // Numero de pedido para mostrar en la notificacion
   payload      Json     // Datos adicionales enviados a FCM
-  status       String   @default("PENDING") // PENDING | SENT | FAILED | DEAD
+  status       String   @default("PENDING") // PENDING | PROCESSING | SENT | FAILED | DEAD | SKIPPED
   attempts     Int      @default(0)
   maxAttempts  Int      @default(5)
+  nextAttemptAt DateTime? // Momento a partir del cual se puede reintentar (backoff)
   lastError    String?
   processedAt  DateTime?
+  // Bloqueo distribuido: solo la instancia que puso el lock puede modificar el evento.
+  lockedAt     DateTime? // Momento en que se adquirió el lock
+  lockedBy     String?   // Identificador de la instancia que posee el lock
+  lockedUntil  DateTime? // Momento en que expira el lock (recuperación tras caída)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   order  Order @relation("OrderNotificationEvents", fields: [orderId], references: [id])
 
   @@index([status, createdAt])
+  @@index([status, nextAttemptAt])
   @@index([eventId])
 }

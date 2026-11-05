@@ -8,31 +8,95 @@ export type FcmSendResult = {
   success: boolean;
   /** true solo cuando Firebase confirma que el token es UNREGISTERED */
   invalidToken: boolean;
+  /** true si el error es temporal y se debe reintentar */
+  retryable: boolean;
+  /** Segundos de espera indicados por Firebase (header Retry-After), si lo hay */
+  retryAfterSeconds?: number;
   error?: string;
   /** Código de error de Firebase (ej. "UNREGISTERED", "INTERNAL", ...) */
   firebaseErrorCode?: string;
+  /** Código de error FCM específico desde details[].errorCode (respuesta HTTP v1) */
+  fcmErrorCode?: string;
 };
 
 /**
- * Extrae el código de error de Firebase desde el cuerpo de respuesta.
- * Solo UNREGISTERED (y variantes relacionadas con el token) indica que el
- * dispositivo ya no es válido y debe eliminarse. Otros errores 400 (parámetros
- * inválidos, cuota excedida, etc.) no significan que el token sea inválido.
+ * Códigos de error FCM que indican que el token es inválido y debe eliminarse.
+ * Solo UNREGISTERED (y variantes) significan que el dispositivo ya no existe.
  */
-function extractFirebaseErrorCode(body: string): string | undefined {
+const TOKEN_INVALID_FCM_ERROR_CODES = new Set([
+  'UNREGISTERED',
+  'UNREGISTERED_TOKEN',
+]);
+
+/**
+ * Códigos de error FCM permanentes: no se debe reintentar con el mismo payload,
+ * pero no significan que el token sea inválido (no se elimina).
+ */
+const PERMANENT_FCM_ERROR_CODES = new Set([
+  'INVALID_ARGUMENT',
+  'PERMISSION_DENIED',
+]);
+
+/**
+ * Códigos de error FCM temporales: se debe reintentar con backoff.
+ */
+const TEMPORARY_FCM_ERROR_CODES = new Set([
+  'INTERNAL',
+  'UNAVAILABLE',
+  'QUOTA_EXCEEDED',
+  'DEVICE_MESSAGE_RATE_EXCEEDED',
+  'TOPICS_MESSAGE_RATE_EXCEEDED',
+]);
+
+/**
+ * Extrae el código de error de Firebase desde el cuerpo de respuesta HTTP v1.
+ *
+ * La respuesta real de FCM HTTP v1 tiene esta estructura:
+ * ```json
+ * {
+ *   "error": {
+ *     "code": 404,
+ *     "status": "NOT_FOUND",
+ *     "message": "Requested entity was not found.",
+ *     "details": [
+ *       {
+ *         "@type": "type.googleapis.com/google.firebase.fcm.v1.FcmError",
+ *         "errorCode": "UNREGISTERED"
+ *       }
+ *     ]
+ *   }
+ * }
+ * ```
+ *
+ * Busca `error.details[].errorCode` (código FCM específico) y cae a
+ * `error.code` (código HTTP) como respaldo.
+ */
+function extractFirebaseErrorCode(body: string): { fcmErrorCode?: string; httpCode?: string } {
   try {
     const parsed = JSON.parse(body);
     const error = parsed?.error;
     if (error && typeof error === 'object') {
-      return error.code as string;
+      // 1. Buscar en details[].errorCode (estructura real de FCM HTTP v1)
+      const details = error.details;
+      if (Array.isArray(details)) {
+        for (const detail of details) {
+          if (detail && typeof detail === 'object' && detail.errorCode) {
+            return { fcmErrorCode: String(detail.errorCode), httpCode: String(error.code) };
+          }
+        }
+      }
+      // 2. Respaldo: error.code como string
+      if (error.code) {
+        return { httpCode: String(error.code) };
+      }
     }
     if (typeof error === 'string') {
-      return error;
+      return { httpCode: error };
     }
   } catch {
     // Cuerpo no es JSON: no se puede extraer código de error.
   }
-  return undefined;
+  return {};
 }
 
 /**
@@ -41,10 +105,54 @@ function extractFirebaseErrorCode(body: string): string | undefined {
  * token está UNREGISTERED (o variantes similares). Otros errores 400/500 no
  * provocan eliminación del token.
  */
-function isInvalidTokenError(code?: string): boolean {
-  if (!code) return false;
-  const c = code.toUpperCase();
-  return c === 'UNREGISTERED' || c === 'UNREGISTERED_TOKEN';
+function isInvalidTokenError(fcmErrorCode?: string, httpCode?: string): boolean {
+  if (fcmErrorCode) {
+    const c = fcmErrorCode.toUpperCase();
+    if (TOKEN_INVALID_FCM_ERROR_CODES.has(c)) return true;
+  }
+  if (httpCode) {
+    const c = httpCode.toUpperCase();
+    if (c === 'UNREGISTERED' || c === 'UNREGISTERED_TOKEN') return true;
+  }
+  return false;
+}
+
+/**
+ * Determina si un error es temporal (reintentable) basado en el código FCM.
+ */
+function isRetryableError(fcmErrorCode?: string, httpCode?: string): boolean {
+  if (fcmErrorCode) {
+    const c = fcmErrorCode.toUpperCase();
+    if (TEMPORARY_FCM_ERROR_CODES.has(c)) return true;
+    // Si es un código FCM conocido y no es permanente, es temporal
+    if (PERMANENT_FCM_ERROR_CODES.has(c)) return false;
+  }
+  // Códigos HTTP 5xx y 429 son temporales
+  if (httpCode) {
+    const n = parseInt(httpCode, 10);
+    if (!isNaN(n)) {
+      if (n >= 500 || n === 429) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Extrae el valor del header Retry-After de la respuesta de Firebase.
+ */
+function extractRetryAfter(headers: { get?: (name: string) => string | null }): number | undefined {
+  try {
+    const retryAfter = headers.get?.('Retry-After');
+    if (retryAfter) {
+      const seconds = parseInt(retryAfter, 10);
+      if (!isNaN(seconds) && seconds > 0) {
+        return seconds;
+      }
+    }
+  } catch {
+    // Ignorar errores de parseo
+  }
+  return undefined;
 }
 
 /**
@@ -103,8 +211,9 @@ export class FirebaseMessagingService {
    *
    * Todos los valores de `data` se envían como strings (FCM los requiere así).
    *
-   * @returns `{ success, invalidToken, error?, firebaseErrorCode? }`.
+   * @returns `{ success, invalidToken, retryable, retryAfterSeconds?, error?, firebaseErrorCode?, fcmErrorCode? }`.
    * `invalidToken: true` solo cuando Firebase responde UNREGISTERED.
+   * `retryable: true` cuando el error es temporal y se debe reintentar.
    */
   async sendToToken(
     token: string,
@@ -116,6 +225,7 @@ export class FirebaseMessagingService {
       return {
         success: false,
         invalidToken: false,
+        retryable: false,
         error: 'Firebase no configurado',
       };
     }
@@ -169,10 +279,15 @@ export class FirebaseMessagingService {
 
       const responseBody = await response.text();
 
-      if (response.status === 404 || response.status === 400) {
-        const firebaseErrorCode = extractFirebaseErrorCode(responseBody);
-        const invalidToken = isInvalidTokenError(firebaseErrorCode);
+      // Extraer información de error desde la respuesta HTTP v1 de Firebase.
+      const errorInfo = extractFirebaseErrorCode(responseBody);
+      const retryAfter = extractRetryAfter(response.headers as unknown as { get?: (name: string) => string | null });
 
+      const firebaseErrorCode = errorInfo.fcmErrorCode || errorInfo.httpCode;
+      const invalidToken = isInvalidTokenError(errorInfo.fcmErrorCode, errorInfo.httpCode);
+      const retryable = isRetryableError(errorInfo.fcmErrorCode, errorInfo.httpCode);
+
+      if (response.status === 404 || response.status === 400) {
         if (invalidToken) {
           this.logger.warn(
             `Token FCM UNREGISTERED (${response.status}): ${responseBody}`,
@@ -185,8 +300,11 @@ export class FirebaseMessagingService {
         return {
           success: false,
           invalidToken,
+          retryable,
+          retryAfterSeconds: retryAfter,
           error: responseBody,
           firebaseErrorCode,
+          fcmErrorCode: errorInfo.fcmErrorCode,
         };
       }
 
@@ -197,14 +315,18 @@ export class FirebaseMessagingService {
         return {
           success: false,
           invalidToken: false,
+          retryable,
+          retryAfterSeconds: retryAfter,
           error: responseBody,
+          firebaseErrorCode,
+          fcmErrorCode: errorInfo.fcmErrorCode,
         };
       }
 
       this.logger.log(
         `Notificación FCM enviada a ${token.substring(0, 12)}...`,
       );
-      return { success: true, invalidToken: false };
+      return { success: true, invalidToken: false, retryable: false };
     } catch (err) {
       this.logger.error(
         `Error enviando notificación FCM: ${(err as Error).message}`,
@@ -212,6 +334,7 @@ export class FirebaseMessagingService {
       return {
         success: false,
         invalidToken: false,
+        retryable: true, // Errores de red son temporales
         error: (err as Error).message,
       };
     }
