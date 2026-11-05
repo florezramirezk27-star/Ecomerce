@@ -787,7 +787,7 @@ export default function BisagrasLanding({
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-4px); }
         }
-        .aw-landing .aw-bounce { animation: aw-bounce 3s infinite ease-in-out; }
+        .aw-landing .aw-bounce { animation: aw-bounce 1.5s infinite ease-in-out; }
         @keyframes aw-shine {
           0%, 55% { transform: translateX(-130%) skewX(-12deg); }
           100% { transform: translateX(130%) skewX(-12deg); }
@@ -1090,7 +1090,7 @@ export default function BisagrasLanding({
                       onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                       disabled={quantity <= 1}
                       aria-label="Disminuir cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-700 text-lg font-bold text-[var(--aw-gold)] disabled:opacity-40"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-700 text-lg font-bold text-[var(--aw-gold)] disabled:opacity-40 aw-bounce"
                     >
                       −
                     </button>
@@ -1107,7 +1107,7 @@ export default function BisagrasLanding({
                       }
                       disabled={quantity >= maxQuantity}
                       aria-label="Aumentar cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-700 text-lg font-bold text-[var(--aw-gold)] disabled:opacity-40"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-700 text-lg font-bold text-[var(--aw-gold)] disabled:opacity-40 aw-bounce"
                     >
                       +
                     </button>
@@ -1120,7 +1120,7 @@ export default function BisagrasLanding({
                   type="button"
                   onClick={() => void handleBuy()}
                   disabled={pending || soldOut || !hasPrice}
-                  className={`aw-pulse flex min-h-14 w-full items-center justify-center rounded-2xl px-5 py-4 text-base font-bold text-white shadow-lg transition-all sm:text-lg ${
+                  className={`aw-pulse aw-bounce w-full items-center justify-center rounded-2xl px-5 py-4 text-base font-bold text-white shadow-lg transition-all sm:text-lg ${
                     soldOut || !hasPrice
                       ? "cursor-not-allowed bg-slate-600"
                       : "bg-gradient-to-r from-[var(--aw-gold)] to-[var(--aw-slate-700)] hover:-translate-y-0.5"
@@ -1457,7 +1457,7 @@ export default function BisagrasLanding({
           </p>
           <a
             href="#ofertas"
-            className="aw-pulse inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-white px-8 py-4 text-lg font-bold text-[var(--aw-slate-900)] shadow-lg transition-transform hover:-translate-y-0.5 sm:w-auto"
+            className="aw-pulse aw-bounce inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-white px-8 py-4 text-lg font-bold text-[var(--aw-slate-900)] shadow-lg transition-transform hover:-translate-y-0.5 sm:w-auto"
           >
             Quiero mi Kit Bisagras
           </a>

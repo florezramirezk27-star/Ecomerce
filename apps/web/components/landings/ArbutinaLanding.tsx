@@ -807,7 +807,7 @@ export default function ArbutinaLanding({
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-4px); }
         }
-        .aw-landing .aw-bounce { animation: aw-bounce 3s infinite ease-in-out; }
+        .aw-landing .aw-bounce { animation: aw-bounce 1.5s infinite ease-in-out; }
         .aw-landing .aw-pulse { animation: aw-pulse 2s infinite; }
         .aw-landing .aw-pulse:disabled { animation: none; }
         .aw-landing .aw-wave { animation: aw-wave-shift 18s linear infinite; }
@@ -1102,7 +1102,7 @@ export default function ArbutinaLanding({
                       onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                       disabled={quantity <= 1}
                       aria-label="Disminuir cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-rose-200 text-lg font-bold text-[var(--aw-rose-800)] disabled:opacity-40"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-rose-200 text-lg font-bold text-[var(--aw-rose-800)] disabled:opacity-40 aw-bounce"
                     >
                       −
                     </button>
@@ -1119,7 +1119,7 @@ export default function ArbutinaLanding({
                       }
                       disabled={quantity >= maxQuantity}
                       aria-label="Aumentar cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-rose-200 text-lg font-bold text-[var(--aw-rose-800)] disabled:opacity-40"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-rose-200 text-lg font-bold text-[var(--aw-rose-800)] disabled:opacity-40 aw-bounce"
                     >
                       +
                     </button>
@@ -1191,7 +1191,7 @@ export default function ArbutinaLanding({
             </div>
             <a
               href="#ofertas"
-              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--aw-rose-800)] shadow transition-colors hover:bg-rose-50"
+              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--aw-rose-800)] shadow transition-colors hover:bg-rose-50 aw-bounce"
             >
               Quiero pedirla
             </a>

@@ -799,7 +799,7 @@ export default function GlucoraLanding({
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-4px); }
         }
-        .gl-landing .gl-bounce { animation: gl-bounce 3s infinite ease-in-out; }
+        .gl-landing .gl-bounce { animation: gl-bounce 1.5s infinite ease-in-out; }
         .gl-landing .gl-pulse { animation: gl-pulse 2s infinite; }
         .gl-landing .gl-pulse:disabled { animation: none; }
         .gl-landing .gl-wave { animation: gl-wave-shift 18s linear infinite; }
@@ -1093,7 +1093,7 @@ export default function GlucoraLanding({
                       onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                       disabled={quantity <= 1}
                       aria-label="Disminuir cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-[var(--gl-stone-2)] text-lg font-bold text-[var(--gl-wine-800)] disabled:opacity-40"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-[var(--gl-stone-2)] text-lg font-bold text-[var(--gl-wine-800)] disabled:opacity-40 gl-bounce"
                     >
                       −
                     </button>
@@ -1110,7 +1110,7 @@ export default function GlucoraLanding({
                       }
                       disabled={quantity >= maxQuantity}
                       aria-label="Aumentar cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-[var(--gl-stone-2)] text-lg font-bold text-[var(--gl-wine-800)] disabled:opacity-40"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-[var(--gl-stone-2)] text-lg font-bold text-[var(--gl-wine-800)] disabled:opacity-40 gl-bounce"
                     >
                       +
                     </button>
@@ -1182,7 +1182,7 @@ export default function GlucoraLanding({
             </div>
             <a
               href="#ofertas"
-              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--gl-wine-800)] shadow transition-colors hover:bg-[var(--gl-bone)]"
+              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--gl-wine-800)] shadow transition-colors hover:bg-[var(--gl-bone)] gl-bounce"
             >
               Quiero mi Glucora
             </a>

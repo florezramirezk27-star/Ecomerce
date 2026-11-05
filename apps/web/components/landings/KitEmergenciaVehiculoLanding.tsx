@@ -598,6 +598,11 @@ export default function KitEmergenciaVehiculoLanding({
           0%, 55% { transform: translateX(-130%) skewX(-12deg); }
           100% { transform: translateX(130%) skewX(-12deg); }
         }
+        @keyframes aw-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        .aw-landing .aw-bounce { animation: aw-bounce 1.5s infinite ease-in-out; }
         .aw-landing .aw-pulse { animation: aw-pulse 2s infinite; }
         .aw-landing .aw-pulse:disabled { animation: none; }
         .aw-landing .aw-wave { animation: aw-wave-shift 18s linear infinite; }
@@ -619,7 +624,8 @@ export default function KitEmergenciaVehiculoLanding({
         @media (prefers-reduced-motion: reduce) {
           .aw-landing .aw-pulse,
           .aw-landing .aw-wave,
-          .aw-landing .aw-wave-reverse { animation: none; }
+          .aw-landing .aw-wave-reverse,
+          .aw-landing .aw-bounce { animation: none; }
           .aw-landing .aw-shine::after { animation: none; opacity: 0; }
           .aw-landing { scroll-behavior: auto; }
         }
@@ -706,7 +712,7 @@ export default function KitEmergenciaVehiculoLanding({
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                   disabled={quantity <= 1}
                   aria-label="Disminuir cantidad"
-                  className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-orange-200 text-lg font-bold text-[var(--aw-emerg-700)] disabled:opacity-40"
+                  className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-orange-200 text-lg font-bold text-[var(--aw-emerg-700)] disabled:opacity-40 aw-bounce"
                 >
                   −
                 </button>
@@ -721,7 +727,7 @@ export default function KitEmergenciaVehiculoLanding({
                   onClick={() => setQuantity((q) => Math.min(maxQuantity, q + 1))}
                   disabled={quantity >= maxQuantity}
                   aria-label="Aumentar cantidad"
-                  className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-orange-200 text-lg font-bold text-[var(--aw-emerg-700)] disabled:opacity-40"
+                  className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-orange-200 text-lg font-bold text-[var(--aw-emerg-700)] disabled:opacity-40 aw-bounce"
                 >
                   +
                 </button>
@@ -733,7 +739,7 @@ export default function KitEmergenciaVehiculoLanding({
                 type="button"
                 onClick={() => void handleBuy()}
                 disabled={pending || soldOut || !hasPrice}
-                className={`aw-pulse flex min-h-14 w-full items-center justify-center rounded-2xl px-5 py-4 text-base font-bold text-white shadow-lg transition-all sm:text-lg ${
+                className={`aw-pulse aw-bounce w-full items-center justify-center rounded-2xl px-5 py-4 text-base font-bold text-white shadow-lg transition-all sm:text-lg ${
                   soldOut || !hasPrice
                     ? "cursor-not-allowed bg-orange-300"
                     : "bg-gradient-to-r from-[var(--aw-emerg-700)] to-[var(--aw-emerg-900)] hover:-translate-y-0.5"
@@ -791,7 +797,7 @@ export default function KitEmergenciaVehiculoLanding({
             </div>
             <a
               href="#contenido"
-              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--aw-emerg-900)] shadow transition-colors hover:bg-orange-50"
+              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--aw-emerg-900)] shadow transition-colors hover:bg-orange-50 aw-bounce"
             >
               Quiero pedirlo
             </a>
@@ -985,7 +991,7 @@ export default function KitEmergenciaVehiculoLanding({
           </p>
           <a
             href="#contenido"
-            className="aw-pulse inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-white px-8 py-4 text-lg font-bold text-[var(--aw-emerg-900)] shadow-lg transition-transform hover:-translate-y-0.5 sm:w-auto"
+            className="aw-pulse aw-bounce inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-white px-8 py-4 text-lg font-bold text-[var(--aw-emerg-900)] shadow-lg transition-transform hover:-translate-y-0.5 sm:w-auto"
           >
             Quiero mi Kit de Emergencia
           </a>

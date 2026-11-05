@@ -774,7 +774,7 @@ export default function AceiteOreganoLanding({
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-4px); }
         }
-        .nb-landing .nb-bounce { animation: nb-bounce 3s infinite ease-in-out; }
+        .nb-landing .nb-bounce { animation: nb-bounce 1.5s infinite ease-in-out; }
         .nb-landing .nb-pulse { animation: nb-pulse 2s infinite; }
         .nb-landing .nb-pulse:disabled { animation: none; }
         .nb-landing .nb-hide-scrollbar { scrollbar-width: none; }
@@ -947,7 +947,7 @@ export default function AceiteOreganoLanding({
                       onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                       disabled={quantity <= 1}
                       aria-label="Disminuir cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-green-200 text-lg font-bold text-[var(--nb-green-800)] disabled:opacity-40"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-green-200 text-lg font-bold text-[var(--nb-green-800)] disabled:opacity-40 nb-bounce"
                     >
                       −
                     </button>
@@ -964,7 +964,7 @@ export default function AceiteOreganoLanding({
                       }
                       disabled={quantity >= maxQuantity}
                       aria-label="Aumentar cantidad"
-                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-green-200 text-lg font-bold text-[var(--nb-green-800)] disabled:opacity-40"
+                      className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-green-200 text-lg font-bold text-[var(--nb-green-800)] disabled:opacity-40 nb-bounce"
                     >
                       +
                     </button>
@@ -1034,7 +1034,7 @@ export default function AceiteOreganoLanding({
             </div>
             <a
               href="#ofertas"
-              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--nb-green-800)] shadow transition-colors hover:bg-green-50"
+              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-white px-6 py-3 font-bold text-[var(--nb-green-800)] shadow transition-colors hover:bg-green-50 nb-bounce"
             >
               Quiero pedirlo
             </a>
