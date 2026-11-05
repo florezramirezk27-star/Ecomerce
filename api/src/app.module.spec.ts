@@ -8,11 +8,26 @@ import { PushDeviceService } from './modules/push-notification/push-device.servi
 
 describe('AppModule (arranque real de NestJS)', () => {
   let module: TestingModule;
+  const previousJwtSecret = process.env.JWT_SECRET;
 
   beforeEach(async () => {
+    process.env.JWT_SECRET = 'ci-test-secret-only-not-production';
     module = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
+  });
+
+  afterEach(async () => {
+    if (previousJwtSecret === undefined) {
+      delete process.env.JWT_SECRET;
+    } else {
+      process.env.JWT_SECRET = previousJwtSecret;
+    }
+    try {
+      await module.close();
+    } catch {
+      // El cierre del módulo puede fallar por conexiones externas (Redis) sin afectar las pruebas de DI.
+    }
   });
 
   it('debe compilar el módulo principal sin errores de DI', () => {
