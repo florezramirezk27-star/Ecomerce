@@ -1,5 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GoogleAuth } from 'google-auth-library';
+import { GoogleAuth, JWTInput } from 'google-auth-library';
+
+/**
+ * Tiempo máximo de una petición HTTP a FCM. Debe ser bastante menor que
+ * `LOCK_TTL_MS` del worker para que una instancia activa pueda renovar su
+ * lease antes de que expire.
+ */
+export const FCM_REQUEST_TIMEOUT_MS = 20_000;
 
 /**
  * Resultado del envío de una notificación FCM.
@@ -35,6 +42,10 @@ const TOKEN_INVALID_FCM_ERROR_CODES = new Set([
 const PERMANENT_FCM_ERROR_CODES = new Set([
   'INVALID_ARGUMENT',
   'PERMISSION_DENIED',
+  'SENDER_ID_MISMATCH',
+  'MISMATCH_SENDER_ID',
+  'INVALID_RECIPIENT',
+  'THIRD_PARTY_AUTH_ERROR',
 ]);
 
 /**
@@ -46,7 +57,22 @@ const TEMPORARY_FCM_ERROR_CODES = new Set([
   'QUOTA_EXCEEDED',
   'DEVICE_MESSAGE_RATE_EXCEEDED',
   'TOPICS_MESSAGE_RATE_EXCEEDED',
+  'UNSPECIFIED_ERROR',
+  'RESOURCE_EXHAUSTED',
+  'ABORTED',
+  'DEADLINE_EXCEEDED',
 ]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Convierte un código de error JSON a string solo si es un escalar válido. */
+function stringifyCode(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+}
 
 /**
  * Extrae el código de error de Firebase desde el cuerpo de respuesta HTTP v1.
@@ -69,25 +95,37 @@ const TEMPORARY_FCM_ERROR_CODES = new Set([
  * ```
  *
  * Busca `error.details[].errorCode` (código FCM específico) y cae a
- * `error.code` (código HTTP) como respaldo.
+ * `error.code` (código HTTP/gRPC) como respaldo.
  */
-function extractFirebaseErrorCode(body: string): { fcmErrorCode?: string; httpCode?: string } {
+function extractFirebaseErrorCode(body: string): {
+  fcmErrorCode?: string;
+  httpCode?: string;
+} {
   try {
-    const parsed = JSON.parse(body);
-    const error = parsed?.error;
-    if (error && typeof error === 'object') {
+    const parsed: unknown = JSON.parse(body);
+    if (!isRecord(parsed)) return {};
+
+    const error = parsed.error;
+    if (isRecord(error)) {
       // 1. Buscar en details[].errorCode (estructura real de FCM HTTP v1)
       const details = error.details;
       if (Array.isArray(details)) {
         for (const detail of details) {
-          if (detail && typeof detail === 'object' && detail.errorCode) {
-            return { fcmErrorCode: String(detail.errorCode), httpCode: String(error.code) };
+          const fcmErrorCode = isRecord(detail)
+            ? stringifyCode(detail.errorCode)
+            : undefined;
+          if (fcmErrorCode) {
+            return {
+              fcmErrorCode,
+              httpCode: stringifyCode(error.code),
+            };
           }
         }
       }
       // 2. Respaldo: error.code como string
-      if (error.code) {
-        return { httpCode: String(error.code) };
+      const httpCode = stringifyCode(error.code);
+      if (httpCode) {
+        return { httpCode };
       }
     }
     if (typeof error === 'string') {
@@ -105,7 +143,10 @@ function extractFirebaseErrorCode(body: string): { fcmErrorCode?: string; httpCo
  * token está UNREGISTERED (o variantes similares). Otros errores 400/500 no
  * provocan eliminación del token.
  */
-function isInvalidTokenError(fcmErrorCode?: string, httpCode?: string): boolean {
+function isInvalidTokenError(
+  fcmErrorCode?: string,
+  httpCode?: string,
+): boolean {
   if (fcmErrorCode) {
     const c = fcmErrorCode.toUpperCase();
     if (TOKEN_INVALID_FCM_ERROR_CODES.has(c)) return true;
@@ -118,41 +159,82 @@ function isInvalidTokenError(fcmErrorCode?: string, httpCode?: string): boolean 
 }
 
 /**
- * Determina si un error es temporal (reintentable) basado en el código FCM.
+ * Determina si un error es temporal (reintentable) basado en el código FCM y
+ * en el status HTTP real de la respuesta.
+ *
+ * Importante: un 4xx desconocido no se reintenta indefinidamente. Solo se
+ * reintentan 408, 425, 429, 5xx y los códigos FCM listados como temporales.
  */
-function isRetryableError(fcmErrorCode?: string, httpCode?: string): boolean {
+function isRetryableError(fcmErrorCode?: string, httpStatus?: string): boolean {
   if (fcmErrorCode) {
     const c = fcmErrorCode.toUpperCase();
     if (TEMPORARY_FCM_ERROR_CODES.has(c)) return true;
-    // Si es un código FCM conocido y no es permanente, es temporal
+    if (TOKEN_INVALID_FCM_ERROR_CODES.has(c)) return false;
     if (PERMANENT_FCM_ERROR_CODES.has(c)) return false;
   }
-  // Códigos HTTP 5xx y 429 son temporales
-  if (httpCode) {
-    const n = parseInt(httpCode, 10);
+
+  if (httpStatus) {
+    const n = parseInt(httpStatus, 10);
     if (!isNaN(n)) {
-      if (n >= 500 || n === 429) return true;
+      if (n === 408 || n === 425 || n === 429 || n >= 500) return true;
+      if (n >= 400 && n < 500) return false;
     }
   }
+
+  // Código FCM desconocido sin status HTTP reconocible: no se reintenta
+  // indefinidamente con el mismo contenido.
   return false;
 }
 
 /**
- * Extrae el valor del header Retry-After de la respuesta de Firebase.
+ * Convierte el valor del header Retry-After a segundos.
+ *
+ * Soporta las dos formas del RFC 9110:
+ * - delta-seconds: `Retry-After: 120`
+ * - HTTP-date: `Retry-After: Wed, 21 Oct 2015 07:28:00 GMT`
  */
-function extractRetryAfter(headers: { get?: (name: string) => string | null }): number | undefined {
-  try {
-    const retryAfter = headers.get?.('Retry-After');
-    if (retryAfter) {
-      const seconds = parseInt(retryAfter, 10);
-      if (!isNaN(seconds) && seconds > 0) {
-        return seconds;
-      }
-    }
-  } catch {
-    // Ignorar errores de parseo
+export function parseRetryAfterHeader(
+  value: string | null | undefined,
+  nowMs: number = Date.now(),
+): number | undefined {
+  if (!value) return undefined;
+
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  // delta-seconds (solo dígitos; evita que "120abc" se acepte a medias).
+  if (/^\d+$/.test(trimmed)) {
+    const seconds = Number(trimmed);
+    return Number.isFinite(seconds) && seconds > 0
+      ? Math.ceil(seconds)
+      : undefined;
   }
+
+  // HTTP-date. Date.parse acepta el formato IMF-fixdate de RFC 9110.
+  const timestamp = Date.parse(trimmed);
+  if (!Number.isNaN(timestamp)) {
+    const seconds = Math.ceil((timestamp - nowMs) / 1000);
+    return seconds > 0 ? seconds : undefined;
+  }
+
   return undefined;
+}
+
+/**
+ * Extrae el valor del header Retry-After de la respuesta de Firebase.
+ * Acepta tanto `Headers` como objetos con `get()` (mocks y adaptadores).
+ */
+export function extractRetryAfter(
+  headers: { get?: (name: string) => string | null } | undefined,
+  nowMs: number = Date.now(),
+): number | undefined {
+  try {
+    const retryAfter = headers?.get?.('Retry-After');
+    return parseRetryAfterHeader(retryAfter, nowMs);
+  } catch {
+    // Ignorar errores de parseo o headers no disponibles.
+    return undefined;
+  }
 }
 
 /**
@@ -185,8 +267,17 @@ export class FirebaseMessagingService {
     }
 
     try {
-      const serviceAccount = JSON.parse(raw);
-      this.projectId = serviceAccount.project_id;
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        !isRecord(parsed) ||
+        typeof parsed.project_id !== 'string' ||
+        parsed.project_id.length === 0
+      ) {
+        throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON no contiene project_id');
+      }
+
+      const serviceAccount = parsed as JWTInput;
+      this.projectId = parsed.project_id;
       this.googleAuth = new GoogleAuth({
         credentials: serviceAccount,
         scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
@@ -225,7 +316,9 @@ export class FirebaseMessagingService {
       return {
         success: false,
         invalidToken: false,
-        retryable: false,
+        // Un despliegue puede arrancar antes de que la variable esté bien
+        // configurada; se permite reintentar en vez de enterrar el evento.
+        retryable: true,
         error: 'Firebase no configurado',
       };
     }
@@ -237,6 +330,12 @@ export class FirebaseMessagingService {
         stringData[key] = value == null ? '' : String(value);
       }
     }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      FCM_REQUEST_TIMEOUT_MS,
+    );
 
     try {
       const accessToken = await this.googleAuth.getAccessToken();
@@ -274,6 +373,7 @@ export class FirebaseMessagingService {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(message),
+          signal: controller.signal,
         },
       );
 
@@ -281,40 +381,38 @@ export class FirebaseMessagingService {
 
       // Extraer información de error desde la respuesta HTTP v1 de Firebase.
       const errorInfo = extractFirebaseErrorCode(responseBody);
-      const retryAfter = extractRetryAfter(response.headers as unknown as { get?: (name: string) => string | null });
+      const retryAfter = extractRetryAfter(response.headers);
 
       const firebaseErrorCode = errorInfo.fcmErrorCode || errorInfo.httpCode;
-      const invalidToken = isInvalidTokenError(errorInfo.fcmErrorCode, errorInfo.httpCode);
-      const retryable = isRetryableError(errorInfo.fcmErrorCode, errorInfo.httpCode);
+      const invalidToken = isInvalidTokenError(
+        errorInfo.fcmErrorCode,
+        errorInfo.httpCode,
+      );
+      // Clasificar con el status HTTP real: un cuerpo no-JSON en un 500
+      // también es un error temporal.
+      const retryable = isRetryableError(
+        errorInfo.fcmErrorCode,
+        String(response.status),
+      );
 
-      if (response.status === 404 || response.status === 400) {
+      if (!response.ok) {
         if (invalidToken) {
           this.logger.warn(
             `Token FCM UNREGISTERED (${response.status}): ${responseBody}`,
           );
+        } else if (retryable) {
+          this.logger.warn(
+            `Error FCM temporal ${response.status}: ${responseBody}`,
+          );
         } else {
           this.logger.warn(
-            `Token FCM error ${response.status} (no es UNREGISTERED, no se elimina): ${responseBody}`,
+            `Error FCM permanente ${response.status} (no se elimina el token): ${responseBody}`,
           );
         }
+
         return {
           success: false,
           invalidToken,
-          retryable,
-          retryAfterSeconds: retryAfter,
-          error: responseBody,
-          firebaseErrorCode,
-          fcmErrorCode: errorInfo.fcmErrorCode,
-        };
-      }
-
-      if (!response.ok) {
-        this.logger.error(
-          `Error FCM ${response.status}: ${responseBody}`,
-        );
-        return {
-          success: false,
-          invalidToken: false,
           retryable,
           retryAfterSeconds: retryAfter,
           error: responseBody,
@@ -328,15 +426,28 @@ export class FirebaseMessagingService {
       );
       return { success: true, invalidToken: false, retryable: false };
     } catch (err) {
+      const message = (err as Error).message;
+      const timedOut =
+        (err as Error).name === 'AbortError' ||
+        message.toLowerCase().includes('aborted');
+
       this.logger.error(
-        `Error enviando notificación FCM: ${(err as Error).message}`,
+        timedOut
+          ? `Timeout de ${FCM_REQUEST_TIMEOUT_MS}ms enviando notificación FCM`
+          : `Error enviando notificación FCM: ${message}`,
       );
+
       return {
         success: false,
         invalidToken: false,
-        retryable: true, // Errores de red son temporales
-        error: (err as Error).message,
+        // Errores de red y timeouts son temporales.
+        retryable: true,
+        error: timedOut
+          ? `Timeout de FCM (${FCM_REQUEST_TIMEOUT_MS}ms)`
+          : message,
       };
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

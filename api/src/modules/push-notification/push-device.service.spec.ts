@@ -11,6 +11,7 @@ describe('PushDeviceService', () => {
   const pushDeviceDelete = jest.fn();
   const pushDeviceFindUnique = jest.fn();
   const pushDeviceFindMany = jest.fn();
+  const pushDeviceDeleteMany = jest.fn();
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -27,6 +28,7 @@ describe('PushDeviceService', () => {
               delete: pushDeviceDelete,
               findUnique: pushDeviceFindUnique,
               findMany: pushDeviceFindMany,
+              deleteMany: pushDeviceDeleteMany,
             },
           },
         },
@@ -117,16 +119,21 @@ describe('PushDeviceService', () => {
     it('lanza NotFoundException cuando el dispositivo no pertenece al usuario', async () => {
       pushDeviceFindFirst.mockResolvedValue(null);
 
-      await expect(
-        service.remove('user-1', 'fcm-token-123'),
-      ).rejects.toThrow('Dispositivo no encontrado');
+      await expect(service.remove('user-1', 'fcm-token-123')).rejects.toThrow(
+        'Dispositivo no encontrado',
+      );
     });
   });
 
   describe('findAdminDevices', () => {
     it('devuelve solo dispositivos de usuarios ADMIN', async () => {
       pushDeviceFindMany.mockResolvedValue([
-        { id: 'dev-1', token: 'token-1', platform: 'android', userId: 'admin-1' },
+        {
+          id: 'dev-1',
+          token: 'token-1',
+          platform: 'android',
+          userId: 'admin-1',
+        },
       ]);
 
       const result = await service.findAdminDevices();
@@ -163,11 +170,27 @@ describe('PushDeviceService', () => {
     });
 
     it('elimina dispositivo por token (invalido)', async () => {
-      pushDeviceDelete.mockResolvedValue({ id: 'dev-1', token: 'fcm-token-123' });
+      pushDeviceDelete.mockResolvedValue({
+        id: 'dev-1',
+        token: 'fcm-token-123',
+      });
 
       await service.deleteByToken('fcm-token-123');
 
-      expect(pushDeviceDelete).toHaveBeenCalledWith({ where: { token: 'fcm-token-123' } });
+      expect(pushDeviceDelete).toHaveBeenCalledWith({
+        where: { token: 'fcm-token-123' },
+      });
+    });
+
+    it('deleteByTokenIfPresent es idempotente', async () => {
+      pushDeviceDeleteMany.mockResolvedValue({ count: 0 });
+
+      const deleted = await service.deleteByTokenIfPresent('fcm-token-123');
+
+      expect(deleted).toBe(0);
+      expect(pushDeviceDeleteMany).toHaveBeenCalledWith({
+        where: { token: 'fcm-token-123' },
+      });
     });
   });
 });

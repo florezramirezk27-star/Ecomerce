@@ -342,6 +342,8 @@ model PushDevice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  deliveries NotificationDelivery[]
+
   @@index([userId])
   @@index([token])
 }
@@ -373,8 +375,43 @@ model NotificationEvent {
   updatedAt    DateTime @updatedAt
 
   order  Order @relation("OrderNotificationEvents", fields: [orderId], references: [id])
+  deliveries NotificationDelivery[]
 
   @@index([status, createdAt])
   @@index([status, nextAttemptAt])
   @@index([eventId])
+}
+
+/// Resultado de entrega de un evento OUTBOX a un dispositivo concreto.
+///
+/// El worker crea una fila por dispositivo la primera vez que procesa un
+/// evento y, a partir de ahí, solo reintenta las filas que siguen pendientes.
+/// Así un dispositivo que ya recibió el mensaje no vuelve a recibirlo cuando
+/// otro dispositivo del mismo evento falla.
+///
+/// `recipientKey` es el hash SHA-256 del token FCM: sobrevive a la eliminación
+/// del token y evita guardar el token en claro en el historial. `deviceId` es
+/// opcional y pasa a NULL si el dispositivo se elimina, conservando el
+/// histórico de la entrega.
+model NotificationDelivery {
+  id                  String   @id @default(cuid())
+  notificationEventId String
+  notificationEvent   NotificationEvent @relation(fields: [notificationEventId], references: [id], onDelete: Cascade)
+  deviceId            String?
+  device              PushDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  recipientKey        String   // SHA-256 del token FCM
+  status              String   @default("PENDING") // PENDING | SENT | RETRY | INVALID | DEAD
+  attempts            Int      @default(0)
+  nextAttemptAt       DateTime?
+  lastAttemptAt       DateTime?
+  deliveredAt         DateTime?
+  lastError           String?
+  firebaseErrorCode   String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([notificationEventId, recipientKey])
+  @@index([notificationEventId, status])
+  @@index([status, nextAttemptAt])
+  @@index([deviceId])
 }

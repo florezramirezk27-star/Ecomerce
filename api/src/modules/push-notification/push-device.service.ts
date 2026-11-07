@@ -80,4 +80,16 @@ export class PushDeviceService {
       where: { token },
     });
   }
+
+  /**
+   * Elimina el token si todavía existe y devuelve cuántos dispositivos se
+   * borraron. Es idempotente: dos workers pueden recibir UNREGISTERED para el
+   * mismo token sin que el segundo falle con P2025.
+   */
+  async deleteByTokenIfPresent(token: string): Promise<number> {
+    const result = await this.prisma.pushDevice.deleteMany({
+      where: { token },
+    });
+    return result.count;
+  }
 }

@@ -1,4 +1,7 @@
-import { FirebaseMessagingService } from './firebase-messaging.service';
+import {
+  FirebaseMessagingService,
+  parseRetryAfterHeader,
+} from './firebase-messaging.service';
 import type { FcmSendResult } from './firebase-messaging.service';
 import { GoogleAuth } from 'google-auth-library';
 
@@ -49,16 +52,21 @@ describe('FirebaseMessagingService', () => {
     const serviceAccount = {
       type: 'service_account',
       project_id: 'kronio-market',
-      private_key: '-----BEGIN PRIVATE KEY-----\nMOCK\n-----END PRIVATE KEY-----\n',
-      client_email: 'firebase-adminsdk-mock@kronio-market.iam.gserviceaccount.com',
+      private_key:
+        '-----BEGIN PRIVATE KEY-----\nMOCK\n-----END PRIVATE KEY-----\n',
+      client_email:
+        'firebase-adminsdk-mock@kronio-market.iam.gserviceaccount.com',
     };
 
     beforeEach(() => {
-      process.env.FIREBASE_SERVICE_ACCOUNT_JSON = JSON.stringify(serviceAccount);
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON =
+        JSON.stringify(serviceAccount);
       fetchMock.mockResolvedValue({
         status: 200,
         ok: true,
-        text: jest.fn().mockResolvedValue('{ "name": "projects/.../messages/123" }'),
+        text: jest
+          .fn()
+          .mockResolvedValue('{ "name": "projects/.../messages/123" }'),
       });
 
       service = new FirebaseMessagingService();
@@ -95,12 +103,11 @@ describe('FirebaseMessagingService', () => {
     });
 
     it('envía todos los valores de data como strings (numericId convertido)', async () => {
-      await service.sendToToken(
-        'fcm-token-123',
-        'Título',
-        'Cuerpo',
-        { numericId: 42, orderId: 'ord-1', active: true },
-      );
+      await service.sendToToken('fcm-token-123', 'Título', 'Cuerpo', {
+        numericId: 42,
+        orderId: 'ord-1',
+        active: true,
+      });
 
       const callArgs = fetchMock.mock.calls[0][1] as RequestInit;
       const body = JSON.parse(callArgs.body as string);
@@ -129,7 +136,11 @@ describe('FirebaseMessagingService', () => {
         ),
       });
 
-      const result = await service.sendToToken('invalid-token', 'Título', 'Cuerpo');
+      const result = await service.sendToToken(
+        'invalid-token',
+        'Título',
+        'Cuerpo',
+      );
 
       expect(result.success).toBe(false);
       expect(result.invalidToken).toBe(true);
@@ -194,7 +205,8 @@ describe('FirebaseMessagingService', () => {
               message: 'Requested entity was not found.',
               details: [
                 {
-                  '@type': 'type.googleapis.com/google.firebase.fcm.v1.FcmError',
+                  '@type':
+                    'type.googleapis.com/google.firebase.fcm.v1.FcmError',
                   errorCode: 'UNREGISTERED',
                 },
               ],
@@ -203,7 +215,11 @@ describe('FirebaseMessagingService', () => {
         ),
       });
 
-      const result = await service.sendToToken('invalid-token', 'Título', 'Cuerpo');
+      const result = await service.sendToToken(
+        'invalid-token',
+        'Título',
+        'Cuerpo',
+      );
 
       expect(result.success).toBe(false);
       expect(result.invalidToken).toBe(true);
@@ -224,7 +240,8 @@ describe('FirebaseMessagingService', () => {
               message: 'Invalid payload',
               details: [
                 {
-                  '@type': 'type.googleapis.com/google.firebase.fcm.v1.FcmError',
+                  '@type':
+                    'type.googleapis.com/google.firebase.fcm.v1.FcmError',
                   errorCode: 'INVALID_ARGUMENT',
                 },
               ],
@@ -265,6 +282,170 @@ describe('FirebaseMessagingService', () => {
       expect(result.success).toBe(false);
       expect(result.retryable).toBe(true);
       expect(result.retryAfterSeconds).toBe(60);
+    });
+
+    it('soporta Retry-After como fecha HTTP (RFC 9110)', async () => {
+      const retryAt = new Date(Date.now() + 120_000).toUTCString();
+      fetchMock.mockResolvedValue({
+        status: 429,
+        ok: false,
+        headers: {
+          get: (name: string) =>
+            name.toLowerCase() === 'retry-after' ? retryAt : null,
+        },
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            error: {
+              code: 429,
+              status: 'RESOURCE_EXHAUSTED',
+              message: 'Quota exceeded',
+            },
+          }),
+        ),
+      });
+
+      const result = await service.sendToToken('token-123', 'Título', 'Cuerpo');
+
+      expect(result.retryable).toBe(true);
+      expect(result.retryAfterSeconds).toBeGreaterThanOrEqual(118);
+      expect(result.retryAfterSeconds).toBeLessThanOrEqual(121);
+    });
+
+    it('clasifica HTTP 429 sin cuerpo JSON como temporal', async () => {
+      fetchMock.mockResolvedValue({
+        status: 429,
+        ok: false,
+        headers: { get: () => null },
+        text: jest.fn().mockResolvedValue('Too Many Requests'),
+      });
+
+      const result = await service.sendToToken('token-123', 'Título', 'Cuerpo');
+
+      expect(result.success).toBe(false);
+      expect(result.retryable).toBe(true);
+      expect(result.invalidToken).toBe(false);
+    });
+
+    it('clasifica HTTP 500 sin cuerpo JSON como temporal', async () => {
+      fetchMock.mockResolvedValue({
+        status: 500,
+        ok: false,
+        headers: { get: () => null },
+        text: jest.fn().mockResolvedValue('<html>Internal error</html>'),
+      });
+
+      const result = await service.sendToToken('token-123', 'Título', 'Cuerpo');
+
+      expect(result.success).toBe(false);
+      expect(result.retryable).toBe(true);
+      expect(result.invalidToken).toBe(false);
+    });
+
+    it('clasifica INTERNAL como temporal', async () => {
+      fetchMock.mockResolvedValue({
+        status: 500,
+        ok: false,
+        headers: { get: () => null },
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            error: {
+              code: 500,
+              status: 'INTERNAL',
+              message: 'Internal error',
+              details: [{ errorCode: 'INTERNAL' }],
+            },
+          }),
+        ),
+      });
+
+      const result = await service.sendToToken('token-123', 'Título', 'Cuerpo');
+
+      expect(result.retryable).toBe(true);
+      expect(result.fcmErrorCode).toBe('INTERNAL');
+    });
+
+    it('clasifica PERMISSION_DENIED como permanente sin borrar token', async () => {
+      fetchMock.mockResolvedValue({
+        status: 403,
+        ok: false,
+        headers: { get: () => null },
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            error: {
+              code: 403,
+              status: 'PERMISSION_DENIED',
+              message: 'Permission denied',
+              details: [{ errorCode: 'PERMISSION_DENIED' }],
+            },
+          }),
+        ),
+      });
+
+      const result = await service.sendToToken('token-123', 'Título', 'Cuerpo');
+
+      expect(result.success).toBe(false);
+      expect(result.invalidToken).toBe(false);
+      expect(result.retryable).toBe(false);
+      expect(result.fcmErrorCode).toBe('PERMISSION_DENIED');
+    });
+
+    it('clasifica un 400 desconocido como permanente (no reintento infinito)', async () => {
+      fetchMock.mockResolvedValue({
+        status: 400,
+        ok: false,
+        headers: { get: () => null },
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            error: { code: 400, message: 'Bad request' },
+          }),
+        ),
+      });
+
+      const result = await service.sendToToken('token-123', 'Título', 'Cuerpo');
+
+      expect(result.success).toBe(false);
+      expect(result.invalidToken).toBe(false);
+      expect(result.retryable).toBe(false);
+    });
+
+    it('ignora un Retry-After inválido sin romper el envío', async () => {
+      fetchMock.mockResolvedValue({
+        status: 503,
+        ok: false,
+        headers: {
+          get: () => 'not-a-number-or-date',
+        },
+        text: jest.fn().mockResolvedValue('unavailable'),
+      });
+
+      const result = await service.sendToToken('token-123', 'Título', 'Cuerpo');
+
+      expect(result.retryable).toBe(true);
+      expect(result.retryAfterSeconds).toBeUndefined();
+    });
+  });
+
+  describe('parseRetryAfterHeader', () => {
+    const now = Date.parse('2026-11-06T12:00:00.000Z');
+
+    it('acepta delta-seconds', () => {
+      expect(parseRetryAfterHeader('120', now)).toBe(120);
+      expect(parseRetryAfterHeader('0', now)).toBeUndefined();
+      expect(parseRetryAfterHeader('120abc', now)).toBeUndefined();
+    });
+
+    it('acepta HTTP-date futura', () => {
+      expect(parseRetryAfterHeader('Fri, 06 Nov 2026 12:02:00 GMT', now)).toBe(
+        120,
+      );
+    });
+
+    it('ignora HTTP-date pasada o inválida', () => {
+      expect(
+        parseRetryAfterHeader('Fri, 06 Nov 2026 11:58:00 GMT', now),
+      ).toBeUndefined();
+      expect(parseRetryAfterHeader('garbage', now)).toBeUndefined();
+      expect(parseRetryAfterHeader(null, now)).toBeUndefined();
     });
   });
 });

@@ -8,6 +8,30 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Imagen con pgvector para que `prisma migrate deploy` pueda aplicar la
+        # migración que crea la extensión vector. Es una base temporal y
+        # aislada: nunca se usa Neon en CI.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kronio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d kronio_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/kronio_test?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/kronio_test?schema=public
+      INTEGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/kronio_test?schema=public
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,10 +48,20 @@ jobs:
 
       - name: Validate Prisma schema
         run: pnpm prisma validate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+
+      - name: Apply migrations to temporary PostgreSQL
+        run: pnpm exec prisma migrate deploy
+
       - run: pnpm --dir api build
-      - run: pnpm --dir api exec jest --runInBand
+
+      - name: Unit tests
+        run: pnpm --dir api exec jest --runInBand
+
+      - name: Integration tests (PostgreSQL real)
+        run: pnpm --dir api test:integration
 
       - run: pnpm --dir apps/web exec tsc --noEmit
       - run: pnpm --dir apps/web lint
