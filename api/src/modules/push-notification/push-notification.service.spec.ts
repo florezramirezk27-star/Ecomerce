@@ -68,6 +68,8 @@ describe('PushNotificationService', () => {
         lockedUntil: new Date(Date.now() + 60000),
       }),
     );
+
+    notificationEventUpdateMany.mockResolvedValue({ count: 0 });
   });
 
   describe('createEvent (dentro de transaccion)', () => {
@@ -194,7 +196,7 @@ describe('PushNotificationService', () => {
       expect(sendToToken).not.toHaveBeenCalled();
     });
 
-    it('reclama evento con FOR UPDATE SKIP LOCKED y establece bloqueo', async () => {
+    it('reclama evento con FOR UPDATE SKIP LOCKED y establece bloqueo atomico', async () => {
       queryRawUnsafe.mockResolvedValue([
         {
           id: 'evt-1',
@@ -214,16 +216,19 @@ describe('PushNotificationService', () => {
 
       await service.processPendingEvents();
 
-      // Verificar que se estableció el bloqueo (status PROCESSING, lockedBy, lockedUntil)
-      expect(notificationEventUpdate).toHaveBeenCalledWith({
-        where: { id: 'evt-1' },
-        data: expect.objectContaining({
-          status: 'PROCESSING',
-          lockedAt: expect.any(Date),
-          lockedBy: expect.any(String),
-          lockedUntil: expect.any(Date),
-        }),
-      });
+      // Verificar que el CTE reclama con FOR UPDATE SKIP LOCKED y marca PROCESSING en un mismo statement.
+      expect(queryRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('FOR UPDATE SKIP LOCKED'),
+        expect.any(Date),
+        expect.any(Date),
+        expect.any(String),
+        expect.any(Date),
+      );
+      const cteSql = queryRawUnsafe.mock.calls[0][0] as string;
+      expect(cteSql).toContain('WITH claimed AS (');
+      expect(cteSql).toContain('UPDATE "NotificationEvent"');
+      expect(cteSql).toContain("SET status = 'PROCESSING'");
+      expect(cteSql).toContain('RETURNING');
     });
 
     it('no procesa evento bloqueado por otra instancia (SKIP LOCKED)', async () => {

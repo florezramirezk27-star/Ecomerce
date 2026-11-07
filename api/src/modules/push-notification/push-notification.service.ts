@@ -242,9 +242,13 @@ export class PushNotificationService
   }> {
     const now = new Date();
 
-    // Reclamar eventos pendientes con bloqueo distribuido.
-    // Usamos una transacción con FOR UPDATE SKIP LOCKED para que cada
-    // instancia solo procese los eventos que logra bloquear.
+    // Recuperar bloqueos expirados antes de reclamar (instancia caída).
+    await this.recoverExpiredLocks();
+
+    // Reclamar eventos y marcar como PROCESSING en una misma transacción.
+    // FOR UPDATE SKIP LOCKED impide que dos instancias procesen el mismo
+    // evento simultáneamente; la actualización a PROCESSING dentro del mismo
+    // statement hace que el bloqueo y el cambio de estado sean atómicos.
     const claimed = await this.prisma.$queryRawUnsafe<{
       id: string;
       eventId: string;
@@ -257,32 +261,37 @@ export class PushNotificationService
       maxAttempts: number;
       lastError: string | null;
     }[]>(`
-      SELECT id, eventId, type, orderId, numericId, payload, status, attempts, maxAttempts, lastError
-      FROM "NotificationEvent"
-      WHERE status = 'PENDING'
-        AND (nextAttemptAt IS NULL OR nextAttemptAt <= $1)
-        AND (lockedUntil IS NULL OR lockedUntil <= $1)
-      ORDER BY createdAt ASC
-      FOR UPDATE SKIP LOCKED
-      LIMIT 50
-    `, now);
+      WITH claimed AS (
+        SELECT id
+        FROM "NotificationEvent"
+        WHERE status = 'PENDING'
+          AND (nextAttemptAt IS NULL OR nextAttemptAt <= $1)
+          AND (lockedUntil IS NULL OR lockedUntil <= $1)
+        ORDER BY createdAt ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 50
+      )
+      UPDATE "NotificationEvent"
+      SET status = 'PROCESSING',
+          lockedAt = $2,
+          lockedBy = $3,
+          lockedUntil = $4
+      FROM claimed
+      WHERE "NotificationEvent".id = claimed.id
+      RETURNING "NotificationEvent".id,
+                "NotificationEvent".eventId,
+                "NotificationEvent".type,
+                "NotificationEvent".orderId,
+                "NotificationEvent".numericId,
+                "NotificationEvent".payload,
+                "NotificationEvent".status,
+                "NotificationEvent".attempts,
+                "NotificationEvent".maxAttempts,
+                "NotificationEvent".lastError
+    `, now, new Date(), this.instanceId, new Date(Date.now() + LOCK_TTL_MS));
 
     if (!claimed || claimed.length === 0) {
       return { processed: 0, sent: 0, failed: 0, dead: 0, skipped: 0 };
-    }
-
-    // Establecer bloqueo en los eventos reclamados.
-    const lockedUntil = new Date(Date.now() + LOCK_TTL_MS);
-    for (const event of claimed) {
-      await this.prisma.notificationEvent.update({
-        where: { id: event.id },
-        data: {
-          status: 'PROCESSING',
-          lockedAt: new Date(),
-          lockedBy: this.instanceId,
-          lockedUntil,
-        },
-      });
     }
 
     let sent = 0;
@@ -292,7 +301,7 @@ export class PushNotificationService
 
     for (const event of claimed) {
       try {
-        // Verificar que todavía poseemos el lock (otra instancia no lo robó).
+        // Verificar que todavía poseemos el lock antes de modificar el evento.
         const current = await this.prisma.notificationEvent.findUnique({
           where: { id: event.id },
           select: { lockedBy: true, lockedUntil: true },
@@ -303,7 +312,7 @@ export class PushNotificationService
           current.lockedBy !== this.instanceId ||
           (current.lockedUntil && current.lockedUntil <= now)
         ) {
-          // Otro instancia se hizo con el lock o expiró: saltar.
+          // Otro instancia se hizo con el lock o expiró: saltar sin modificar.
           this.logger.debug(
             `Evento ${event.eventId} ya no está bajo nuestro lock, saltando`,
           );
@@ -313,7 +322,8 @@ export class PushNotificationService
         const devices = await this.deviceService.findAdminDevices();
 
         if (devices.length === 0) {
-          // No hay dispositivos registrados: marcar como SKIPPED (no es fallo ni enviado).
+          // No hay dispositivos registrados: marcar como SKIPPED
+          // (no es fallo ni enviado; el evento queda resuelto).
           await this.prisma.notificationEvent.update({
             where: { id: event.id },
             data: {
@@ -339,9 +349,10 @@ export class PushNotificationService
           ),
         );
 
-        // Separar dispositivos por resultado: solo eliminar tokens UNREGISTERED.
+        // Separar dispositivos por resultado.
         const tokensToDelete: string[] = [];
         let anySuccess = false;
+        let anyRealFailure = false;
         let maxRetryAfter: number | undefined;
 
         for (let i = 0; i < results.length; i++) {
@@ -349,6 +360,9 @@ export class PushNotificationService
           const device = devices[i];
           if (result.success) {
             anySuccess = true;
+          } else if (!result.invalidToken) {
+            // Solo fallos reales (no UNREGISTERED) cuentan para reintento.
+            anyRealFailure = true;
           }
           if (result.invalidToken && device.token) {
             tokensToDelete.push(device.token);
@@ -375,7 +389,8 @@ export class PushNotificationService
         const nextAttempts = (event.attempts ?? 0) + 1;
         const maxAttempts = event.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 
-        if (anySuccess) {
+        if (anySuccess && !anyRealFailure) {
+          // Todos los dispositivos recibieron la notificación.
           await this.prisma.notificationEvent.update({
             where: { id: event.id },
             data: {
@@ -387,8 +402,30 @@ export class PushNotificationService
             },
           });
           sent++;
+        } else if (anySuccess && anyRealFailure) {
+          // Entrega parcial: al menos un dispositivo recibió, otros fallaron.
+          // Queda como PENDING para reintentar solo con los que fallaron
+          // (los UNREGISTERED ya se eliminaron arriba).
+          await this.prisma.notificationEvent.update({
+            where: { id: event.id },
+            data: {
+              status: 'PENDING',
+              attempts: nextAttempts,
+              lastError:
+                'Entrega parcial: algunos dispositivos fallaron' +
+                (maxRetryAfter ? ` (retry-after ${maxRetryAfter}s)` : ''),
+              nextAttemptAt: this.calculateNextAttemptAt(
+                nextAttempts,
+                maxRetryAfter,
+              ),
+              lockedAt: null,
+              lockedBy: null,
+              lockedUntil: null,
+            },
+          });
+          failed++;
         } else if (nextAttempts >= maxAttempts) {
-          // Se agotaron los intentos: marcar como DEAD para no reprocesar más.
+          // Ningún dispositivo recibió y se agotaron los intentos.
           await this.prisma.notificationEvent.update({
             where: { id: event.id },
             data: {
@@ -405,8 +442,7 @@ export class PushNotificationService
           });
           dead++;
         } else {
-          // Reintentable: queda como PENDING con attempts incrementado
-          // y nextAttemptAt calculado con backoff exponencial.
+          // Ningún dispositivo recibió, quedan intentos: reintentar con backoff.
           await this.prisma.notificationEvent.update({
             where: { id: event.id },
             data: {

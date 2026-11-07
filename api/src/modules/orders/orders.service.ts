@@ -267,27 +267,24 @@ export class OrdersService {
 
         // Evento OUTBOX ORDER_CREATED dentro de la misma transaccion que
         // crea el pedido. Identificador deterministico basado en el ID del
-        // pedido para evitar duplicados. Si falla la creacion del evento
-        // (p. ej. Firebase no disponible), no se interrumpe el checkout:
-        // el evento se reintentara por el worker de forma asincronica.
-        try {
-          await this.pushNotifications.createEvent(
-            tx,
-            `order-created-${created.id}`,
-            'ORDER_CREATED',
-            created.id,
-            created.numericId,
-            {
-              orderId: created.id,
-              numericId: created.numericId,
-              targetStatus: 'PENDING',
-            },
-          );
-        } catch (err) {
-          this.logger.error(
-            `No se pudo crear evento OUTBOX ORDER_CREATED para ${created.id}: ${(err as Error).message}`,
-          );
-        }
+        // pedido para evitar duplicados.
+        //
+        // Si la creacion del evento falla, el checkout NO debe confirmarse:
+        // un pedido sin su evento de notificacion es un evento huérfano que
+        // nunca llegaría al admin. Se deja propagar la excepción para que
+        // la transacción Prisma haga rollback completo.
+        await this.pushNotifications.createEvent(
+          tx,
+          `order-created-${created.id}`,
+          'ORDER_CREATED',
+          created.id,
+          created.numericId,
+          {
+            orderId: created.id,
+            numericId: created.numericId,
+            targetStatus: 'PENDING',
+          },
+        );
 
         return created;
       });

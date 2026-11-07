@@ -678,14 +678,12 @@ describe('OrdersService', () => {
       expect(eventIds.filter((id: string) => id === 'order-created-ord-1').length).toBe(2);
     });
 
-    it('Firebase errores no interrumpen el checkout (createEvent falla silenciosamente)', async () => {
+    it('Firebase errores fallan el checkout (createEvent no se oculta)', async () => {
       const pushSvc = moduleRef.get(PushNotificationService);
       (pushSvc.createEvent as jest.Mock).mockRejectedValue(new Error('DB error'));
 
-      await expect(service.checkout(user.id, dto)).resolves.toBeDefined();
-
-      // El checkout debe completarse incluso si el evento de notificacion falla.
-      expect(txMock.order.create).toHaveBeenCalled();
+      // El checkout debe fallar: no se confirma un pedido sin su evento OUTBOX.
+      await expect(service.checkout(user.id, dto)).rejects.toThrow('DB error');
     });
   });
 });
