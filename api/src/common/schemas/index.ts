@@ -13,6 +13,9 @@ export { updateCategorySchema } from './categories/update-category.schema';
 export { checkoutSchema } from './orders/checkout.schema';
 export { updateOrderStatusSchema } from './orders/update-order-status.schema';
 
+export { registerPushDeviceSchema } from './push/register-push-device.schema';
+export type { RegisterPushDeviceDto } from './push/register-push-device.schema';
+
 export { addToCartSchema } from './cart/add-to-cart.schema';
 export { updateCartItemSchema } from './cart/update-cart-item.schema';
 

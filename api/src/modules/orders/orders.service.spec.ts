@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
 import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
+import { PushNotificationService } from '../push-notification/push-notification.service';
 import type { CheckoutDto } from './dto/checkout.dto';
 
 /**
@@ -23,6 +24,7 @@ type CheckoutRes = {
 
 describe('OrdersService', () => {
   let service: OrdersService;
+  let moduleRef: TestingModule;
 
   // Mocks a nivel de modulo, no de test: se inyectan por `useValue` para no
   // tener que castear el servicio a `any` y llegar a sus dependencias privadas.
@@ -49,6 +51,9 @@ describe('OrdersService', () => {
     },
     cartItem: {
       deleteMany: jest.fn(),
+    },
+    notificationEvent: {
+      create: jest.fn(),
     },
   };
 
@@ -83,7 +88,7 @@ describe('OrdersService', () => {
     txMock.product.updateMany.mockResolvedValue({ count: 1 });
     txMock.product.update.mockResolvedValue({});
     txMock.order.create.mockResolvedValue({ id: 'ord-1', status: 'PENDING' });
-    txMock.order.update.mockResolvedValue({ status: 'CANCELLED' });
+    txMock.order.update.mockResolvedValue({ status: 'PAID', numericId: 42 });
     txMock.cartItem.deleteMany.mockResolvedValue({ count: 1 });
 
     for (const fn of Object.values(mailMocks)) {
@@ -105,7 +110,7 @@ describe('OrdersService', () => {
     });
     dropiCancelOrder.mockResolvedValue({ success: true });
 
-    const module: TestingModule = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       providers: [
         OrdersService,
         {
@@ -145,10 +150,17 @@ describe('OrdersService', () => {
             invalidate: jest.fn().mockResolvedValue(undefined),
           },
         },
+        {
+          provide: PushNotificationService,
+          useValue: {
+            createEvent: jest.fn().mockResolvedValue(undefined),
+            createEventStandalone: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
-    service = module.get<OrdersService>(OrdersService);
+    service = moduleRef.get<OrdersService>(OrdersService);
   });
 
   it('should be defined', () => {
@@ -272,7 +284,7 @@ describe('OrdersService', () => {
       const res = (await service.checkout(user.id, dto)) as CheckoutRes;
 
       expect(res.status).toBe('PAID');
-      expect(orderUpdate).toHaveBeenCalledWith(
+      expect(txMock.order.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { status: 'PAID' } }),
       );
       // El pedido si sale de PENDING, que era el error original.
@@ -297,6 +309,7 @@ describe('OrdersService', () => {
         ],
         rechazo: true,
       });
+      txMock.order.update.mockResolvedValue({ status: 'CANCELLED', numericId: 42 });
 
       const res = (await service.checkout(user.id, dto)) as CheckoutRes;
 
@@ -591,6 +604,86 @@ describe('OrdersService', () => {
           }) as unknown,
         }),
       );
+    });
+  });
+
+  describe('checkout: evento OUTBOX ORDER_CREATED atomico', () => {
+    const user = { id: 'user-1', name: 'Ana', email: 'ana@test.com' };
+    const producto = {
+      id: 'prod-1',
+      name: 'Reloj',
+      price: 100000,
+      stock: 5,
+      active: true,
+      dropiProductId: null,
+    };
+
+    const dto: CheckoutDto = {
+      shippingName: 'Ana Ruiz',
+      shippingPhone: '3001234567',
+      shippingAddress: 'Calle 1 #2-3',
+      shippingCity: 'Bogota',
+      shippingState: 'Cundinamarca',
+      shippingEmail: 'ana@test.com',
+    };
+
+    beforeEach(() => {
+      userFindUnique.mockResolvedValue(user);
+      cartFindUnique.mockResolvedValue({
+        id: 'cart-1',
+        userId: user.id,
+        items: [{ id: 'ci-1', productId: 'prod-1', quantity: 1, product: producto }],
+      });
+      txMock.product.findMany.mockResolvedValue([producto]);
+      txMock.order.create.mockResolvedValue({ id: 'ord-1', status: 'PENDING', numericId: 42 });
+      txMock.product.updateMany.mockResolvedValue({ count: 1 });
+      orderFindFirst.mockResolvedValue(null);
+      orderFindUnique.mockResolvedValue(null);
+      dropiCreateOrder.mockResolvedValue({
+        success: null,
+        message: 'Sin Dropi',
+        results: [],
+        orderId: null,
+        carrier: null,
+        rechazo: false,
+      });
+      trackingUpsert.mockResolvedValue({});
+    });
+
+    it('crea el evento ORDER_CREATED dentro de la transaccion del pedido', async () => {
+      const pushSvc = moduleRef.get(PushNotificationService);
+      await service.checkout(user.id, dto);
+
+      expect(pushSvc.createEvent).toHaveBeenCalledWith(
+        expect.anything(), // tx
+        'order-created-ord-1',
+        'ORDER_CREATED',
+        'ord-1',
+        42,
+        expect.objectContaining({
+          orderId: 'ord-1',
+          numericId: 42,
+          targetStatus: 'PENDING',
+        }),
+      );
+    });
+
+    it('usa un identificador deterministico para ORDER_CREATED (deduplicacion)', async () => {
+      await service.checkout(user.id, dto);
+      await service.checkout(user.id, dto);
+
+      const pushSvc = moduleRef.get(PushNotificationService);
+      const createCalls = (pushSvc.createEvent as jest.Mock).mock.calls;
+      const eventIds = createCalls.map((c: any) => c[1]);
+      expect(eventIds.filter((id: string) => id === 'order-created-ord-1').length).toBe(2);
+    });
+
+    it('Firebase errores fallan el checkout (createEvent no se oculta)', async () => {
+      const pushSvc = moduleRef.get(PushNotificationService);
+      (pushSvc.createEvent as jest.Mock).mockRejectedValue(new Error('DB error'));
+
+      // El checkout debe fallar: no se confirma un pedido sin su evento OUTBOX.
+      await expect(service.checkout(user.id, dto)).rejects.toThrow('DB error');
     });
   });
 });

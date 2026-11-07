@@ -568,6 +568,25 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
-    if (this.client) await this.client.quit();
+    const client = this.client;
+    if (!client) return;
+
+    // `lazyConnect` deja el cliente en estado `wait` si nunca se uso. En ese
+    // estado `quit()` rechaza con "Stream isn't writeable" y, al propagarse,
+    // Nest aborta el cierre del resto de modulos (dejando timers y pools
+    // abiertos). Cerrar el socket directamente es suficiente y no requiere
+    // handshake.
+    if (client.status === 'wait' || client.status === 'end') {
+      client.disconnect();
+      return;
+    }
+
+    try {
+      await client.quit();
+    } catch {
+      // Si la conexion esta caida, QUIT no puede escribirse; forzar el cierre
+      // evita que el apagado quede bloqueado esperando reconexion.
+      client.disconnect();
+    }
   }
 }
