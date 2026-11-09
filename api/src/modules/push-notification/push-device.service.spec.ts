@@ -1,4 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PushDeviceService } from './push-device.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -6,12 +8,20 @@ describe('PushDeviceService', () => {
   let service: PushDeviceService;
   let prisma: PrismaService;
 
-  const pushDeviceUpsert = jest.fn();
+  const pushDeviceCreate = jest.fn();
+  const pushDeviceUpdate = jest.fn();
   const pushDeviceFindFirst = jest.fn();
   const pushDeviceDelete = jest.fn();
   const pushDeviceFindUnique = jest.fn();
   const pushDeviceFindMany = jest.fn();
   const pushDeviceDeleteMany = jest.fn();
+
+  function prismaKnownError(code: string) {
+    return new Prisma.PrismaClientKnownRequestError(
+      'Prisma test error',
+      { code, clientVersion: '6.19.3' },
+    );
+  }
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -23,7 +33,8 @@ describe('PushDeviceService', () => {
           provide: PrismaService,
           useValue: {
             pushDevice: {
-              upsert: pushDeviceUpsert,
+              create: pushDeviceCreate,
+              update: pushDeviceUpdate,
               findFirst: pushDeviceFindFirst,
               delete: pushDeviceDelete,
               findUnique: pushDeviceFindUnique,
@@ -44,8 +55,9 @@ describe('PushDeviceService', () => {
   });
 
   describe('registerOrUpdate', () => {
-    it('crea un nuevo dispositivo cuando el token no existe', async () => {
-      pushDeviceUpsert.mockResolvedValue({
+    it('crea un dispositivo cuando el token todavía no existe', async () => {
+      pushDeviceFindUnique.mockResolvedValueOnce(null);
+      pushDeviceCreate.mockResolvedValue({
         id: 'dev-1',
         userId: 'user-1',
         token: 'fcm-token-123',
@@ -58,19 +70,18 @@ describe('PushDeviceService', () => {
         'android',
       );
 
-      expect(pushDeviceUpsert).toHaveBeenCalledWith({
+      expect(pushDeviceFindUnique).toHaveBeenCalledWith({
         where: { token: 'fcm-token-123' },
-        update: {
-          userId: 'user-1',
-          platform: 'android',
-          updatedAt: expect.any(Date),
-        },
-        create: {
+        select: { id: true, userId: true },
+      });
+      expect(pushDeviceCreate).toHaveBeenCalledWith({
+        data: {
           userId: 'user-1',
           token: 'fcm-token-123',
           platform: 'android',
         },
       });
+      expect(pushDeviceUpdate).not.toHaveBeenCalled();
       expect(result).toEqual({
         id: 'dev-1',
         userId: 'user-1',
@@ -79,8 +90,12 @@ describe('PushDeviceService', () => {
       });
     });
 
-    it('actualiza el dispositivo existente sin duplicar', async () => {
-      pushDeviceUpsert.mockResolvedValue({
+    it('actualiza la plataforma si el token ya pertenece al mismo usuario', async () => {
+      pushDeviceFindUnique.mockResolvedValueOnce({
+        id: 'dev-1',
+        userId: 'user-1',
+      });
+      pushDeviceUpdate.mockResolvedValue({
         id: 'dev-1',
         userId: 'user-1',
         token: 'fcm-token-123',
@@ -89,12 +104,83 @@ describe('PushDeviceService', () => {
 
       await service.registerOrUpdate('user-1', 'fcm-token-123', 'ios');
 
-      // El upsert usa `where: { token }`, así que nunca duplica por token.
-      expect(pushDeviceUpsert).toHaveBeenCalledTimes(1);
-      expect(pushDeviceUpsert).toHaveBeenCalledWith({
-        where: { token: 'fcm-token-123' },
-        update: expect.objectContaining({ platform: 'ios', userId: 'user-1' }),
-        create: expect.objectContaining({ platform: 'ios', userId: 'user-1' }),
+      expect(pushDeviceUpdate).toHaveBeenCalledWith({
+        where: { id: 'dev-1', userId: 'user-1' },
+        data: {
+          platform: 'ios',
+          updatedAt: expect.any(Date),
+        },
+      });
+      expect(pushDeviceCreate).not.toHaveBeenCalled();
+    });
+
+    it('rechaza un token que ya pertenece a otro usuario', async () => {
+      pushDeviceFindUnique.mockResolvedValueOnce({
+        id: 'dev-1',
+        userId: 'user-2',
+      });
+
+      await expect(
+        service.registerOrUpdate('user-1', 'fcm-token-123', 'ios'),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(pushDeviceCreate).not.toHaveBeenCalled();
+      expect(pushDeviceUpdate).not.toHaveBeenCalled();
+    });
+
+    it('resuelve una carrera de INSERT sin reasignar un token a otro usuario', async () => {
+      pushDeviceFindUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'dev-1', userId: 'user-2' });
+      pushDeviceCreate.mockRejectedValue(prismaKnownError('P2002'));
+
+      await expect(
+        service.registerOrUpdate('user-1', 'fcm-token-123', 'android'),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(pushDeviceCreate).toHaveBeenCalledTimes(1);
+      expect(pushDeviceUpdate).not.toHaveBeenCalled();
+    });
+
+    it('permite completar el registro si la carrera UNIQUE la ganó el mismo usuario', async () => {
+      pushDeviceFindUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'dev-1', userId: 'user-1' });
+      pushDeviceCreate.mockRejectedValue(prismaKnownError('P2002'));
+      pushDeviceUpdate.mockResolvedValue({
+        id: 'dev-1',
+        userId: 'user-1',
+        token: 'fcm-token-123',
+        platform: 'ios',
+      });
+
+      await service.registerOrUpdate('user-1', 'fcm-token-123', 'ios');
+
+      expect(pushDeviceUpdate).toHaveBeenCalledWith({
+        where: { id: 'dev-1', userId: 'user-1' },
+        data: {
+          platform: 'ios',
+          updatedAt: expect.any(Date),
+        },
+      });
+    });
+
+    it('rechaza el cambio si el dueño cambia entre la lectura y la actualización', async () => {
+      pushDeviceFindUnique
+        .mockResolvedValueOnce({ id: 'dev-1', userId: 'user-1' })
+        .mockResolvedValueOnce({ userId: 'user-2' });
+      pushDeviceUpdate.mockRejectedValue(prismaKnownError('P2025'));
+
+      await expect(
+        service.registerOrUpdate('user-1', 'fcm-token-123', 'android'),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(pushDeviceUpdate).toHaveBeenCalledWith({
+        where: { id: 'dev-1', userId: 'user-1' },
+        data: {
+          platform: 'android',
+          updatedAt: expect.any(Date),
+        },
       });
     });
   });
