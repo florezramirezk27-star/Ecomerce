@@ -11,6 +11,7 @@ import { CatalogCacheService } from '../../common/cache/catalog-cache.service';
 import { Prisma, OrderStatus } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
 import { DropiService } from '../dropi/dropi.service';
+import { PushNotificationService } from '../push-notification/push-notification.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import {
   effectiveStock,
@@ -94,6 +95,7 @@ export class OrdersService {
     private readonly mailService: MailService,
     private readonly dropiService: DropiService,
     private readonly cache: CatalogCacheService,
+    private readonly pushNotifications: PushNotificationService,
   ) {}
 
   async checkout(userId: string | null, dto: CheckoutDto) {
@@ -262,6 +264,27 @@ export class OrdersService {
             },
           });
         }
+
+        // Evento OUTBOX ORDER_CREATED dentro de la misma transaccion que
+        // crea el pedido. Identificador deterministico basado en el ID del
+        // pedido para evitar duplicados.
+        //
+        // Si la creacion del evento falla, el checkout NO debe confirmarse:
+        // un pedido sin su evento de notificacion es un evento huérfano que
+        // nunca llegaría al admin. Se deja propagar la excepción para que
+        // la transacción Prisma haga rollback completo.
+        await this.pushNotifications.createEvent(
+          tx,
+          `order-created-${created.id}`,
+          'ORDER_CREATED',
+          created.id,
+          created.numericId,
+          {
+            orderId: created.id,
+            numericId: created.numericId,
+            targetStatus: 'PENDING',
+          },
+        );
 
         return created;
       });
@@ -625,7 +648,7 @@ export class OrdersService {
   ): Promise<OrderStatus> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      select: { status: true },
+      select: { status: true, numericId: true },
     });
 
     if (!order) {
@@ -636,12 +659,28 @@ export class OrdersService {
     if (dropiResult.success === true) {
       if (order.status !== OrderStatus.PENDING) return order.status;
 
-      const updated = await this.prisma.order.update({
-        where: { id: orderId },
-        data: { status: OrderStatus.PAID },
-        select: { status: true },
+      const updated = await this.prisma.$transaction(async (tx) => {
+        const updatedOrder = await tx.order.update({
+          where: { id: orderId },
+          data: { status: OrderStatus.PAID },
+          select: { status: true, numericId: true },
+        });
+        await this.pushNotifications.createEvent(
+          tx,
+          `order-status-changed-${orderId}-paid`,
+          'ORDER_STATUS_CHANGED',
+          orderId,
+          updatedOrder.numericId || 0,
+          {
+            orderId,
+            numericId: updatedOrder.numericId || 0,
+            targetStatus: 'PAID',
+          },
+        );
+        return updatedOrder;
       });
       this.logger.log(`Pedido ${orderId}: Dropi lo aceptó → Confirmado`);
+
       return updated.status;
     }
 
@@ -1224,7 +1263,7 @@ export class OrdersService {
           });
         }
 
-        return tx.order.update({
+        const updated = await tx.order.update({
           where: { id },
           data: {
             status: status,
@@ -1238,21 +1277,57 @@ export class OrdersService {
             },
           },
         });
+
+        // Evento OUTBOX ORDER_CANCELLED dentro de la misma transaccion.
+        await this.pushNotifications.createEvent(
+          tx,
+          `order-cancelled-${id}-cancelled`,
+          'ORDER_CANCELLED',
+          id,
+          order.numericId,
+          {
+            orderId: id,
+            numericId: order.numericId,
+            targetStatus: 'CANCELLED',
+          },
+        );
+
+        return updated;
       });
     } else {
-      updatedOrder = await this.prisma.order.update({
-        where: { id },
-        data: {
-          status: status as OrderStatus,
-        },
-        include: {
-          user: true,
-          items: {
-            include: {
-              product: true,
+      updatedOrder = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.order.update({
+          where: { id },
+          data: {
+            status: status as OrderStatus,
+          },
+          include: {
+            user: true,
+            items: {
+              include: {
+                product: true,
+              },
             },
           },
-        },
+        });
+
+        // Evento OUTBOX ORDER_STATUS_CHANGED dentro de la misma transaccion.
+        // Identificador deterministico basado en pedido y estado destino
+        // para evitar duplicados si la transición se procesa más de una vez.
+        await this.pushNotifications.createEvent(
+          tx,
+          `order-status-changed-${id}-${status.toLowerCase()}`,
+          'ORDER_STATUS_CHANGED',
+          id,
+          order.numericId,
+          {
+            orderId: id,
+            numericId: order.numericId,
+            targetStatus: status,
+          },
+        );
+
+        return updated;
       });
     }
 
@@ -1331,6 +1406,10 @@ export class OrdersService {
           );
       }
     }
+
+    // Notificacion de cambio de estado o cancelacion al administrador.
+    // El evento OUTBOX ya se creó dentro de la transacción de actualización de
+    // estado (arriba), con identificador determinístico para evitar duplicados.
 
     try {
       await this.cache.invalidate('product');
