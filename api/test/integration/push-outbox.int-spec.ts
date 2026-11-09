@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { PushNotificationService } from '../../src/modules/push-notification/push-notification.service';
 import { PushDeviceService } from '../../src/modules/push-notification/push-device.service';
@@ -77,6 +78,57 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
     resolve = done;
   });
   return { promise, resolve };
+}
+
+/**
+ * Acceso controlado a métodos privados del worker para probar las garantías
+ * de propiedad del lock sin depender de tiempos ni de llamadas a FCM.
+ */
+type PushNotificationInternals = {
+  instanceId: string;
+  claimPendingEvents: (now: Date) => Promise<
+    Array<{
+      id: string;
+      eventId: string;
+      attempts: number;
+      maxAttempts: number;
+    }>
+  >;
+  ensureDeliveries: (
+    eventId: string,
+    devices: Awaited<ReturnType<PushDeviceService['findAdminDevices']>>,
+  ) => Promise<boolean>;
+  updateDeliveryIfOwned: (
+    eventId: string,
+    deliveryId: string,
+    data: Prisma.NotificationDeliveryUpdateManyMutationInput,
+  ) => Promise<'UPDATED' | 'NOT_PENDING' | 'LOCK_LOST'>;
+};
+
+function internals(
+  service: PushNotificationService,
+): PushNotificationInternals {
+  return service as unknown as PushNotificationInternals;
+}
+
+/**
+ * Fuerza un lock vigente de otra instancia sobre el evento. Simula que B
+ * recuperó el evento después de que A perdiera el lease.
+ */
+async function forceLockOwnership(
+  prisma: PrismaService,
+  eventId: string,
+  lockedBy: string,
+) {
+  return prisma.notificationEvent.update({
+    where: { id: eventId },
+    data: {
+      status: 'PROCESSING',
+      lockedAt: new Date(),
+      lockedBy,
+      lockedUntil: new Date(Date.now() + 5 * 60 * 1000),
+    },
+  });
 }
 
 describe('Push outbox contra PostgreSQL real', () => {
@@ -682,5 +734,322 @@ describe('Push outbox contra PostgreSQL real', () => {
     const third = await service.processPendingEvents();
     expect(third.processed).toBe(0);
     expect(sends).toBe(2);
+  });
+
+  it('Prueba K: una instancia antigua no puede actualizar una entrega', async () => {
+    const device = await createDevice(prismaA, 'token-k');
+    const serviceA = makeService(prismaA);
+    const serviceB = makeService(prismaB);
+    const apiA = internals(serviceA);
+    const instanceB = internals(serviceB).instanceId;
+
+    const { event } = await createOrderAndEvent(
+      serviceA,
+      prismaA,
+      'order-created-k',
+    );
+
+    // A reclama el evento y crea la entrega mientras es propietaria.
+    const claimed = await apiA.claimPendingEvents(new Date());
+    expect(claimed.map((item) => item.id)).toContain(event.id);
+
+    const deviceServiceA = new PushDeviceService(prismaA);
+    const devices = await deviceServiceA.findAdminDevices();
+    await expect(apiA.ensureDeliveries(event.id, devices)).resolves.toBe(true);
+
+    const delivery = await prismaA.notificationDelivery.findFirstOrThrow({
+      where: { notificationEventId: event.id, deviceId: device.id },
+    });
+    expect(delivery.status).toBe('PENDING');
+
+    // B obtiene un nuevo lock válido: A ya no es propietaria.
+    const bLock = await forceLockOwnership(prismaB, event.id, instanceB);
+    expect(bLock.lockedBy).toBe(instanceB);
+
+    const outcome = await apiA.updateDeliveryIfOwned(event.id, delivery.id, {
+      status: 'SENT',
+      attempts: 1,
+      lastAttemptAt: new Date(),
+      deliveredAt: new Date(),
+      nextAttemptAt: null,
+    });
+    expect(outcome).toBe('LOCK_LOST');
+
+    // La entrega no cambió.
+    const savedDelivery = await prismaB.notificationDelivery.findUniqueOrThrow({
+      where: { id: delivery.id },
+    });
+    expect(savedDelivery.status).toBe('PENDING');
+    expect(savedDelivery.attempts).toBe(0);
+    expect(savedDelivery.deliveredAt).toBeNull();
+
+    // B sigue siendo la propietaria del evento y su lock está intacto.
+    const savedEvent = await prismaB.notificationEvent.findUniqueOrThrow({
+      where: { id: event.id },
+    });
+    expect(savedEvent.status).toBe('PROCESSING');
+    expect(savedEvent.lockedBy).toBe(instanceB);
+    expect(savedEvent.lockedUntil?.getTime()).toBe(
+      bLock.lockedUntil?.getTime(),
+    );
+  });
+
+  it('Prueba L: una instancia antigua no puede crear entregas', async () => {
+    await createDevice(prismaA, 'token-l');
+    const serviceA = makeService(prismaA);
+    const serviceB = makeService(prismaB);
+    const apiA = internals(serviceA);
+    const instanceB = internals(serviceB).instanceId;
+
+    const { event } = await createOrderAndEvent(
+      serviceA,
+      prismaA,
+      'order-created-l',
+    );
+
+    const claimed = await apiA.claimPendingEvents(new Date());
+    expect(claimed.map((item) => item.id)).toContain(event.id);
+
+    // B pasa a ser la propietaria antes de que A cree las entregas.
+    const bLock = await forceLockOwnership(prismaB, event.id, instanceB);
+
+    const deviceServiceA = new PushDeviceService(prismaA);
+    const devices = await deviceServiceA.findAdminDevices();
+    await expect(apiA.ensureDeliveries(event.id, devices)).resolves.toBe(false);
+
+    expect(
+      await prismaB.notificationDelivery.count({
+        where: { notificationEventId: event.id },
+      }),
+    ).toBe(0);
+
+    const savedEvent = await prismaB.notificationEvent.findUniqueOrThrow({
+      where: { id: event.id },
+    });
+    expect(savedEvent.status).toBe('PROCESSING');
+    expect(savedEvent.lockedBy).toBe(instanceB);
+    expect(savedEvent.lockedUntil?.getTime()).toBe(
+      bLock.lockedUntil?.getTime(),
+    );
+  });
+
+  it('Prueba M: perder el lock durante un envío no registra el resultado', async () => {
+    await createDevice(prismaA, 'token-m');
+    const serviceB = makeService(prismaB);
+    const instanceB = internals(serviceB).instanceId;
+
+    const sendStarted = deferred();
+    const releaseSend = deferred();
+
+    const serviceA = makeService(prismaA, async () => {
+      sendStarted.resolve();
+      await releaseSend.promise;
+      return success();
+    });
+
+    const { event } = await createOrderAndEvent(
+      serviceA,
+      prismaA,
+      'order-created-m',
+    );
+
+    const processing = serviceA.processPendingEvents();
+    await sendStarted.promise;
+
+    // B se apropia del evento mientras A espera la respuesta de Firebase.
+    const bLock = await forceLockOwnership(prismaB, event.id, instanceB);
+
+    releaseSend.resolve();
+    const result = await processing;
+
+    expect(result.sent).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(result.dead).toBe(0);
+    expect(result.skipped).toBe(0);
+
+    // A no escribió el resultado de la entrega.
+    const delivery = await prismaB.notificationDelivery.findFirstOrThrow({
+      where: { notificationEventId: event.id },
+    });
+    expect(delivery.status).toBe('PENDING');
+    expect(delivery.attempts).toBe(0);
+    expect(delivery.deliveredAt).toBeNull();
+
+    // A tampoco finalizó el evento ni tocó el lock de B.
+    const savedEvent = await prismaB.notificationEvent.findUniqueOrThrow({
+      where: { id: event.id },
+    });
+    expect(savedEvent.status).toBe('PROCESSING');
+    expect(savedEvent.lockedBy).toBe(instanceB);
+    expect(savedEvent.attempts).toBe(0);
+    expect(savedEvent.lockedUntil?.getTime()).toBe(
+      bLock.lockedUntil?.getTime(),
+    );
+  });
+
+  it('Prueba N: una entrega resuelta concurrentemente no vuelve a enviarse', async () => {
+    const device = await createDevice(prismaA, 'token-n');
+    let sendsB = 0;
+    const serviceA = makeService(prismaA);
+    const serviceB = makeService(prismaB, () => {
+      sendsB++;
+      return success();
+    });
+    const apiA = internals(serviceA);
+    const apiB = internals(serviceB);
+    const instanceB = apiB.instanceId;
+
+    const { event } = await createOrderAndEvent(
+      serviceA,
+      prismaA,
+      'order-created-n',
+    );
+
+    await apiA.claimPendingEvents(new Date());
+    const deviceServiceA = new PushDeviceService(prismaA);
+    const devices = await deviceServiceA.findAdminDevices();
+    await expect(apiA.ensureDeliveries(event.id, devices)).resolves.toBe(true);
+
+    const delivery = await prismaA.notificationDelivery.findFirstOrThrow({
+      where: { notificationEventId: event.id, deviceId: device.id },
+    });
+
+    // A registra SENT.
+    const sentAt = new Date();
+    const outcomeA = await apiA.updateDeliveryIfOwned(event.id, delivery.id, {
+      status: 'SENT',
+      attempts: 1,
+      lastAttemptAt: sentAt,
+      deliveredAt: sentAt,
+      nextAttemptAt: null,
+      lastError: null,
+      firebaseErrorCode: null,
+    });
+    expect(outcomeA).toBe('UPDATED');
+
+    // B obtiene el lock e intenta registrar RETRY sobre la misma entrega.
+    await forceLockOwnership(prismaB, event.id, instanceB);
+    const outcomeB = await apiB.updateDeliveryIfOwned(event.id, delivery.id, {
+      status: 'RETRY',
+      attempts: 2,
+      nextAttemptAt: new Date(Date.now() + 60_000),
+      lastError: 'UNAVAILABLE',
+    });
+    expect(outcomeB).toBe('NOT_PENDING');
+
+    const savedDelivery = await prismaB.notificationDelivery.findUniqueOrThrow({
+      where: { id: delivery.id },
+    });
+    expect(savedDelivery.status).toBe('SENT');
+    expect(savedDelivery.attempts).toBe(1);
+    expect(savedDelivery.deliveredAt?.getTime()).toBe(sentAt.getTime());
+
+    // Aunque el evento vuelva a PENDING, el worker no reenvía una entrega
+    // ya resuelta: solo finaliza el evento como SENT.
+    await prismaB.notificationEvent.update({
+      where: { id: event.id },
+      data: {
+        status: 'PENDING',
+        lockedAt: null,
+        lockedBy: null,
+        lockedUntil: null,
+        nextAttemptAt: new Date(Date.now() - 1000),
+      },
+    });
+
+    const result = await serviceB.processPendingEvents();
+    expect(sendsB).toBe(0);
+    expect(result.processed).toBe(1);
+    expect(result.sent).toBe(1);
+
+    const finalEvent = await prismaB.notificationEvent.findUniqueOrThrow({
+      where: { id: event.id },
+    });
+    expect(finalEvent.status).toBe('SENT');
+    expect(finalEvent.attempts).toBe(1);
+  });
+
+  it('Prueba O: los destinatarios quedan congelados en el primer procesamiento', async () => {
+    const device1 = await createDevice(prismaA, 'token-o-1');
+    const device2 = await createDevice(prismaA, 'token-o-2');
+
+    const calls: string[] = [];
+    let attempts2 = 0;
+
+    const service = makeService(prismaA, (token) => {
+      calls.push(token);
+
+      if (token === 'token-o-2') {
+        attempts2++;
+        if (attempts2 === 1) {
+          return {
+            success: false,
+            invalidToken: false,
+            retryable: true,
+            error: 'UNAVAILABLE',
+            firebaseErrorCode: 'UNAVAILABLE',
+          };
+        }
+      }
+
+      return success();
+    });
+
+    const { event } = await createOrderAndEvent(
+      service,
+      prismaA,
+      'order-created-o',
+    );
+
+    const first = await service.processPendingEvents();
+    expect(first.failed).toBe(1);
+
+    const afterFirst = await prismaA.notificationDelivery.findMany({
+      where: { notificationEventId: event.id },
+    });
+    expect(afterFirst).toHaveLength(2);
+
+    const delivery1 = afterFirst.find(
+      (delivery) => delivery.deviceId === device1.id,
+    );
+    const delivery2 = afterFirst.find(
+      (delivery) => delivery.deviceId === device2.id,
+    );
+    expect(delivery1?.status).toBe('SENT');
+    expect(delivery2?.status).toBe('RETRY');
+
+    // El tercer dispositivo se registra después del primer procesamiento.
+    const device3 = await createDevice(prismaA, 'token-o-3');
+
+    // Simular el paso del backoff del dispositivo pendiente.
+    await prismaA.notificationEvent.update({
+      where: { id: event.id },
+      data: { nextAttemptAt: new Date(Date.now() - 1000) },
+    });
+    await prismaA.notificationDelivery.update({
+      where: { id: delivery2!.id },
+      data: { nextAttemptAt: new Date(Date.now() - 1000) },
+    });
+
+    const second = await service.processPendingEvents();
+    expect(second.sent).toBe(1);
+
+    // Solo el destinatario originalmente pendiente recibe el reintento.
+    expect(calls.filter((token) => token === 'token-o-1')).toHaveLength(1);
+    expect(calls.filter((token) => token === 'token-o-2')).toHaveLength(2);
+    expect(calls.filter((token) => token === 'token-o-3')).toHaveLength(0);
+
+    const finalDeliveries = await prismaA.notificationDelivery.findMany({
+      where: { notificationEventId: event.id },
+    });
+    expect(finalDeliveries).toHaveLength(2);
+    expect(
+      finalDeliveries.some((delivery) => delivery.deviceId === device3.id),
+    ).toBe(false);
+
+    const finalEvent = await prismaA.notificationEvent.findUniqueOrThrow({
+      where: { id: event.id },
+    });
+    expect(finalEvent.status).toBe('SENT');
   });
 });

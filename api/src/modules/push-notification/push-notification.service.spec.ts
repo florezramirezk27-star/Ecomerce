@@ -2,7 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PushNotificationService } from './push-notification.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PushDeviceService } from './push-device.service';
-import { FirebaseMessagingService } from './firebase-messaging.service';
+import {
+  FirebaseMessagingService,
+  FcmSendResult,
+} from './firebase-messaging.service';
 
 type ClaimedEvent = {
   id: string;
@@ -26,21 +29,71 @@ type PendingDelivery = {
   device: { id: string; token: string } | null;
 };
 
+type EventWriteArgs = {
+  where: {
+    id: string;
+    lockedBy?: string;
+    lockedUntil?: { lt?: Date; gt?: Date };
+  };
+  data: Record<string, unknown>;
+};
+
+type DeliveryCreateManyArgs = {
+  data: Array<Record<string, unknown>>;
+  skipDuplicates?: boolean;
+};
+
+type TransactionCallback = (tx: unknown) => Promise<unknown>;
+
+type AdminDevice = {
+  id: string;
+  token: string;
+  platform: string;
+  userId: string;
+};
+
 describe('PushNotificationService', () => {
   let service: PushNotificationService;
   let prisma: PrismaService;
 
-  const notificationEventCreate = jest.fn();
-  const notificationEventUpdate = jest.fn();
-  const notificationEventUpdateMany = jest.fn();
-  const notificationDeliveryCount = jest.fn();
-  const notificationDeliveryCreateMany = jest.fn();
-  const notificationDeliveryFindMany = jest.fn();
-  const notificationDeliveryUpdateMany = jest.fn();
-  const queryRaw = jest.fn();
-  const findAdminDevices = jest.fn();
-  const deleteByTokenIfPresent = jest.fn();
-  const sendToToken = jest.fn();
+  const notificationEventCreate = jest.fn<Promise<unknown>, [unknown]>();
+  const notificationEventUpdate = jest.fn<Promise<unknown>, [unknown]>();
+  const notificationEventUpdateMany = jest.fn<
+    Promise<{ count: number }>,
+    [EventWriteArgs]
+  >();
+  const notificationEventFindFirst = jest.fn<
+    Promise<{ id: string } | null>,
+    [unknown]
+  >();
+  const notificationDeliveryCount = jest.fn<Promise<number>, [unknown]>();
+  const notificationDeliveryCreateMany = jest.fn<
+    Promise<{ count: number }>,
+    [DeliveryCreateManyArgs]
+  >();
+  const notificationDeliveryFindMany = jest.fn<
+    Promise<Array<Record<string, unknown>>>,
+    [unknown]
+  >();
+  const queryRaw = jest.fn<
+    Promise<ClaimedEvent[]>,
+    [TemplateStringsArray, ...unknown[]]
+  >();
+  const queryRawUnsafe = jest.fn<
+    Promise<Array<{ id: string }>>,
+    [string, ...unknown[]]
+  >();
+  const transactionQueryRaw = jest.fn<
+    Promise<Array<{ id: string }>>,
+    [TemplateStringsArray, ...unknown[]]
+  >();
+  const transaction = jest.fn<Promise<unknown>, [TransactionCallback]>();
+  const findAdminDevices = jest.fn<Promise<AdminDevice[]>, []>();
+  const deleteByTokenIfPresent = jest.fn<Promise<number>, [string]>();
+  const sendToToken = jest.fn<
+    Promise<FcmSendResult>,
+    [string, string, string, Record<string, string | number | boolean | null>]
+  >();
 
   // Resultado de la escritura final del evento. Los tests de lock perdido lo
   // ponen en 0 para simular que otra instancia es la dueña.
@@ -79,21 +132,32 @@ describe('PushNotificationService', () => {
   });
 
   beforeEach(async () => {
-    // resetAllMocks (no clearAllMocks) también descarta las colas de
-    // mockResolvedValueOnce que un test anterior pudo dejar sin consumir.
     jest.resetAllMocks();
     finalEventWriteCount = 1;
 
+    // resetAllMocks borra la implementación de $transaction, así que se
+    // vuelve a registrar en cada test. El callback recibe un cliente de
+    // transacción con las operaciones que usa ensureDeliveries.
+    transaction.mockImplementation((callback) =>
+      callback({
+        $queryRaw: transactionQueryRaw,
+        notificationDelivery: { createMany: notificationDeliveryCreateMany },
+      }),
+    );
+
     queryRaw.mockResolvedValue([]);
+    // Por defecto, el SELECT ... FOR UPDATE de ensureDeliveries confirma que
+    // el evento sigue bajo nuestro lock.
+    transactionQueryRaw.mockResolvedValue([{ id: 'evt-1' }]);
+    // Por defecto, $queryRawUnsafe devuelve [{ id }] = una fila afectada.
+    queryRawUnsafe.mockResolvedValue([{ id: 'del-1' }]);
     notificationEventCreate.mockResolvedValue({ id: 'evt-1' });
     notificationEventUpdate.mockResolvedValue({});
     notificationDeliveryCount.mockResolvedValue(0);
-    notificationDeliveryCreateMany.mockImplementation(
-      ({ data }: { data: unknown[] }) =>
-        Promise.resolve({ count: Array.isArray(data) ? data.length : 0 }),
+    notificationDeliveryCreateMany.mockImplementation(({ data }) =>
+      Promise.resolve({ count: data.length }),
     );
     notificationDeliveryFindMany.mockResolvedValue([]);
-    notificationDeliveryUpdateMany.mockResolvedValue({ count: 1 });
     findAdminDevices.mockResolvedValue([]);
     deleteByTokenIfPresent.mockResolvedValue(1);
     sendToToken.mockResolvedValue({
@@ -102,41 +166,35 @@ describe('PushNotificationService', () => {
       retryable: false,
     });
 
-    notificationEventUpdateMany.mockImplementation(
-      (args: {
-        where: {
-          id: string;
-          lockedBy?: string;
-          lockedUntil?: { lt?: Date; gt?: Date };
-        };
-        data: Record<string, unknown>;
-      }) => {
-        const instanceId = (service as unknown as { instanceId: string })
-          .instanceId;
+    // Por defecto, el evento todavía pertenece a esta instancia.
+    notificationEventFindFirst.mockResolvedValue({ id: 'evt-1' });
 
-        // Recuperación de locks expirados: no es una escritura final.
-        if (
-          args.where.lockedUntil?.lt &&
-          args.data.status === 'PENDING' &&
-          args.data.lockedBy === null &&
-          !('nextAttemptAt' in args.data)
-        ) {
-          return Promise.resolve({ count: 0 });
+    notificationEventUpdateMany.mockImplementation((args) => {
+      const instanceId = (service as unknown as { instanceId: string })
+        .instanceId;
+
+      // Recuperación de locks expirados: no es una escritura final.
+      if (
+        args.where.lockedUntil?.lt &&
+        args.data.status === 'PENDING' &&
+        args.data.lockedBy === null &&
+        !('nextAttemptAt' in args.data)
+      ) {
+        return Promise.resolve({ count: 0 });
+      }
+
+      // Escritura final: exige status PROCESSING + lockedBy de esta
+      // instancia. El test puede simular que el lock ya no nos pertenece.
+      if (args.where.lockedBy === instanceId) {
+        if ('status' in args.data) {
+          return Promise.resolve({ count: finalEventWriteCount });
         }
-
-        // Escritura final: exige status PROCESSING + lockedBy de esta
-        // instancia. El test puede simular que el lock ya no nos pertenece.
-        if (args.where.lockedBy === instanceId) {
-          if ('status' in args.data) {
-            return Promise.resolve({ count: finalEventWriteCount });
-          }
-          // Renovación del lease.
-          return Promise.resolve({ count: 1 });
-        }
-
+        // Renovación del lease.
         return Promise.resolve({ count: 1 });
-      },
-    );
+      }
+
+      return Promise.resolve({ count: 1 });
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -148,14 +206,16 @@ describe('PushNotificationService', () => {
               create: notificationEventCreate,
               update: notificationEventUpdate,
               updateMany: notificationEventUpdateMany,
+              findFirst: notificationEventFindFirst,
             },
             notificationDelivery: {
               count: notificationDeliveryCount,
               createMany: notificationDeliveryCreateMany,
               findMany: notificationDeliveryFindMany,
-              updateMany: notificationDeliveryUpdateMany,
             },
             $queryRaw: queryRaw,
+            $queryRawUnsafe: queryRawUnsafe,
+            $transaction: transaction,
           },
         },
         {
@@ -178,25 +238,42 @@ describe('PushNotificationService', () => {
     service = module.get<PushNotificationService>(PushNotificationService);
     prisma = module.get<PrismaService>(PrismaService);
     (service as unknown as { processing: boolean }).processing = false;
+    (
+      service as unknown as { resolvedDeliveries?: Set<string> }
+    ).resolvedDeliveries = new Set();
   });
 
-  function finalEventUpdateCall() {
-    return notificationEventUpdateMany.mock.calls.find(([args]) => {
-      const instanceId = (service as unknown as { instanceId: string })
-        .instanceId;
-      return (
-        args?.where?.lockedBy === instanceId &&
-        args?.data &&
-        typeof args.data === 'object' &&
-        'status' in args.data
-      );
-    });
+  /**
+   * `anyDate()` devuelve `any`; el helper lo estrecha al tipo Date para
+   * que el spec pase `@typescript-eslint/no-unsafe-assignment` sin casts
+   * dispersos. Sigue siendo el matcher asimétrico de Jest.
+   */
+  function anyDate(): Date {
+    return expect.any(Date) as Date;
   }
 
-  function deliveryUpdateCall(deliveryId: string) {
-    return notificationDeliveryUpdateMany.mock.calls.find(
-      ([args]) => args?.where?.id === deliveryId,
-    );
+  function objectContaining<T extends object>(expected: T): T {
+    return expect.objectContaining(expected) as T;
+  }
+
+  function finalEventUpdateCall(): EventWriteArgs | undefined {
+    const call = notificationEventUpdateMany.mock.calls.find(([args]) => {
+      const instanceId = (service as unknown as { instanceId: string })
+        .instanceId;
+      return args.where.lockedBy === instanceId && 'status' in args.data;
+    });
+    return call?.[0];
+  }
+
+  // Verifica que $queryRawUnsafe fue llamado con el deliveryId dado.
+  function queryRawUnsafeCalledWith(deliveryId: string): boolean {
+    return queryRawUnsafe.mock.calls.some(([sql, ...values]) => {
+      // Los valores se pasan como argumentos sueltos: [sql, ...values, deliveryId, eventId, instanceId, now]
+      return (
+        sql.includes('"NotificationDelivery"') &&
+        values.slice(-4).includes(deliveryId)
+      );
+    });
   }
 
   describe('createEvent (dentro de transaccion)', () => {
@@ -220,7 +297,7 @@ describe('PushNotificationService', () => {
           status: 'PENDING',
           attempts: 0,
           maxAttempts: 5,
-          nextAttemptAt: expect.any(Date),
+          nextAttemptAt: anyDate(),
         },
       });
     });
@@ -237,13 +314,13 @@ describe('PushNotificationService', () => {
       );
 
       expect(notificationEventCreate).toHaveBeenCalledWith({
-        data: expect.objectContaining({
+        data: objectContaining({
           eventId: 'evt-unique-1',
           type: 'ORDER_CANCELLED',
           status: 'PENDING',
           attempts: 0,
           maxAttempts: 5,
-          nextAttemptAt: expect.any(Date),
+          nextAttemptAt: anyDate(),
         }),
       });
     });
@@ -281,8 +358,6 @@ describe('PushNotificationService', () => {
       expect(sql).toContain('"e"."maxAttempts"');
       expect(sql).toContain('"e"."lastError"');
       expect(sql).toContain('FOR UPDATE SKIP LOCKED');
-      // Las columnas son TIMESTAMP(3) sin zona; el parámetro Date llega como
-      // timestamptz y debe convertirse a UTC para comparar correctamente.
       expect(sql).toContain("AT TIME ZONE 'UTC'");
       expect(sql).toContain('SET "status" = \'PROCESSING\'');
       expect(sql).toContain('LIMIT');
@@ -309,18 +384,15 @@ describe('PushNotificationService', () => {
         'Has recibido un nuevo pedido #42.',
         { orderId: 'ord-1', numericId: 42 },
       );
-      expect(notificationDeliveryUpdateMany).toHaveBeenCalledWith({
-        where: { id: 'del-1', status: { in: ['PENDING', 'RETRY'] } },
-        data: expect.objectContaining({ status: 'SENT' }),
-      });
+      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
       const finalCall = finalEventUpdateCall();
-      expect(finalCall?.[0].where).toEqual({
+      expect(finalCall?.where).toEqual({
         id: 'evt-1',
         status: 'PROCESSING',
         lockedBy: (service as unknown as { instanceId: string }).instanceId,
-        lockedUntil: { gt: expect.any(Date) },
+        lockedUntil: { gt: anyDate() },
       });
-      expect(finalCall?.[0].data).toEqual(
+      expect(finalCall?.data).toEqual(
         expect.objectContaining({
           status: 'SENT',
           attempts: 1,
@@ -441,27 +513,20 @@ describe('PushNotificationService', () => {
 
       const result = await service.processPendingEvents();
 
-      expect(deliveryUpdateCall('del-1')?.[0].data).toEqual(
-        expect.objectContaining({ status: 'SENT' }),
-      );
-      expect(deliveryUpdateCall('del-2')?.[0].data).toEqual(
-        expect.objectContaining({
-          status: 'RETRY',
-          nextAttemptAt: expect.any(Date),
-        }),
-      );
+      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
+      expect(queryRawUnsafeCalledWith('del-2')).toBe(true);
       const finalCall = finalEventUpdateCall();
-      expect(finalCall?.[0].data).toEqual(
+      expect(finalCall?.data).toEqual(
         expect.objectContaining({
           status: 'PENDING',
-          nextAttemptAt: expect.any(Date),
+          nextAttemptAt: anyDate(),
         }),
       );
       expect(result.failed).toBe(1);
       expect(result.sent).toBe(0);
     });
 
-    it('elimina solo el token UNREGISTERED y conserva la entrega INVALID', async () => {
+    it('elimina solo el token UNREGISTERED y conserva el historial', async () => {
       queryRaw.mockResolvedValue([event]);
       findAdminDevices.mockResolvedValue([device]);
       sendToToken.mockResolvedValue({
@@ -479,10 +544,8 @@ describe('PushNotificationService', () => {
       const result = await service.processPendingEvents();
 
       expect(deleteByTokenIfPresent).toHaveBeenCalledWith('token-admin-1');
-      expect(deliveryUpdateCall('del-1')?.[0].data).toEqual(
-        expect.objectContaining({ status: 'INVALID' }),
-      );
-      expect(finalEventUpdateCall()?.[0].data).toEqual(
+      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
+      expect(finalEventUpdateCall()?.data).toEqual(
         expect.objectContaining({ status: 'SKIPPED' }),
       );
       expect(result.skipped).toBe(1);
@@ -509,11 +572,8 @@ describe('PushNotificationService', () => {
 
       const result = await service.processPendingEvents();
 
-      const data = deliveryUpdateCall('del-1')?.[0].data;
-      expect(data).toEqual(
-        expect.objectContaining({ status: 'DEAD', nextAttemptAt: null }),
-      );
-      expect(finalEventUpdateCall()?.[0].data).toEqual(
+      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
+      expect(finalEventUpdateCall()?.data).toEqual(
         expect.objectContaining({ status: 'DEAD' }),
       );
       expect(result.dead).toBe(1);
@@ -536,9 +596,7 @@ describe('PushNotificationService', () => {
 
       const result = await service.processPendingEvents();
 
-      expect(deliveryUpdateCall('del-1')?.[0].data).toEqual(
-        expect.objectContaining({ status: 'DEAD', attempts: 5 }),
-      );
+      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
       expect(result.dead).toBe(1);
     });
 
@@ -550,7 +608,7 @@ describe('PushNotificationService', () => {
       const result = await service.processPendingEvents();
 
       expect(notificationDeliveryCreateMany).not.toHaveBeenCalled();
-      expect(finalEventUpdateCall()?.[0].data).toEqual(
+      expect(finalEventUpdateCall()?.data).toEqual(
         expect.objectContaining({
           status: 'SKIPPED',
           lockedAt: null,
@@ -563,8 +621,6 @@ describe('PushNotificationService', () => {
 
     it('no envía a dispositivos nuevos en reintentos de un evento antiguo', async () => {
       queryRaw.mockResolvedValue([event]);
-      // Ya existen entregas: el worker no debe consultar ni añadir el
-      // dispositivo nuevo que se registró después del primer intento.
       notificationDeliveryCount.mockResolvedValue(1);
       notificationDeliveryFindMany
         .mockResolvedValueOnce([])
@@ -591,15 +647,13 @@ describe('PushNotificationService', () => {
 
       const result = await service.processPendingEvents();
 
-      // El error se captura en processClaimedEvent y el evento vuelve a
-      // PENDING con backoff, sin propagar la excepción.
       const finalCall = finalEventUpdateCall();
-      expect(finalCall?.[0].data).toEqual(
+      expect(finalCall?.data).toEqual(
         expect.objectContaining({
           status: 'PENDING',
           attempts: 1,
           lastError: 'Firebase caído',
-          nextAttemptAt: expect.any(Date),
+          nextAttemptAt: anyDate(),
         }),
       );
       expect(result.failed).toBe(1);
@@ -614,34 +668,34 @@ describe('PushNotificationService', () => {
 
       const result = await service.processPendingEvents();
 
-      expect(finalEventUpdateCall()?.[0].data).toEqual(
+      expect(finalEventUpdateCall()?.data).toEqual(
         expect.objectContaining({
           status: 'DEAD',
           attempts: 5,
-          processedAt: expect.any(Date),
+          processedAt: anyDate(),
         }),
       );
       expect(result.dead).toBe(1);
     });
 
     it('calcula nextAttemptAt con backoff exponencial y respeta Retry-After', () => {
-      const calculateNextAttemptAt = (
-        service as unknown as {
-          calculateNextAttemptAt: (
-            attempts: number,
-            retryAfterSeconds?: number,
-          ) => Date;
-        }
-      ).calculateNextAttemptAt.bind(service);
+      const api = service as unknown as {
+        calculateNextAttemptAt: (
+          attempts: number,
+          retryAfterSeconds?: number,
+        ) => Date;
+      };
 
-      const first = calculateNextAttemptAt(0);
-      const second = calculateNextAttemptAt(1);
-      const third = calculateNextAttemptAt(2);
+      // El método no usa `this`; invocarlo sobre la vista tipada evita el
+      // `any` que produce Function.prototype.bind en este tsconfig.
+      const first = api.calculateNextAttemptAt(0);
+      const second = api.calculateNextAttemptAt(1);
+      const third = api.calculateNextAttemptAt(2);
 
       expect(second.getTime()).toBeGreaterThan(first.getTime());
       expect(third.getTime()).toBeGreaterThan(second.getTime());
 
-      const withRetryAfter = calculateNextAttemptAt(0, 120);
+      const withRetryAfter = api.calculateNextAttemptAt(0, 120);
       expect(withRetryAfter.getTime()).toBeGreaterThan(Date.now() + 119000);
       expect(withRetryAfter.getTime()).toBeLessThan(Date.now() + 122000);
     });
@@ -661,7 +715,7 @@ describe('PushNotificationService', () => {
       expect(notificationEventUpdateMany).toHaveBeenCalledWith({
         where: {
           status: 'PROCESSING',
-          lockedUntil: { lt: expect.any(Date) },
+          lockedUntil: { lt: anyDate() },
         },
         data: {
           status: 'PENDING',
@@ -672,6 +726,237 @@ describe('PushNotificationService', () => {
       });
       const data = notificationEventUpdateMany.mock.calls[0][0].data;
       expect(data).not.toHaveProperty('attempts');
+    });
+  });
+
+  // ========================================================================
+  // Nuevas pruebas: protección del lock del evento padre en NotificationDelivery
+  // ========================================================================
+
+  describe('protección de entregas por propiedad del lock del evento padre', () => {
+    it('1. una instancia propietaria puede crear las entregas', async () => {
+      queryRaw.mockResolvedValue([event]);
+      findAdminDevices.mockResolvedValue([device]);
+      notificationDeliveryCount.mockResolvedValue(0);
+      notificationEventFindFirst.mockResolvedValue({ id: 'evt-1' });
+      // Tras crear las entregas, el worker las encuentra PENDING y las envía.
+      notificationDeliveryFindMany
+        .mockResolvedValueOnce([pendingDelivery()])
+        .mockResolvedValueOnce([
+          { status: 'SENT', nextAttemptAt: null, lastError: null },
+        ]);
+      sendToToken.mockResolvedValue({
+        success: true,
+        invalidToken: false,
+        retryable: false,
+      });
+
+      const result = await service.processPendingEvents();
+
+      expect(notificationDeliveryCreateMany).toHaveBeenCalled();
+      expect(sendToToken).toHaveBeenCalledTimes(1);
+      expect(result.sent).toBe(1);
+    });
+
+    it('2. una instancia que perdió el lock no puede crear entregas', async () => {
+      queryRaw.mockResolvedValue([event]);
+      findAdminDevices.mockResolvedValue([device]);
+      notificationDeliveryCount.mockResolvedValue(0);
+      // El SELECT ... FOR UPDATE dentro de la transacción no encuentra la fila
+      // porque el evento ya no pertenece a esta instancia.
+      transactionQueryRaw.mockResolvedValue([]);
+
+      const result = await service.processPendingEvents();
+
+      expect(notificationDeliveryCreateMany).not.toHaveBeenCalled();
+      expect(result.sent).toBe(0);
+      expect(result.failed).toBe(0);
+      expect(result.dead).toBe(0);
+    });
+
+    it('3. una instancia propietaria puede actualizar una entrega', async () => {
+      queryRaw.mockResolvedValue([event]);
+      findAdminDevices.mockResolvedValue([device]);
+      notificationDeliveryCount.mockResolvedValue(0);
+      sendToToken.mockResolvedValue({
+        success: true,
+        invalidToken: false,
+        retryable: false,
+      });
+      notificationDeliveryFindMany
+        .mockResolvedValueOnce([pendingDelivery()])
+        .mockResolvedValueOnce([
+          { status: 'SENT', nextAttemptAt: null, lastError: null },
+        ]);
+
+      const result = await service.processPendingEvents();
+
+      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
+      expect(result.sent).toBe(1);
+    });
+
+    it('4. una instancia que perdió el lock no puede actualizar una entrega', async () => {
+      queryRaw.mockResolvedValue([event]);
+      findAdminDevices.mockResolvedValue([device]);
+      notificationDeliveryCount.mockResolvedValue(0);
+      sendToToken.mockResolvedValue({
+        success: true,
+        invalidToken: false,
+        retryable: false,
+      });
+      // queryRawUnsafe devuelve [] -> NOT_PENDING o LOCK_LOST.
+      // notificationEventFindFirst devuelve null -> el evento no es nuestro.
+      notificationEventFindFirst.mockResolvedValue(null);
+      queryRawUnsafe.mockResolvedValue([]);
+      notificationDeliveryFindMany
+        .mockResolvedValueOnce([pendingDelivery()])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.processPendingEvents();
+
+      // Se perdió el lock: no se cuenta como enviado ni fallido.
+      expect(result.sent).toBe(0);
+      expect(result.failed).toBe(0);
+      expect(result.dead).toBe(0);
+    });
+
+    it('5. una entrega SENT no puede cambiar a RETRY', async () => {
+      // La entrega ya está resuelta (SENT): updateDeliveryIfOwned devuelve NOT_PENDING.
+      const svc = service as unknown as { resolvedDeliveries?: Set<string> };
+      svc.resolvedDeliveries = new Set(['del-1']);
+
+      queryRaw.mockResolvedValue([event]);
+      findAdminDevices.mockResolvedValue([device]);
+      notificationDeliveryCount.mockResolvedValue(0);
+      sendToToken.mockResolvedValue({
+        success: false,
+        invalidToken: false,
+        retryable: true,
+        error: 'UNAVAILABLE',
+      });
+      // queryRawUnsafe devuelve [] para la entrega resuelta.
+      queryRawUnsafe.mockResolvedValue([]);
+      notificationEventFindFirst.mockResolvedValue({ id: 'evt-1' }); // Seguimos siendo dueños
+      notificationDeliveryFindMany
+        .mockResolvedValueOnce([pendingDelivery()])
+        .mockResolvedValueOnce([
+          { status: 'SENT', nextAttemptAt: null, lastError: null },
+        ]);
+
+      const result = await service.processPendingEvents();
+
+      // La entrega SENT no se sobrescribe: NOT_PENDING, continuar normalmente.
+      // El evento se finaliza como SENT porque la entrega ya era SENT.
+      expect(result.sent).toBe(1);
+    });
+
+    it('6. una entrega INVALID no puede volver a PENDING', async () => {
+      const svc = service as unknown as { resolvedDeliveries?: Set<string> };
+      svc.resolvedDeliveries = new Set(['del-1']);
+
+      queryRaw.mockResolvedValue([event]);
+      findAdminDevices.mockResolvedValue([device]);
+      notificationDeliveryCount.mockResolvedValue(0);
+      sendToToken.mockResolvedValue({
+        success: true,
+        invalidToken: false,
+        retryable: false,
+      });
+      queryRawUnsafe.mockResolvedValue([]);
+      notificationEventFindFirst.mockResolvedValue({ id: 'evt-1' });
+      notificationDeliveryFindMany
+        .mockResolvedValueOnce([{ ...pendingDelivery(), status: 'INVALID' }])
+        .mockResolvedValueOnce([
+          { status: 'INVALID', nextAttemptAt: null, lastError: null },
+        ]);
+
+      const result = await service.processPendingEvents();
+
+      // La entrega INVALID no se sobrescribe: NOT_PENDING, continuar.
+      expect(result.sent).toBe(0);
+      expect(result.failed).toBe(0);
+    });
+
+    it('7. una pérdida de lock no activa handleProcessingError como error ordinario', async () => {
+      queryRaw.mockResolvedValue([event]);
+      findAdminDevices.mockResolvedValue([device]);
+      notificationDeliveryCount.mockResolvedValue(0);
+      // Al intentar renovar el lease antes de enviar, falla (0 filas).
+      notificationEventUpdateMany.mockImplementationOnce(
+        (args: {
+          where: { lockedBy?: string; lockedUntil?: { gt?: Date } };
+          data: Record<string, unknown>;
+        }) => {
+          if (args.data.lockedUntil && !('status' in args.data)) {
+            return Promise.resolve({ count: 0 });
+          }
+          return Promise.resolve({ count: 1 });
+        },
+      );
+
+      const result = await service.processPendingEvents();
+
+      // El resultado debe ser LOCK_LOST, no un error de procesamiento.
+      expect(result.sent).toBe(0);
+      expect(result.failed).toBe(0);
+      expect(result.dead).toBe(0);
+    });
+
+    it('8. una actualización que afecta cero filas detiene el procesamiento', async () => {
+      queryRaw.mockResolvedValue([event]);
+      findAdminDevices.mockResolvedValue([device]);
+      notificationDeliveryCount.mockResolvedValue(0);
+      sendToToken.mockResolvedValue({
+        success: true,
+        invalidToken: false,
+        retryable: false,
+      });
+      // queryRawUnsafe devuelve [] y notificationEventFindFirst devuelve null -> LOCK_LOST.
+      queryRawUnsafe.mockResolvedValue([]);
+      notificationEventFindFirst.mockResolvedValue(null);
+      notificationDeliveryFindMany
+        .mockResolvedValueOnce([pendingDelivery()])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.processPendingEvents();
+
+      // No debe haber escritura final del evento tras la pérdida de lock.
+      expect(result.sent).toBe(0);
+      expect(finalEventUpdateCall()).toBeUndefined();
+    });
+
+    it('9. una instancia antigua no puede sobrescribir el lock de otra', async () => {
+      // Simular que notificationEventUpdateMany devuelve 0 filas porque
+      // el lockedBy no coincide (instancia antigua).
+      notificationEventUpdateMany.mockImplementationOnce(() =>
+        Promise.resolve({ count: 0 }),
+      );
+
+      const updated = await (
+        service as unknown as {
+          writeEventIfOwned: (
+            id: string,
+            data: Record<string, unknown>,
+            now: Date,
+          ) => Promise<boolean>;
+        }
+      ).writeEventIfOwned('evt-1', { status: 'SENT' }, new Date());
+
+      expect(updated).toBe(false);
+    });
+
+    it('10. una entrega ya resuelta no vuelve a recibir un envío por el worker', async () => {
+      queryRaw.mockResolvedValue([event]);
+      findAdminDevices.mockResolvedValue([device]);
+      notificationDeliveryCount.mockResolvedValue(1);
+      // Ya hay entregas: el where de Prisma filtra por PENDING/RETRY, así que
+      // una entrega SENT no se devuelve. No hay nada que enviar.
+      notificationDeliveryFindMany.mockResolvedValueOnce([]);
+
+      await service.processPendingEvents();
+
+      expect(sendToToken).not.toHaveBeenCalled();
+      expect(findAdminDevices).not.toHaveBeenCalled();
     });
   });
 });

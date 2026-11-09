@@ -5,7 +5,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PushDeviceService } from './push-device.service';
 import {
@@ -67,6 +67,37 @@ type DeliveryToProcess = {
 };
 
 type EventOutcome = NotificationEventStatus | 'LOCK_LOST';
+
+/**
+ * Resultado de intentar escribir una entrega protegida por el lock del
+ * evento padre.
+ *
+ * - `UPDATED`: la entrega se modificó (sigue PENDING/RETRY y el lock es
+ *   nuestro).
+ * - `NOT_PENDING`: la entrega ya estaba resuelta (SENT/INVALID/DEAD) o no
+ *   existe; no es un error, simplemente no hay nada que hacer.
+ * - `LOCK_LOST`: la entrega seguía PENDING/RETRY pero el evento padre ya no
+ *   es PROCESSING con nuestro lock: otra instancia se lo apropió.
+ */
+type DeliveryWriteOutcome = 'UPDATED' | 'NOT_PENDING' | 'LOCK_LOST';
+
+/**
+ * Columnas de `NotificationDelivery` que el worker puede escribir.
+ *
+ * El UPDATE de entregas se construye dinámicamente porque cada resultado FCM
+ * escribe un conjunto distinto de columnas. Esta lista blanca evita que una
+ * clave inesperada del objeto de datos llegue al SQL: los nombres de columna
+ * nunca se interpolan sin validación.
+ */
+const DELIVERY_WRITABLE_COLUMNS = new Set([
+  'status',
+  'attempts',
+  'lastAttemptAt',
+  'deliveredAt',
+  'nextAttemptAt',
+  'lastError',
+  'firebaseErrorCode',
+]);
 
 /**
  * Tiempo de bloqueo distribuido en milisegundos (10 minutos).
@@ -133,7 +164,10 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PushNotificationService.name);
   private workerInterval: NodeJS.Timeout | null = null;
   private processing = false;
-  private readonly instanceId = `${process.pid}-${Date.now()}`;
+  // `Date.now()` solo no basta: dos procesos/contenedores pueden arrancar en
+  // el mismo milisegundo (incluso con el mismo PID en contenedores distintos)
+  // y creerían compartir el lock. El UUID garantiza unicidad real.
+  private readonly instanceId = `${process.pid}-${Date.now()}-${randomUUID()}`;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -409,7 +443,12 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
           return this.finalizeEvent(event);
         }
 
-        await this.ensureDeliveries(event.id, devices);
+        // Si la instancia ya no posee el lock del evento padre, no se crean
+        // entregas y se detiene el procesamiento de este evento.
+        const created = await this.ensureDeliveries(event.id, devices);
+        if (!created) {
+          return this.loseLock(event, 'al crear entregas');
+        }
       }
 
       const pendingDeliveries = await this.prisma.notificationDelivery.findMany(
@@ -445,12 +484,20 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
         if (!delivery.device?.token) {
           // El dispositivo se eliminó después de crear la entrega. Se cierra
           // como INVALID conservando el historial (deviceId queda en NULL).
-          await this.updateDeliveryIfPending(delivery.id, {
-            status: 'INVALID',
-            lastAttemptAt: new Date(),
-            nextAttemptAt: null,
-            lastError: 'Dispositivo o token eliminado antes del envío',
-          });
+          const outcome = await this.updateDeliveryIfOwned(
+            event.id,
+            delivery.id,
+            {
+              status: 'INVALID',
+              lastAttemptAt: new Date(),
+              nextAttemptAt: null,
+              lastError: 'Dispositivo o token eliminado antes del envío',
+            },
+          );
+          if (outcome === 'LOCK_LOST') {
+            return this.loseLock(event, 'al marcar dispositivo sin token');
+          }
+          // Si es NOT_PENDING, la entrega ya estaba resuelta: continuar.
           continue;
         }
 
@@ -461,7 +508,19 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
           event.payload as Record<string, string | number | boolean | null>,
         );
 
-        await this.recordDeliveryResult(delivery, result, event.maxAttempts);
+        // Si la instancia perdió el lock mientras esperaba Firebase o al
+        // escribir el resultado, detenemos el procesamiento inmediatamente:
+        // no tocamos más entregas ni finalizamos el evento.
+        const outcome = await this.recordDeliveryResult(
+          delivery,
+          result,
+          event.maxAttempts,
+          event.id,
+        );
+        if (outcome === 'LOCK_LOST') {
+          return this.loseLock(event, 'tras enviar a un dispositivo');
+        }
+        // Si es NOT_PENDING o UPDATED, continuar con la siguiente entrega.
       }
 
       return this.finalizeEvent(event);
@@ -472,18 +531,29 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Crea las entregas por dispositivo si el evento todavía no tiene ninguna.
-   * `skipDuplicates` + el índice único hacen la operación segura ante
-   * ejecuciones concurrentes.
+   * Solo procede si esta instancia sigue poseyendo el lock del evento padre.
+   *
+   * La verificación de propiedad y la creación de entregas ocurren dentro de
+   * la misma transacción PostgreSQL: `SELECT ... FOR UPDATE` bloquea la fila
+   * del evento y comprueba `status = PROCESSING`, `lockedBy = instanceId` y
+   * `lockedUntil > now`. Otra instancia no puede apropiarse del lock entre la
+   * comprobación y el `createMany`. No hay llamadas a Firebase dentro de esta
+   * transacción (es corta y solo toca la base de datos).
+   *
+   * `skipDuplicates` + el índice único protegen además ante reintentos.
    *
    * Política explícita: si ya existen entregas, no se añaden dispositivos
    * nuevos a un evento antiguo. Los destinatarios se congelan en el primer
    * procesamiento para no reenviar a dispositivos que no estaban en el
    * snapshot original.
+   *
+   * @returns true si las entregas quedaron creadas (o no había dispositivos
+   * que registrar), false si la instancia perdió el lock del evento padre.
    */
   private async ensureDeliveries(
     eventId: string,
     devices: Awaited<ReturnType<PushDeviceService['findAdminDevices']>>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const now = new Date();
     const data = devices
       .filter((device) => Boolean(device.token))
@@ -496,25 +566,77 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
         nextAttemptAt: now,
       }));
 
-    if (data.length === 0) return;
+    return this.prisma.$transaction(async (tx) => {
+      // Bloquea la fila del evento y verifica la propiedad en la misma
+      // transacción. Si el lock expiró o pertenece a otra instancia, no se
+      // crea ninguna entrega.
+      const owned = await tx.$queryRaw<{ id: string }[]>`
+        SELECT "e"."id"
+        FROM "NotificationEvent" AS "e"
+        WHERE "e"."id" = ${eventId}
+          AND "e"."status" = 'PROCESSING'
+          AND "e"."lockedBy" = ${this.instanceId}
+          AND "e"."lockedUntil" > (${now} AT TIME ZONE 'UTC')
+        FOR UPDATE
+      `;
 
-    await this.prisma.notificationDelivery.createMany({
-      data,
-      skipDuplicates: true,
+      if (owned.length === 0) {
+        this.logger.warn(
+          `Evento ${eventId}: lock perdido antes de crear entregas, no se crearán`,
+        );
+        return false;
+      }
+
+      if (data.length > 0) {
+        await tx.notificationDelivery.createMany({
+          data,
+          skipDuplicates: true,
+        });
+      }
+
+      return true;
     });
   }
 
+  /**
+   * Comprueba si esta instancia sigue poseyendo el lock vigente del evento.
+   * Condición: status = PROCESSING, lockedBy = this.instanceId,
+   * lockedUntil > ahora.
+   */
+  private async eventStillOwned(eventId: string): Promise<boolean> {
+    const now = new Date();
+    const result = await this.prisma.notificationEvent.findFirst({
+      where: {
+        id: eventId,
+        status: 'PROCESSING',
+        lockedBy: this.instanceId,
+        lockedUntil: { gt: now },
+      },
+      select: { id: true },
+    });
+    return result !== null;
+  }
+
+  /**
+   * Registra el resultado de un envío FCM en la entrega, solo si esta
+   * instancia sigue poseyendo el lock del evento padre.
+   *
+   * @returns 'UPDATED' si se escribió el resultado, 'NOT_PENDING' si la
+   * entrega ya estaba resuelta (no hay nada que hacer), 'LOCK_LOST' si la
+   * instancia ya no posee el lock del evento padre.
+   */
   private async recordDeliveryResult(
     delivery: DeliveryToProcess,
     result: FcmSendResult,
     maxAttempts: number,
-  ): Promise<void> {
+    eventId: string,
+  ): Promise<'UPDATED' | 'NOT_PENDING' | 'LOCK_LOST'> {
     const now = new Date();
     const attempts = delivery.attempts + 1;
     const error = this.describeFcmError(result);
 
     if (result.success) {
-      await this.updateDeliveryIfPending(delivery.id, {
+      return this.updateDeliveryIfOwned(eventId, delivery.id, {
         status: 'SENT',
         attempts,
         lastAttemptAt: now,
@@ -523,13 +645,12 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
         lastError: null,
         firebaseErrorCode: null,
       });
-      return;
     }
 
     if (result.invalidToken) {
       // Historial primero: si el token se borra, deviceId pasa a NULL pero la
       // fila de entrega se conserva.
-      await this.updateDeliveryIfPending(delivery.id, {
+      const outcome = await this.updateDeliveryIfOwned(eventId, delivery.id, {
         status: 'INVALID',
         attempts,
         lastAttemptAt: now,
@@ -538,6 +659,7 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
         firebaseErrorCode:
           result.firebaseErrorCode ?? result.fcmErrorCode ?? null,
       });
+      if (outcome !== 'UPDATED') return outcome;
 
       if (delivery.device?.token) {
         try {
@@ -553,11 +675,11 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
           );
         }
       }
-      return;
+      return 'UPDATED';
     }
 
     if (result.retryable && attempts < maxAttempts) {
-      await this.updateDeliveryIfPending(delivery.id, {
+      return this.updateDeliveryIfOwned(eventId, delivery.id, {
         status: 'RETRY',
         attempts,
         lastAttemptAt: now,
@@ -569,12 +691,11 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
         firebaseErrorCode:
           result.firebaseErrorCode ?? result.fcmErrorCode ?? null,
       });
-      return;
     }
 
     // Error permanente o máximo de intentos agotado: no volver a intentar
     // este dispositivo con el mismo contenido.
-    await this.updateDeliveryIfPending(delivery.id, {
+    return this.updateDeliveryIfOwned(eventId, delivery.id, {
       status: 'DEAD',
       attempts,
       lastAttemptAt: now,
@@ -588,25 +709,84 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Escribe el resultado de una entrega solo si sigue pendiente. Nunca pisa
-   * un SENT/INVALID/DEAD escrito por otro worker.
+   * Escribe el resultado de una entrega solo si:
+   * - la entrega sigue PENDING o RETRY, y
+   * - el evento NotificationEvent padre sigue PROCESSING con el lock
+   *   perteneciente a esta instancia y no expirado.
+   *
+   * Toda la comprobación ocurre dentro de una única sentencia UPDATE ... FROM
+   * contra PostgreSQL, así que no existe ventana de carrera entre verificar
+   * y escribir. Si afecta cero filas, se distingue si la entrega ya estaba
+   * resuelta (NOT_PENDING) o si se perdió el lock del evento padre (LOCK_LOST).
    */
-  private async updateDeliveryIfPending(
+  private async updateDeliveryIfOwned(
+    eventId: string,
     deliveryId: string,
     data: Prisma.NotificationDeliveryUpdateManyMutationInput,
-  ): Promise<boolean> {
-    const updated = await this.prisma.notificationDelivery.updateMany({
-      where: { id: deliveryId, status: { in: ['PENDING', 'RETRY'] } },
-      data,
-    });
+  ): Promise<DeliveryWriteOutcome> {
+    const now = new Date();
 
-    if (updated.count === 0) {
-      this.logger.debug(
-        `Entrega ${deliveryId} ya fue resuelta por otro worker, no se sobrescribe`,
+    // Construir cláusula SET dinámicamente desde los campos de data. Los
+    // nombres de columna se validan contra una lista blanca y los valores
+    // siempre viajan como parámetros posicionales ($1, $2, ...).
+    //
+    // Prisma enlaza un `Date` como `timestamptz`, pero las columnas de
+    // Prisma son `TIMESTAMP(3)` sin zona. `AT TIME ZONE 'UTC'` convierte el
+    // instante al timestamp UTC que Prisma espera, sin depender del TimeZone
+    // de la sesión (en local puede ser America/Bogota).
+    const setClauses: string[] = [`"updatedAt" = ($1 AT TIME ZONE 'UTC')`];
+    const values: unknown[] = [now];
+    let paramIdx = 2;
+
+    for (const [key, value] of Object.entries(data)) {
+      if (value === undefined) continue;
+      if (!DELIVERY_WRITABLE_COLUMNS.has(key)) {
+        throw new Error(`Columna de entrega no permitida: ${key}`);
+      }
+      const placeholder = `$${paramIdx++}`;
+      setClauses.push(
+        `"${key}" = ${value instanceof Date ? `(${placeholder} AT TIME ZONE 'UTC')` : placeholder}`,
       );
-      return false;
+      values.push(value);
     }
-    return true;
+
+    const setSql = setClauses.join(', ');
+
+    // Parámetros finales: deliveryId, eventId, instanceId, now.
+    const deliveryIdIdx = paramIdx++;
+    const eventIdIdx = paramIdx++;
+    const instanceIdIdx = paramIdx++;
+    const nowIdx = paramIdx++;
+
+    const sql = `
+      UPDATE "NotificationDelivery" AS "d"
+      SET ${setSql}
+      FROM "NotificationEvent" AS "e"
+      WHERE "d"."id" = $${deliveryIdIdx}
+        AND "d"."notificationEventId" = $${eventIdIdx}
+        AND "d"."status" IN ('PENDING', 'RETRY')
+        AND "e"."id" = "d"."notificationEventId"
+        AND "e"."status" = 'PROCESSING'
+        AND "e"."lockedBy" = $${instanceIdIdx}
+        AND "e"."lockedUntil" > ($${nowIdx} AT TIME ZONE 'UTC')
+      RETURNING "d"."id"
+    `;
+
+    const result = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+      sql,
+      ...values,
+      deliveryId,
+      eventId,
+      this.instanceId,
+      now,
+    );
+
+    if (result.length > 0) return 'UPDATED';
+
+    // No se actualizó ninguna fila. Distinguir si la entrega ya estaba
+    // resuelta (NOT_PENDING) o si perdimos el lock del evento padre (LOCK_LOST).
+    const stillOwned = await this.eventStillOwned(eventId);
+    return stillOwned ? 'NOT_PENDING' : 'LOCK_LOST';
   }
 
   /**
