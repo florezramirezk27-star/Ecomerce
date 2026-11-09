@@ -82,6 +82,17 @@ type EventOutcome = NotificationEventStatus | 'LOCK_LOST';
 type DeliveryWriteOutcome = 'UPDATED' | 'NOT_PENDING' | 'LOCK_LOST';
 
 /**
+ * Resultado de una operación que requiere poseer el lock del evento padre.
+ *
+ * `owned: false` significa que la fila del evento no existe o que, después de
+ * adquirir el bloqueo, la instancia ya no era la propietaria vigente. En ambos
+ * casos no se ejecutó la operación.
+ */
+type LockedEventResult<T> =
+  | { owned: true; value: T }
+  | { owned: false };
+
+/**
  * Columnas de `NotificationDelivery` que el worker puede escribir.
  *
  * El UPDATE de entregas se construye dinámicamente porque cada resultado FCM
@@ -108,6 +119,19 @@ const DELIVERY_WRITABLE_COLUMNS = new Set([
  * instancia muere, otra puede recuperar el evento tras este lapso.
  */
 const LOCK_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * Límites de las transacciones cortas que serializan las escrituras de
+ * entregas con el lock del evento padre.
+ *
+ * `lock_timeout` se aplica dentro de PostgreSQL con `SET LOCAL`: si otra
+ * transacción mantiene la fila del evento bloqueada más de 5 segundos, la
+ * sentencia falla de forma controlada en lugar de detener el worker
+ * indefinidamente. El timeout de Prisma es mayor que ese límite para que el
+ * error de PostgreSQL llegue a la lógica de recuperación.
+ */
+const DELIVERY_TX_MAX_WAIT_MS = 5_000;
+const DELIVERY_TX_TIMEOUT_MS = 15_000;
 
 /**
  * Número máximo de intentos por defecto (por dispositivo).
@@ -331,7 +355,7 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
     // Recuperar bloqueos expirados antes de reclamar (instancia caída).
     await this.recoverExpiredLocks();
 
-    const claimed = await this.claimPendingEvents(new Date());
+    const claimed = await this.claimPendingEvents();
 
     if (claimed.length === 0) {
       return { processed: 0, sent: 0, failed: 0, dead: 0, skipped: 0 };
@@ -380,11 +404,7 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
    * SQL atómica. Los identificadores camelCase van entre comillas porque las
    * migraciones de PostgreSQL los crearon con mayúsculas.
    */
-  private async claimPendingEvents(
-    now: Date,
-  ): Promise<ClaimedNotificationEvent[]> {
-    const lockedUntil = new Date(now.getTime() + LOCK_TTL_MS);
-
+  private async claimPendingEvents(): Promise<ClaimedNotificationEvent[]> {
     return this.prisma.$queryRaw<ClaimedNotificationEvent[]>`
       WITH "claimed" AS (
         SELECT "e"."id"
@@ -392,11 +412,11 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
         WHERE "e"."status" = 'PENDING'
           AND (
             "e"."nextAttemptAt" IS NULL
-            OR "e"."nextAttemptAt" <= (${now} AT TIME ZONE 'UTC')
+            OR "e"."nextAttemptAt" <= (clock_timestamp() AT TIME ZONE 'UTC')
           )
           AND (
             "e"."lockedUntil" IS NULL
-            OR "e"."lockedUntil" <= (${now} AT TIME ZONE 'UTC')
+            OR "e"."lockedUntil" <= (clock_timestamp() AT TIME ZONE 'UTC')
           )
         ORDER BY "e"."createdAt" ASC, "e"."id" ASC
         FOR UPDATE SKIP LOCKED
@@ -404,10 +424,10 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
       )
       UPDATE "NotificationEvent" AS "e"
       SET "status" = 'PROCESSING',
-          "lockedAt" = (${now} AT TIME ZONE 'UTC'),
+          "lockedAt" = (clock_timestamp() AT TIME ZONE 'UTC'),
           "lockedBy" = ${this.instanceId},
-          "lockedUntil" = (${lockedUntil} AT TIME ZONE 'UTC'),
-          "updatedAt" = (${now} AT TIME ZONE 'UTC')
+          "lockedUntil" = ((clock_timestamp() + make_interval(secs => ${LOCK_TTL_MS / 1000})) AT TIME ZONE 'UTC'),
+          "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC')
       FROM "claimed" AS "c"
       WHERE "e"."id" = "c"."id"
       RETURNING "e"."id",
@@ -566,55 +586,104 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
         nextAttemptAt: now,
       }));
 
-    return this.prisma.$transaction(async (tx) => {
-      // Bloquea la fila del evento y verifica la propiedad en la misma
-      // transacción. Si el lock expiró o pertenece a otra instancia, no se
-      // crea ninguna entrega.
-      const owned = await tx.$queryRaw<{ id: string }[]>`
-        SELECT "e"."id"
-        FROM "NotificationEvent" AS "e"
-        WHERE "e"."id" = ${eventId}
-          AND "e"."status" = 'PROCESSING'
-          AND "e"."lockedBy" = ${this.instanceId}
-          AND "e"."lockedUntil" > (${now} AT TIME ZONE 'UTC')
-        FOR UPDATE
-      `;
-
-      if (owned.length === 0) {
-        this.logger.warn(
-          `Evento ${eventId}: lock perdido antes de crear entregas, no se crearán`,
-        );
-        return false;
-      }
-
+    const result = await this.withLockedOwnedEvent(eventId, async (tx) => {
       if (data.length > 0) {
         await tx.notificationDelivery.createMany({
           data,
           skipDuplicates: true,
         });
       }
-
       return true;
     });
+
+    if (!result.owned) {
+      this.logger.warn(
+        `Evento ${eventId}: lock perdido antes de crear entregas, no se crearán`,
+      );
+      return false;
+    }
+
+    return result.value;
   }
 
   /**
-   * Comprueba si esta instancia sigue poseyendo el lock vigente del evento.
-   * Condición: status = PROCESSING, lockedBy = this.instanceId,
-   * lockedUntil > ahora.
+   * Ejecuta una operación corta bajo el lock exclusivo del evento padre.
+   *
+   * Protocolo:
+   * 1. `SELECT ... FOR UPDATE` bloquea la fila de `NotificationEvent`. Cualquier
+   *    operación que intente cambiar el propietario o el estado del evento
+   *    (reclamar, recuperar, renovar, finalizar) espera a que esta transacción
+   *    termine.
+   * 2. Después de adquirir el bloqueo, la propiedad y la vigencia se comprueban
+   *    con `clock_timestamp()` de PostgreSQL. No se usa una fecha capturada en
+   *    JavaScript antes de una posible espera por el lock.
+   * 3. Solo entonces se ejecuta la escritura, dentro de la misma transacción.
+   *
+   * La transacción no contiene llamadas a Firebase, HTTP, Redis ni esperas
+   * manuales. `lock_timeout` limita la espera y el timeout de Prisma es mayor
+   * para que un error de PostgreSQL llegue a la recuperación existente.
    */
-  private async eventStillOwned(eventId: string): Promise<boolean> {
-    const now = new Date();
-    const result = await this.prisma.notificationEvent.findFirst({
-      where: {
-        id: eventId,
-        status: 'PROCESSING',
-        lockedBy: this.instanceId,
-        lockedUntil: { gt: now },
+  private async withLockedOwnedEvent<T>(
+    eventId: string,
+    operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<LockedEventResult<T>> {
+    return this.prisma.$transaction(
+      async (tx): Promise<LockedEventResult<T>> => {
+        await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
+
+        // Paso 1: bloquear la fila del evento padre.
+        const locked = await tx.$queryRaw<{ id: string }[]>`
+          SELECT "id"
+          FROM "NotificationEvent"
+          WHERE "id" = ${eventId}
+          FOR UPDATE
+        `;
+
+        if (locked.length === 0) {
+          return { owned: false };
+        }
+
+        // Paso 2: verificar propiedad y vigencia con el reloj de PostgreSQL,
+        // una vez adquirido el bloqueo.
+        const owned = await tx.$queryRaw<{ id: string }[]>`
+          SELECT "id"
+          FROM "NotificationEvent"
+          WHERE "id" = ${eventId}
+            AND "status" = 'PROCESSING'
+            AND "lockedBy" = ${this.instanceId}
+            AND "lockedUntil" > (clock_timestamp() AT TIME ZONE 'UTC')
+        `;
+
+        if (owned.length === 0) {
+          return { owned: false };
+        }
+
+        // Paso 3: escribir manteniendo el bloqueo del padre.
+        const value = await operation(tx);
+        return { owned: true, value };
       },
-      select: { id: true },
-    });
-    return result !== null;
+      {
+        maxWait: DELIVERY_TX_MAX_WAIT_MS,
+        timeout: DELIVERY_TX_TIMEOUT_MS,
+      },
+    );
+  }
+
+  /**
+   * Rechaza columnas que el worker no debe escribir en `NotificationDelivery`.
+   *
+   * Aunque la escritura usa la operación tipada de Prisma (sin SQL dinámico),
+   * esta comprobación en tiempo de ejecución mantiene la lista blanca como
+   * última barrera contra campos inesperados.
+   */
+  private assertWritableDeliveryColumns(
+    data: Prisma.NotificationDeliveryUpdateManyMutationInput,
+  ): void {
+    for (const key of Object.keys(data)) {
+      if (!DELIVERY_WRITABLE_COLUMNS.has(key)) {
+        throw new Error(`Columna de entrega no permitida: ${key}`);
+      }
+    }
   }
 
   /**
@@ -709,84 +778,44 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Escribe el resultado de una entrega solo si:
-   * - la entrega sigue PENDING o RETRY, y
-   * - el evento NotificationEvent padre sigue PROCESSING con el lock
-   *   perteneciente a esta instancia y no expirado.
+   * Escribe el resultado de una entrega bajo el lock exclusivo del evento
+   * padre.
    *
-   * Toda la comprobación ocurre dentro de una única sentencia UPDATE ... FROM
-   * contra PostgreSQL, así que no existe ventana de carrera entre verificar
-   * y escribir. Si afecta cero filas, se distingue si la entrega ya estaba
-   * resuelta (NOT_PENDING) o si se perdió el lock del evento padre (LOCK_LOST).
+   * La transacción corta bloquea primero `NotificationEvent` con
+   * `SELECT ... FOR UPDATE`, comprueba después la propiedad con
+   * `clock_timestamp()` y solo entonces ejecuta la actualización tipada de
+   * `NotificationDelivery`. Cualquier cambio de propietario del evento debe
+   * esperar a que esta transacción confirme o revierta.
+   *
+   * La guarda `status IN ('PENDING', 'RETRY')` impide sobrescribir entregas ya
+   * resueltas (`SENT`, `INVALID`, `DEAD`). Si la entrega no cumple esa
+   * condición se devuelve `NOT_PENDING`; si el evento ya no es nuestro se
+   * devuelve `LOCK_LOST`.
    */
   private async updateDeliveryIfOwned(
     eventId: string,
     deliveryId: string,
     data: Prisma.NotificationDeliveryUpdateManyMutationInput,
   ): Promise<DeliveryWriteOutcome> {
-    const now = new Date();
+    // Validación de la lista blanca antes de abrir cualquier transacción.
+    this.assertWritableDeliveryColumns(data);
 
-    // Construir cláusula SET dinámicamente desde los campos de data. Los
-    // nombres de columna se validan contra una lista blanca y los valores
-    // siempre viajan como parámetros posicionales ($1, $2, ...).
-    //
-    // Prisma enlaza un `Date` como `timestamptz`, pero las columnas de
-    // Prisma son `TIMESTAMP(3)` sin zona. `AT TIME ZONE 'UTC'` convierte el
-    // instante al timestamp UTC que Prisma espera, sin depender del TimeZone
-    // de la sesión (en local puede ser America/Bogota).
-    const setClauses: string[] = [`"updatedAt" = ($1 AT TIME ZONE 'UTC')`];
-    const values: unknown[] = [now];
-    let paramIdx = 2;
+    const result = await this.withLockedOwnedEvent(eventId, async (tx) => {
+      const updated = await tx.notificationDelivery.updateMany({
+        where: {
+          id: deliveryId,
+          notificationEventId: eventId,
+          status: { in: ['PENDING', 'RETRY'] },
+        },
+        data,
+      });
 
-    for (const [key, value] of Object.entries(data)) {
-      if (value === undefined) continue;
-      if (!DELIVERY_WRITABLE_COLUMNS.has(key)) {
-        throw new Error(`Columna de entrega no permitida: ${key}`);
-      }
-      const placeholder = `$${paramIdx++}`;
-      setClauses.push(
-        `"${key}" = ${value instanceof Date ? `(${placeholder} AT TIME ZONE 'UTC')` : placeholder}`,
-      );
-      values.push(value);
-    }
+      return updated.count === 1
+        ? ('UPDATED' as const)
+        : ('NOT_PENDING' as const);
+    });
 
-    const setSql = setClauses.join(', ');
-
-    // Parámetros finales: deliveryId, eventId, instanceId, now.
-    const deliveryIdIdx = paramIdx++;
-    const eventIdIdx = paramIdx++;
-    const instanceIdIdx = paramIdx++;
-    const nowIdx = paramIdx++;
-
-    const sql = `
-      UPDATE "NotificationDelivery" AS "d"
-      SET ${setSql}
-      FROM "NotificationEvent" AS "e"
-      WHERE "d"."id" = $${deliveryIdIdx}
-        AND "d"."notificationEventId" = $${eventIdIdx}
-        AND "d"."status" IN ('PENDING', 'RETRY')
-        AND "e"."id" = "d"."notificationEventId"
-        AND "e"."status" = 'PROCESSING'
-        AND "e"."lockedBy" = $${instanceIdIdx}
-        AND "e"."lockedUntil" > ($${nowIdx} AT TIME ZONE 'UTC')
-      RETURNING "d"."id"
-    `;
-
-    const result = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-      sql,
-      ...values,
-      deliveryId,
-      eventId,
-      this.instanceId,
-      now,
-    );
-
-    if (result.length > 0) return 'UPDATED';
-
-    // No se actualizó ninguna fila. Distinguir si la entrega ya estaba
-    // resuelta (NOT_PENDING) o si perdimos el lock del evento padre (LOCK_LOST).
-    const stillOwned = await this.eventStillOwned(eventId);
-    return stillOwned ? 'NOT_PENDING' : 'LOCK_LOST';
+    return result.owned ? result.value : 'LOCK_LOST';
   }
 
   /**
@@ -855,7 +884,7 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
       };
     }
 
-    const updated = await this.writeEventIfOwned(event.id, data, now);
+    const updated = await this.writeEventIfOwned(event.id, data);
     if (!updated) {
       return this.loseLock(event, 'al escribir el resultado final');
     }
@@ -904,7 +933,7 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
           lockedUntil: null,
         };
 
-    const updated = await this.writeEventIfOwned(event.id, data, now);
+    const updated = await this.writeEventIfOwned(event.id, data);
     if (!updated) {
       return this.loseLock(event, 'al registrar el error de procesamiento');
     }
@@ -913,44 +942,47 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Condición de propiedad del lock. Si afecta cero filas, otra instancia es
-   * la dueña (o el evento cambió de estado) y esta instancia no debe escribir.
+   * Escribe el estado final del evento bajo el mismo protocolo transaccional
+   * que las entregas: bloquea el padre, comprueba propiedad con
+   * `clock_timestamp()` y escribe dentro de la transacción.
+   *
+   * Así la escritura final no puede ocurrir después de que otra instancia haya
+   * cambiado el propietario, aunque la sentencia haya esperado por el lock.
    */
   private async writeEventIfOwned(
     eventId: string,
     data: Prisma.NotificationEventUpdateManyMutationInput,
-    now: Date,
   ): Promise<boolean> {
-    const result = await this.prisma.notificationEvent.updateMany({
-      where: {
-        id: eventId,
-        status: 'PROCESSING',
-        lockedBy: this.instanceId,
-        lockedUntil: { gt: now },
-      },
-      data,
+    const result = await this.withLockedOwnedEvent(eventId, async (tx) => {
+      const updated = await tx.notificationEvent.updateMany({
+        where: { id: eventId },
+        data,
+      });
+      return updated.count === 1;
     });
 
-    if (result.count === 0) {
-      return false;
-    }
-    return true;
+    return result.owned ? result.value : false;
   }
 
+  /**
+   * Renueva el lease solo si sigue vigente y pertenece a esta instancia.
+   *
+   * La condición y el nuevo `lockedUntil` usan `clock_timestamp()` en la misma
+   * sentencia atómica. Si la sentencia espera por un lock, PostgreSQL evalúa de
+   * nuevo la condición con el reloj actual: nunca resucita un lease expirado.
+   */
   private async renewLease(eventId: string): Promise<boolean> {
-    const now = new Date();
-    const result = await this.prisma.notificationEvent.updateMany({
-      where: {
-        id: eventId,
-        status: 'PROCESSING',
-        lockedBy: this.instanceId,
-        lockedUntil: { gt: now },
-      },
-      data: {
-        lockedUntil: new Date(now.getTime() + LOCK_TTL_MS),
-      },
-    });
-    return result.count === 1;
+    const updated = await this.prisma.$executeRaw`
+      UPDATE "NotificationEvent"
+      SET "lockedUntil" = ((clock_timestamp() + make_interval(secs => ${LOCK_TTL_MS / 1000})) AT TIME ZONE 'UTC'),
+          "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC')
+      WHERE "id" = ${eventId}
+        AND "status" = 'PROCESSING'
+        AND "lockedBy" = ${this.instanceId}
+        AND "lockedUntil" > (clock_timestamp() AT TIME ZONE 'UTC')
+    `;
+
+    return updated === 1;
   }
 
   private loseLock(
@@ -1017,31 +1049,36 @@ export class PushNotificationService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Recupera eventos cuyo bloqueo haya expirado (instancia caída).
+   *
+   * El `UPDATE` usa `clock_timestamp()` en el `WHERE`. Si otra transacción
+   * mantiene bloqueada la fila del evento, PostgreSQL espera y, al liberarse,
+   * vuelve a evaluar la condición con el reloj actual. Por eso no recupera un
+   * lock que otra instancia renovó mientras la sentencia esperaba, ni pisa una
+   * escritura de entrega en curso.
+   *
    * Los pone de nuevo como PENDING para que otra instancia pueda reclamarlos.
    * No toca locks vigentes y conserva `attempts` y el historial de entregas.
    */
   async recoverExpiredLocks(): Promise<number> {
-    const now = new Date();
-    const result = await this.prisma.notificationEvent.updateMany({
-      where: {
-        status: 'PROCESSING',
-        lockedUntil: { lt: now },
-      },
-      data: {
-        status: 'PENDING',
-        lockedAt: null,
-        lockedBy: null,
-        lockedUntil: null,
-      },
-    });
+    const result = await this.prisma.$executeRaw`
+      UPDATE "NotificationEvent"
+      SET "status" = 'PENDING',
+          "lockedAt" = NULL,
+          "lockedBy" = NULL,
+          "lockedUntil" = NULL,
+          "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC')
+      WHERE "status" = 'PROCESSING'
+        AND "lockedUntil" IS NOT NULL
+        AND "lockedUntil" <= (clock_timestamp() AT TIME ZONE 'UTC')
+    `;
 
-    if (result.count > 0) {
+    if (result > 0) {
       this.logger.warn(
-        `Recuperados ${result.count} evento(s) con lock expirado`,
+        `Recuperados ${result} evento(s) con lock expirado`,
       );
     }
 
-    return result.count;
+    return result;
   }
 
   /**

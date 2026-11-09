@@ -1052,4 +1052,293 @@ describe('Push outbox contra PostgreSQL real', () => {
     });
     expect(finalEvent.status).toBe('SENT');
   });
+
+  async function expectBlocked(promise: Promise<unknown>, ms = 300): Promise<boolean> {
+    return Promise.race([
+      promise.then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms)),
+    ]);
+  }
+
+  it('Prueba P: serialización cuando A bloquea primero', async () => {
+    await createDevice(prismaA, 'token-p');
+    const serviceA = makeService(prismaA);
+    const serviceB = makeService(prismaB);
+    const apiA = internals(serviceA);
+    const instanceB = internals(serviceB).instanceId;
+    const { event } = await createOrderAndEvent(serviceA, prismaA, 'order-created-p');
+
+    await apiA.claimPendingEvents(new Date());
+    const devices = await new PushDeviceService(prismaA).findAdminDevices();
+    await expect(apiA.ensureDeliveries(event.id, devices)).resolves.toBe(true);
+    const delivery = await prismaA.notificationDelivery.findFirstOrThrow({
+      where: { notificationEventId: event.id, deviceId: devices[0].id },
+    });
+    expect(delivery.status).toBe('PENDING');
+
+    // A bloquea la fila padre con FOR UPDATE y la mantiene abierta mediante una barrera.
+    const release = deferred();
+    const holdLock = prismaA.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "NotificationEvent" WHERE "id" = ${event.id} FOR UPDATE`;
+      await release.promise;
+      // A escribe la entrega dentro de la misma transacción que tiene al padre bloqueado.
+      await tx.$executeRawUnsafe(
+        `UPDATE "NotificationDelivery"
+           SET "status" = 'SENT', "attempts" = 1, "deliveredAt" = $1, "lastAttemptAt" = $1,
+               "nextAttemptAt" = NULL, "lastError" = NULL, "firebaseErrorCode" = NULL
+         WHERE "id" = $2 AND "notificationEventId" = $3 AND "status" IN ('PENDING', 'RETRY')`,
+        new Date(),
+        delivery.id,
+        event.id,
+      );
+    });
+
+    // B intenta apropiarse del evento mientras A tiene el lock: queda bloqueado.
+    const bUpdate = prismaB.notificationEvent.update({
+      where: { id: event.id },
+      data: {
+        status: 'PROCESSING',
+        lockedAt: new Date(),
+        lockedBy: instanceB,
+        lockedUntil: new Date(Date.now() + 5 * 60 * 1000),
+        updatedAt: new Date(),
+      },
+    });
+    const stillBlocked = await expectBlocked(bUpdate, 300);
+    expect(stillBlocked).toBe(false);
+
+    // A confirma: libera el lock de PostgreSQL y se aplica su escritura de entrega.
+    release.resolve();
+    await holdLock;
+    await bUpdate;
+
+    const savedDelivery = await prismaB.notificationDelivery.findUniqueOrThrow({
+      where: { id: delivery.id },
+    });
+    expect(savedDelivery.status).toBe('SENT');
+    expect(savedDelivery.attempts).toBe(1);
+
+    // B adquirió la propiedad solo después del commit de A.
+    const savedEvent = await prismaB.notificationEvent.findUniqueOrThrow({
+      where: { id: event.id },
+    });
+    expect(savedEvent.status).toBe('PROCESSING');
+    expect(savedEvent.lockedBy).toBe(instanceB);
+  });
+
+  it('Prueba Q: B obtiene el lock antes que A', async () => {
+    await createDevice(prismaA, 'token-q');
+    const serviceA = makeService(prismaA);
+    const serviceB = makeService(prismaB);
+    const apiA = internals(serviceA);
+    const instanceB = internals(serviceB).instanceId;
+    const { event } = await createOrderAndEvent(serviceA, prismaA, 'order-created-q');
+
+    await apiA.claimPendingEvents(new Date());
+    const devices = await new PushDeviceService(prismaA).findAdminDevices();
+    await expect(apiA.ensureDeliveries(event.id, devices)).resolves.toBe(true);
+    const delivery = await prismaA.notificationDelivery.findFirstOrThrow({
+      where: { notificationEventId: event.id, deviceId: devices[0].id },
+    });
+
+    // B obtiene el lock antes de que A escriba la entrega.
+    await forceLockOwnership(prismaB, event.id, instanceB);
+
+    // A obtiene el bloqueo de fila, comprueba la propiedad actual y devuelve LOCK_LOST.
+    const outcome = await apiA.updateDeliveryIfOwned(event.id, delivery.id, {
+      status: 'SENT',
+      attempts: 1,
+      lastAttemptAt: new Date(),
+      deliveredAt: new Date(),
+      nextAttemptAt: null,
+      lastError: null,
+      firebaseErrorCode: null,
+    });
+    expect(outcome).toBe('LOCK_LOST');
+
+    // La entrega no se modificó.
+    const savedDelivery = await prismaB.notificationDelivery.findUniqueOrThrow({
+      where: { id: delivery.id },
+    });
+    expect(savedDelivery.status).toBe('PENDING');
+    expect(savedDelivery.attempts).toBe(0);
+    expect(savedDelivery.deliveredAt).toBeNull();
+
+    // El lock de B se mantiene intacto.
+    const savedEvent = await prismaB.notificationEvent.findUniqueOrThrow({
+      where: { id: event.id },
+    });
+    expect(savedEvent.status).toBe('PROCESSING');
+    expect(savedEvent.lockedBy).toBe(instanceB);
+  });
+
+  it('Prueba R: recuperación compite con escritura de entrega', async () => {
+    await createDevice(prismaA, 'token-r');
+    const serviceA = makeService(prismaA);
+    const serviceB = makeService(prismaB);
+    const apiA = internals(serviceA);
+    const { event } = await createOrderAndEvent(serviceA, prismaA, 'order-created-r');
+
+    await apiA.claimPendingEvents(new Date());
+    const devices = await new PushDeviceService(prismaA).findAdminDevices();
+    await expect(apiA.ensureDeliveries(event.id, devices)).resolves.toBe(true);
+    const delivery = await prismaA.notificationDelivery.findFirstOrThrow({
+      where: { notificationEventId: event.id, deviceId: devices[0].id },
+    });
+
+    // El lease de A ya expiró, pero A sigue procesando (mantiene el lock del padre).
+    await prismaA.notificationEvent.update({
+      where: { id: event.id },
+      data: { lockedUntil: new Date(Date.now() - 1000) },
+    });
+
+    // A bloquea la fila padre con FOR UPDATE y escribe la entrega dentro de esa transacción.
+    const lockHeldA = deferred();
+    const release = deferred();
+    const holdLock = prismaA.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "NotificationEvent" WHERE "id" = ${event.id} FOR UPDATE`;
+      lockHeldA.resolve();
+      await release.promise;
+      await tx.$executeRawUnsafe(
+        `UPDATE "NotificationDelivery"
+           SET "status" = 'SENT', "attempts" = 1, "deliveredAt" = $1, "lastAttemptAt" = $1,
+               "nextAttemptAt" = NULL
+         WHERE "id" = $2 AND "notificationEventId" = $3 AND "status" IN ('PENDING', 'RETRY')`,
+        new Date(),
+        delivery.id,
+        event.id,
+      );
+    });
+    await lockHeldA.promise; // A tiene el lock antes de que B intente recuperar.
+
+    // B ejecuta la recuperación: su UPDATE apunta a la fila de A (lease expirado) y debe esperar el lock.
+    const recover = serviceB.recoverExpiredLocks();
+    const stillBlocked = await expectBlocked(recover, 300);
+    expect(stillBlocked).toBe(false);
+
+    release.resolve();
+    await holdLock;
+    const recovered = await recover;
+
+    // A escribió la entrega y se conserva aunque el lock haya expirado después.
+    const savedDelivery = await prismaB.notificationDelivery.findUniqueOrThrow({
+      where: { id: delivery.id },
+    });
+    expect(savedDelivery.status).toBe('SENT');
+
+    // B reevaluó tras esperar: el lease expiró, por lo que recuperó el evento correctamente.
+    const savedEvent = await prismaB.notificationEvent.findUniqueOrThrow({
+      where: { id: event.id },
+    });
+    expect(savedEvent.status).toBe('PENDING');
+    expect(savedEvent.lockedBy).toBeNull();
+    expect(savedEvent.lockedUntil).toBeNull();
+    expect(recovered).toBe(1);
+  });
+
+  it('Prueba S: espera y expiración durante la adquisición', async () => {
+    await createDevice(prismaA, 'token-s');
+    const serviceA = makeService(prismaA);
+    const serviceB = makeService(prismaB);
+    const apiA = internals(serviceA);
+    const { event } = await createOrderAndEvent(serviceA, prismaA, 'order-created-s');
+
+    await apiA.claimPendingEvents(new Date());
+    const devices = await new PushDeviceService(prismaA).findAdminDevices();
+    await expect(apiA.ensureDeliveries(event.id, devices)).resolves.toBe(true);
+    const delivery = await prismaA.notificationDelivery.findFirstOrThrow({
+      where: { notificationEventId: event.id, deviceId: devices[0].id },
+    });
+
+    // Forzar que el lease ya expiró aunque A siga siendo la propietaria registrada.
+    await prismaA.notificationEvent.update({
+      where: { id: event.id },
+      data: { lockedUntil: new Date(Date.now() - 1000) },
+    });
+
+    // B mantiene el bloqueo de fila padre mientras A intenta adquirirlo.
+    const lockHeldB = deferred();
+    const releaseB = deferred();
+    const holdB = prismaB.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "NotificationEvent" WHERE "id" = ${event.id} FOR UPDATE`;
+      lockHeldB.resolve();
+      await releaseB.promise;
+    });
+    await lockHeldB.promise; // B tiene el lock antes de que A intente adquirirlo.
+
+    // A intenta escribir: queda bloqueada esperando el lock de B. B libera tras un breve
+    // lapso, así que A adquiere el bloqueo y comprueba el lease (ya expirado) con clock_timestamp().
+    const start = Date.now();
+    const outcomePromise = apiA.updateDeliveryIfOwned(event.id, delivery.id, {
+      status: 'SENT',
+      attempts: 1,
+      lastAttemptAt: new Date(),
+      deliveredAt: new Date(),
+      nextAttemptAt: null,
+      lastError: null,
+      firebaseErrorCode: null,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    releaseB.resolve();
+    const outcome = await outcomePromise;
+    const waited = Date.now() - start;
+    expect(outcome).toBe('LOCK_LOST');
+    expect(waited).toBeGreaterThan(50); // A esperó por el lock antes de comprobar el lease
+
+    await holdB;
+
+    // La entrega no se modificó.
+    const savedDelivery = await prismaA.notificationDelivery.findUniqueOrThrow({
+      where: { id: delivery.id },
+    });
+    expect(savedDelivery.status).toBe('PENDING');
+    expect(savedDelivery.attempts).toBe(0);
+  });
+
+  it('Prueba T: concurrencia repetida sobre el mismo evento', async () => {
+    await createDevice(prismaA, 'token-t');
+    const serviceA = makeService(prismaA);
+    const serviceB = makeService(prismaB);
+    const apiA = internals(serviceA);
+    const instanceB = internals(serviceB).instanceId;
+
+    const rounds = 6;
+    for (let i = 0; i < rounds; i++) {
+      const { event } = await createOrderAndEvent(
+        serviceA,
+        prismaA,
+        `order-created-t-${i}`,
+      );
+      await apiA.claimPendingEvents(new Date());
+      const devices = await new PushDeviceService(prismaA).findAdminDevices();
+      await expect(apiA.ensureDeliveries(event.id, devices)).resolves.toBe(true);
+      const delivery = await prismaA.notificationDelivery.findFirstOrThrow({
+        where: { notificationEventId: event.id, deviceId: devices[0].id },
+      });
+
+      // Orden válido 2: B adquiere primero el evento y A no logra modificar la entrega.
+      await forceLockOwnership(prismaB, event.id, instanceB);
+      const outcome = await apiA.updateDeliveryIfOwned(event.id, delivery.id, {
+        status: 'SENT',
+        attempts: 1,
+        lastAttemptAt: new Date(),
+        deliveredAt: new Date(),
+        nextAttemptAt: null,
+        lastError: null,
+        firebaseErrorCode: null,
+      });
+      expect(outcome).toBe('LOCK_LOST');
+
+      const saved = await prismaB.notificationDelivery.findUniqueOrThrow({
+        where: { id: delivery.id },
+      });
+      expect(saved.status).toBe('PENDING');
+      expect(saved.attempts).toBe(0);
+
+      const ev = await prismaB.notificationEvent.findUniqueOrThrow({
+        where: { id: event.id },
+      });
+      expect(ev.lockedBy).toBe(instanceB);
+    }
+  });
 });

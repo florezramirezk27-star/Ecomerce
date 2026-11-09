@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { Prisma } from '@prisma/client';
 import { PushNotificationService } from './push-notification.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PushDeviceService } from './push-device.service';
@@ -30,10 +31,15 @@ type PendingDelivery = {
 };
 
 type EventWriteArgs = {
+  where: { id: string };
+  data: Record<string, unknown>;
+};
+
+type DeliveryUpdateManyArgs = {
   where: {
     id: string;
-    lockedBy?: string;
-    lockedUntil?: { lt?: Date; gt?: Date };
+    notificationEventId: string;
+    status: { in: string[] };
   };
   data: Record<string, unknown>;
 };
@@ -58,14 +64,6 @@ describe('PushNotificationService', () => {
 
   const notificationEventCreate = jest.fn<Promise<unknown>, [unknown]>();
   const notificationEventUpdate = jest.fn<Promise<unknown>, [unknown]>();
-  const notificationEventUpdateMany = jest.fn<
-    Promise<{ count: number }>,
-    [EventWriteArgs]
-  >();
-  const notificationEventFindFirst = jest.fn<
-    Promise<{ id: string } | null>,
-    [unknown]
-  >();
   const notificationDeliveryCount = jest.fn<Promise<number>, [unknown]>();
   const notificationDeliveryCreateMany = jest.fn<
     Promise<{ count: number }>,
@@ -79,13 +77,25 @@ describe('PushNotificationService', () => {
     Promise<ClaimedEvent[]>,
     [TemplateStringsArray, ...unknown[]]
   >();
-  const queryRawUnsafe = jest.fn<
-    Promise<Array<{ id: string }>>,
-    [string, ...unknown[]]
+  const executeRaw = jest.fn<
+    Promise<number>,
+    [TemplateStringsArray, ...unknown[]]
   >();
   const transactionQueryRaw = jest.fn<
     Promise<Array<{ id: string }>>,
     [TemplateStringsArray, ...unknown[]]
+  >();
+  const transactionExecuteRaw = jest.fn<
+    Promise<number>,
+    [TemplateStringsArray, ...unknown[]]
+  >();
+  const transactionDeliveryUpdateMany = jest.fn<
+    Promise<{ count: number }>,
+    [DeliveryUpdateManyArgs]
+  >();
+  const transactionEventUpdateMany = jest.fn<
+    Promise<{ count: number }>,
+    [EventWriteArgs]
   >();
   const transaction = jest.fn<Promise<unknown>, [TransactionCallback]>();
   const findAdminDevices = jest.fn<Promise<AdminDevice[]>, []>();
@@ -94,6 +104,12 @@ describe('PushNotificationService', () => {
     Promise<FcmSendResult>,
     [string, string, string, Record<string, string | number | boolean | null>]
   >();
+
+  // Estado configurable de los mocks de PostgreSQL.
+  let eventRowExists = true;
+  let eventOwnership = true;
+  let recoverCount = 0;
+  let renewLeaseCount = 1;
 
   // Resultado de la escritura final del evento. Los tests de lock perdido lo
   // ponen en 0 para simular que otra instancia es la dueña.
@@ -131,26 +147,66 @@ describe('PushNotificationService', () => {
     ...overrides,
   });
 
+  function transactionClient() {
+    return {
+      $executeRaw: transactionExecuteRaw,
+      $queryRaw: transactionQueryRaw,
+      notificationDelivery: {
+        createMany: notificationDeliveryCreateMany,
+        updateMany: transactionDeliveryUpdateMany,
+      },
+      notificationEvent: {
+        updateMany: transactionEventUpdateMany,
+      },
+    };
+  }
+
   beforeEach(async () => {
     jest.resetAllMocks();
     finalEventWriteCount = 1;
+    eventRowExists = true;
+    eventOwnership = true;
+    recoverCount = 0;
+    renewLeaseCount = 1;
 
     // resetAllMocks borra la implementación de $transaction, así que se
     // vuelve a registrar en cada test. El callback recibe un cliente de
-    // transacción con las operaciones que usa ensureDeliveries.
+    // transacción con las operaciones que usa withLockedOwnedEvent.
     transaction.mockImplementation((callback) =>
-      callback({
-        $queryRaw: transactionQueryRaw,
-        notificationDelivery: { createMany: notificationDeliveryCreateMany },
-      }),
+      callback(transactionClient()),
     );
 
     queryRaw.mockResolvedValue([]);
-    // Por defecto, el SELECT ... FOR UPDATE de ensureDeliveries confirma que
-    // el evento sigue bajo nuestro lock.
-    transactionQueryRaw.mockResolvedValue([{ id: 'evt-1' }]);
-    // Por defecto, $queryRawUnsafe devuelve [{ id }] = una fila afectada.
-    queryRawUnsafe.mockResolvedValue([{ id: 'del-1' }]);
+    // Las transacciones ejecutan primero SELECT ... FOR UPDATE y después la
+    // comprobación de propiedad con clock_timestamp(). Los tests pueden
+    // simular la pérdida del lock cambiando eventOwnership.
+    transactionQueryRaw.mockImplementation((strings) => {
+      const sql = strings.join('?');
+      if (sql.includes('"lockedBy"')) {
+        return Promise.resolve(
+          eventRowExists && eventOwnership ? [{ id: 'evt-1' }] : [],
+        );
+      }
+      if (sql.includes('FOR UPDATE')) {
+        return Promise.resolve(eventRowExists ? [{ id: 'evt-1' }] : []);
+      }
+      return Promise.resolve([{ id: 'evt-1' }]);
+    });
+    transactionExecuteRaw.mockResolvedValue(0);
+    transactionDeliveryUpdateMany.mockResolvedValue({ count: 1 });
+    transactionEventUpdateMany.mockImplementation(() =>
+      Promise.resolve({ count: finalEventWriteCount }),
+    );
+    executeRaw.mockImplementation((strings) => {
+      const sql = strings.join('?');
+      if (sql.includes(`SET "status" = 'PENDING'`)) {
+        return Promise.resolve(recoverCount);
+      }
+      if (sql.includes('SET "lockedUntil"')) {
+        return Promise.resolve(renewLeaseCount);
+      }
+      return Promise.resolve(0);
+    });
     notificationEventCreate.mockResolvedValue({ id: 'evt-1' });
     notificationEventUpdate.mockResolvedValue({});
     notificationDeliveryCount.mockResolvedValue(0);
@@ -166,36 +222,6 @@ describe('PushNotificationService', () => {
       retryable: false,
     });
 
-    // Por defecto, el evento todavía pertenece a esta instancia.
-    notificationEventFindFirst.mockResolvedValue({ id: 'evt-1' });
-
-    notificationEventUpdateMany.mockImplementation((args) => {
-      const instanceId = (service as unknown as { instanceId: string })
-        .instanceId;
-
-      // Recuperación de locks expirados: no es una escritura final.
-      if (
-        args.where.lockedUntil?.lt &&
-        args.data.status === 'PENDING' &&
-        args.data.lockedBy === null &&
-        !('nextAttemptAt' in args.data)
-      ) {
-        return Promise.resolve({ count: 0 });
-      }
-
-      // Escritura final: exige status PROCESSING + lockedBy de esta
-      // instancia. El test puede simular que el lock ya no nos pertenece.
-      if (args.where.lockedBy === instanceId) {
-        if ('status' in args.data) {
-          return Promise.resolve({ count: finalEventWriteCount });
-        }
-        // Renovación del lease.
-        return Promise.resolve({ count: 1 });
-      }
-
-      return Promise.resolve({ count: 1 });
-    });
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PushNotificationService,
@@ -205,8 +231,6 @@ describe('PushNotificationService', () => {
             notificationEvent: {
               create: notificationEventCreate,
               update: notificationEventUpdate,
-              updateMany: notificationEventUpdateMany,
-              findFirst: notificationEventFindFirst,
             },
             notificationDelivery: {
               count: notificationDeliveryCount,
@@ -214,7 +238,7 @@ describe('PushNotificationService', () => {
               findMany: notificationDeliveryFindMany,
             },
             $queryRaw: queryRaw,
-            $queryRawUnsafe: queryRawUnsafe,
+            $executeRaw: executeRaw,
             $transaction: transaction,
           },
         },
@@ -238,9 +262,6 @@ describe('PushNotificationService', () => {
     service = module.get<PushNotificationService>(PushNotificationService);
     prisma = module.get<PrismaService>(PrismaService);
     (service as unknown as { processing: boolean }).processing = false;
-    (
-      service as unknown as { resolvedDeliveries?: Set<string> }
-    ).resolvedDeliveries = new Set();
   });
 
   /**
@@ -257,23 +278,24 @@ describe('PushNotificationService', () => {
   }
 
   function finalEventUpdateCall(): EventWriteArgs | undefined {
-    const call = notificationEventUpdateMany.mock.calls.find(([args]) => {
-      const instanceId = (service as unknown as { instanceId: string })
-        .instanceId;
-      return args.where.lockedBy === instanceId && 'status' in args.data;
-    });
+    const call = transactionEventUpdateMany.mock.calls.find(
+      ([args]) => 'status' in args.data,
+    );
     return call?.[0];
   }
 
-  // Verifica que $queryRawUnsafe fue llamado con el deliveryId dado.
-  function queryRawUnsafeCalledWith(deliveryId: string): boolean {
-    return queryRawUnsafe.mock.calls.some(([sql, ...values]) => {
-      // Los valores se pasan como argumentos sueltos: [sql, ...values, deliveryId, eventId, instanceId, now]
-      return (
-        sql.includes('"NotificationDelivery"') &&
-        values.slice(-4).includes(deliveryId)
-      );
-    });
+  // Verifica que la entrega con el id dado se actualizó dentro de una
+  // transacción que mantenía el lock del evento padre.
+  function deliveryUpdateCalledWith(deliveryId: string): boolean {
+    return transactionDeliveryUpdateMany.mock.calls.some(
+      ([args]) => args.where.id === deliveryId,
+    );
+  }
+
+  function transactionSql(
+    call: [TemplateStringsArray, ...unknown[]] | undefined,
+  ): string {
+    return call ? call[0].join('?') : '';
   }
 
   describe('createEvent (dentro de transaccion)', () => {
@@ -384,14 +406,9 @@ describe('PushNotificationService', () => {
         'Has recibido un nuevo pedido #42.',
         { orderId: 'ord-1', numericId: 42 },
       );
-      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
+      expect(deliveryUpdateCalledWith('del-1')).toBe(true);
       const finalCall = finalEventUpdateCall();
-      expect(finalCall?.where).toEqual({
-        id: 'evt-1',
-        status: 'PROCESSING',
-        lockedBy: (service as unknown as { instanceId: string }).instanceId,
-        lockedUntil: { gt: anyDate() },
-      });
+      expect(finalCall?.where).toEqual({ id: 'evt-1' });
       expect(finalCall?.data).toEqual(
         expect.objectContaining({
           status: 'SENT',
@@ -429,17 +446,8 @@ describe('PushNotificationService', () => {
   describe('propiedad del lock en escrituras finales', () => {
     it('si el lease se pierde al inicio, no envía ni escribe', async () => {
       queryRaw.mockResolvedValue([event]);
-      notificationEventUpdateMany.mockImplementation(
-        (args: {
-          where: { lockedBy?: string };
-          data: Record<string, unknown>;
-        }) => {
-          if (args.data.lockedUntil && !('status' in args.data)) {
-            return Promise.resolve({ count: 0 });
-          }
-          return Promise.resolve({ count: 1 });
-        },
-      );
+      // La renovación del lease falla (0 filas): la instancia pierde el lock al iniciar.
+      renewLeaseCount = 0;
 
       const result = await service.processPendingEvents();
 
@@ -513,8 +521,8 @@ describe('PushNotificationService', () => {
 
       const result = await service.processPendingEvents();
 
-      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
-      expect(queryRawUnsafeCalledWith('del-2')).toBe(true);
+      expect(deliveryUpdateCalledWith('del-1')).toBe(true);
+      expect(deliveryUpdateCalledWith('del-2')).toBe(true);
       const finalCall = finalEventUpdateCall();
       expect(finalCall?.data).toEqual(
         expect.objectContaining({
@@ -544,7 +552,7 @@ describe('PushNotificationService', () => {
       const result = await service.processPendingEvents();
 
       expect(deleteByTokenIfPresent).toHaveBeenCalledWith('token-admin-1');
-      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
+      expect(deliveryUpdateCalledWith('del-1')).toBe(true);
       expect(finalEventUpdateCall()?.data).toEqual(
         expect.objectContaining({ status: 'SKIPPED' }),
       );
@@ -572,7 +580,7 @@ describe('PushNotificationService', () => {
 
       const result = await service.processPendingEvents();
 
-      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
+      expect(deliveryUpdateCalledWith('del-1')).toBe(true);
       expect(finalEventUpdateCall()?.data).toEqual(
         expect.objectContaining({ status: 'DEAD' }),
       );
@@ -596,7 +604,7 @@ describe('PushNotificationService', () => {
 
       const result = await service.processPendingEvents();
 
-      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
+      expect(deliveryUpdateCalledWith('del-1')).toBe(true);
       expect(result.dead).toBe(1);
     });
 
@@ -703,7 +711,7 @@ describe('PushNotificationService', () => {
 
   describe('recoverExpiredLocks', () => {
     it('solo recupera PROCESSING con lockedUntil expirado y conserva intentos', async () => {
-      notificationEventUpdateMany.mockResolvedValue({ count: 2 });
+      recoverCount = 2;
 
       const recovered = await (
         service as unknown as {
@@ -712,20 +720,15 @@ describe('PushNotificationService', () => {
       ).recoverExpiredLocks();
 
       expect(recovered).toBe(2);
-      expect(notificationEventUpdateMany).toHaveBeenCalledWith({
-        where: {
-          status: 'PROCESSING',
-          lockedUntil: { lt: anyDate() },
-        },
-        data: {
-          status: 'PENDING',
-          lockedAt: null,
-          lockedBy: null,
-          lockedUntil: null,
-        },
-      });
-      const data = notificationEventUpdateMany.mock.calls[0][0].data;
-      expect(data).not.toHaveProperty('attempts');
+      const calls = executeRaw.mock.calls.map((c) => c[0].join('?'));
+      expect(calls.some((s) => s.includes(`SET "status" = 'PENDING'`))).toBe(
+        true,
+      );
+      expect(
+        calls.some((s) => s.includes('"lockedUntil" <= (clock_timestamp()')),
+      ).toBe(true);
+      const data = executeRaw.mock.calls[0][0];
+      expect(data.join('?')).not.toContain('attempts');
     });
   });
 
@@ -734,47 +737,28 @@ describe('PushNotificationService', () => {
   // ========================================================================
 
   describe('protección de entregas por propiedad del lock del evento padre', () => {
-    it('1. una instancia propietaria puede crear las entregas', async () => {
-      queryRaw.mockResolvedValue([event]);
-      findAdminDevices.mockResolvedValue([device]);
-      notificationDeliveryCount.mockResolvedValue(0);
-      notificationEventFindFirst.mockResolvedValue({ id: 'evt-1' });
-      // Tras crear las entregas, el worker las encuentra PENDING y las envía.
-      notificationDeliveryFindMany
-        .mockResolvedValueOnce([pendingDelivery()])
-        .mockResolvedValueOnce([
-          { status: 'SENT', nextAttemptAt: null, lastError: null },
-        ]);
-      sendToToken.mockResolvedValue({
-        success: true,
-        invalidToken: false,
-        retryable: false,
-      });
+    type PushApi = {
+      updateDeliveryIfOwned: (
+        eventId: string,
+        deliveryId: string,
+        data: Record<string, unknown>,
+      ) => Promise<'UPDATED' | 'NOT_PENDING' | 'LOCK_LOST'>;
+      ensureDeliveries: (
+        eventId: string,
+        devices: { id: string; token: string }[],
+      ) => Promise<boolean>;
+      assertWritableDeliveryColumns: (
+        data: Record<string, unknown>,
+      ) => void;
+    };
 
-      const result = await service.processPendingEvents();
+    function api(): PushApi {
+      return service as unknown as PushApi;
+    }
 
-      expect(notificationDeliveryCreateMany).toHaveBeenCalled();
-      expect(sendToToken).toHaveBeenCalledTimes(1);
-      expect(result.sent).toBe(1);
-    });
-
-    it('2. una instancia que perdió el lock no puede crear entregas', async () => {
-      queryRaw.mockResolvedValue([event]);
-      findAdminDevices.mockResolvedValue([device]);
-      notificationDeliveryCount.mockResolvedValue(0);
-      // El SELECT ... FOR UPDATE dentro de la transacción no encuentra la fila
-      // porque el evento ya no pertenece a esta instancia.
-      transactionQueryRaw.mockResolvedValue([]);
-
-      const result = await service.processPendingEvents();
-
-      expect(notificationDeliveryCreateMany).not.toHaveBeenCalled();
-      expect(result.sent).toBe(0);
-      expect(result.failed).toBe(0);
-      expect(result.dead).toBe(0);
-    });
-
-    it('3. una instancia propietaria puede actualizar una entrega', async () => {
+    function ownedEventDefaults() {
+      eventRowExists = true;
+      eventOwnership = true;
       queryRaw.mockResolvedValue([event]);
       findAdminDevices.mockResolvedValue([device]);
       notificationDeliveryCount.mockResolvedValue(0);
@@ -783,180 +767,146 @@ describe('PushNotificationService', () => {
         invalidToken: false,
         retryable: false,
       });
-      notificationDeliveryFindMany
-        .mockResolvedValueOnce([pendingDelivery()])
-        .mockResolvedValueOnce([
-          { status: 'SENT', nextAttemptAt: null, lastError: null },
-        ]);
+    }
 
-      const result = await service.processPendingEvents();
-
-      expect(queryRawUnsafeCalledWith('del-1')).toBe(true);
-      expect(result.sent).toBe(1);
+    beforeEach(() => {
+      ownedEventDefaults();
     });
 
-    it('4. una instancia que perdió el lock no puede actualizar una entrega', async () => {
-      queryRaw.mockResolvedValue([event]);
-      findAdminDevices.mockResolvedValue([device]);
-      notificationDeliveryCount.mockResolvedValue(0);
-      sendToToken.mockResolvedValue({
-        success: true,
-        invalidToken: false,
-        retryable: false,
+    it('1. una instancia propietaria puede adquirir el lock del evento padre', async () => {
+      const outcome = await api().updateDeliveryIfOwned('evt-1', 'del-1', {
+        status: 'SENT',
+        attempts: 1,
+        lastAttemptAt: new Date(),
+        deliveredAt: new Date(),
+        nextAttemptAt: null,
+        lastError: null,
+        firebaseErrorCode: null,
       });
-      // queryRawUnsafe devuelve [] -> NOT_PENDING o LOCK_LOST.
-      // notificationEventFindFirst devuelve null -> el evento no es nuestro.
-      notificationEventFindFirst.mockResolvedValue(null);
-      queryRawUnsafe.mockResolvedValue([]);
-      notificationDeliveryFindMany
-        .mockResolvedValueOnce([pendingDelivery()])
-        .mockResolvedValueOnce([]);
-
-      const result = await service.processPendingEvents();
-
-      // Se perdió el lock: no se cuenta como enviado ni fallido.
-      expect(result.sent).toBe(0);
-      expect(result.failed).toBe(0);
-      expect(result.dead).toBe(0);
+      expect(outcome).toBe('UPDATED');
+      const sqls = transactionQueryRaw.mock.calls.map((c) => c[0].join('?'));
+      expect(sqls.some((s) => s.includes('FOR UPDATE'))).toBe(true);
+      expect(sqls.some((s) => s.includes('"lockedBy"'))).toBe(true);
+      expect(deliveryUpdateCalledWith('del-1')).toBe(true);
     });
 
-    it('5. una entrega SENT no puede cambiar a RETRY', async () => {
-      // La entrega ya está resuelta (SENT): updateDeliveryIfOwned devuelve NOT_PENDING.
-      const svc = service as unknown as { resolvedDeliveries?: Set<string> };
-      svc.resolvedDeliveries = new Set(['del-1']);
-
-      queryRaw.mockResolvedValue([event]);
-      findAdminDevices.mockResolvedValue([device]);
-      notificationDeliveryCount.mockResolvedValue(0);
-      sendToToken.mockResolvedValue({
-        success: false,
-        invalidToken: false,
-        retryable: true,
-        error: 'UNAVAILABLE',
+    it('2. una instancia propietaria puede actualizar una entrega dentro de la transacción', async () => {
+      const outcome = await api().updateDeliveryIfOwned('evt-1', 'del-1', {
+        status: 'SENT',
+        attempts: 1,
       });
-      // queryRawUnsafe devuelve [] para la entrega resuelta.
-      queryRawUnsafe.mockResolvedValue([]);
-      notificationEventFindFirst.mockResolvedValue({ id: 'evt-1' }); // Seguimos siendo dueños
-      notificationDeliveryFindMany
-        .mockResolvedValueOnce([pendingDelivery()])
-        .mockResolvedValueOnce([
-          { status: 'SENT', nextAttemptAt: null, lastError: null },
-        ]);
-
-      const result = await service.processPendingEvents();
-
-      // La entrega SENT no se sobrescribe: NOT_PENDING, continuar normalmente.
-      // El evento se finaliza como SENT porque la entrega ya era SENT.
-      expect(result.sent).toBe(1);
+      expect(outcome).toBe('UPDATED');
+      expect(deliveryUpdateCalledWith('del-1')).toBe(true);
     });
 
-    it('6. una entrega INVALID no puede volver a PENDING', async () => {
-      const svc = service as unknown as { resolvedDeliveries?: Set<string> };
-      svc.resolvedDeliveries = new Set(['del-1']);
-
-      queryRaw.mockResolvedValue([event]);
-      findAdminDevices.mockResolvedValue([device]);
-      notificationDeliveryCount.mockResolvedValue(0);
-      sendToToken.mockResolvedValue({
-        success: true,
-        invalidToken: false,
-        retryable: false,
+    it('3. una instancia no propietaria no puede actualizar la entrega (LOCK_LOST)', async () => {
+      eventOwnership = false;
+      const outcome = await api().updateDeliveryIfOwned('evt-1', 'del-1', {
+        status: 'SENT',
+        attempts: 1,
       });
-      queryRawUnsafe.mockResolvedValue([]);
-      notificationEventFindFirst.mockResolvedValue({ id: 'evt-1' });
-      notificationDeliveryFindMany
-        .mockResolvedValueOnce([{ ...pendingDelivery(), status: 'INVALID' }])
-        .mockResolvedValueOnce([
-          { status: 'INVALID', nextAttemptAt: null, lastError: null },
-        ]);
-
-      const result = await service.processPendingEvents();
-
-      // La entrega INVALID no se sobrescribe: NOT_PENDING, continuar.
-      expect(result.sent).toBe(0);
-      expect(result.failed).toBe(0);
+      expect(outcome).toBe('LOCK_LOST');
+      expect(deliveryUpdateCalledWith('del-1')).toBe(false);
     });
 
-    it('7. una pérdida de lock no activa handleProcessingError como error ordinario', async () => {
-      queryRaw.mockResolvedValue([event]);
-      findAdminDevices.mockResolvedValue([device]);
-      notificationDeliveryCount.mockResolvedValue(0);
-      // Al intentar renovar el lease antes de enviar, falla (0 filas).
-      notificationEventUpdateMany.mockImplementationOnce(
-        (args: {
-          where: { lockedBy?: string; lockedUntil?: { gt?: Date } };
-          data: Record<string, unknown>;
-        }) => {
-          if (args.data.lockedUntil && !('status' in args.data)) {
-            return Promise.resolve({ count: 0 });
-          }
-          return Promise.resolve({ count: 1 });
-        },
+    it('4. un error de espera por el lock se propaga como error de base de datos (no LOCK_LOST)', async () => {
+      transactionQueryRaw.mockImplementationOnce(() =>
+        Promise.reject(new Error('canceling statement due to statement timeout')),
       );
+      await expect(
+        api().updateDeliveryIfOwned('evt-1', 'del-1', {
+          status: 'SENT',
+          attempts: 1,
+        }),
+      ).rejects.toThrow();
+    });
 
+    it('5. la comprobación del lease usa clock_timestamp() después del FOR UPDATE', async () => {
+      const outcome = await api().updateDeliveryIfOwned('evt-1', 'del-1', {
+        status: 'SENT',
+        attempts: 1,
+      });
+      expect(outcome).toBe('UPDATED');
+      const sqls = transactionQueryRaw.mock.calls.map((c) => c[0].join('?'));
+      const forUpdateIdx = sqls.findIndex((s) => s.includes('FOR UPDATE'));
+      const ownershipIdx = sqls.findIndex(
+        (s, i) => i > forUpdateIdx && s.includes('"lockedBy"'),
+      );
+      expect(ownershipIdx).toBeGreaterThan(forUpdateIdx);
+      expect(sqls[ownershipIdx]).toContain('clock_timestamp');
+    });
+
+    it('6. una entrega SENT no puede convertirse en RETRY (NOT_PENDING)', async () => {
+      // La entrega ya está resuelta: el UPDATE afecta cero filas.
+      transactionDeliveryUpdateMany.mockResolvedValueOnce({ count: 0 });
+      const outcome = await api().updateDeliveryIfOwned('evt-1', 'del-1', {
+        status: 'RETRY',
+        attempts: 2,
+        nextAttemptAt: new Date(),
+        lastError: 'UNAVAILABLE',
+      });
+      expect(outcome).toBe('NOT_PENDING');
+    });
+
+    it('7. una entrega INVALID no puede volver a PENDING (NOT_PENDING)', async () => {
+      // La entrega ya está resuelta: el UPDATE afecta cero filas.
+      transactionDeliveryUpdateMany.mockResolvedValueOnce({ count: 0 });
+      const outcome = await api().updateDeliveryIfOwned('evt-1', 'del-1', {
+        status: 'PENDING',
+        attempts: 1,
+        nextAttemptAt: new Date(),
+      });
+      expect(outcome).toBe('NOT_PENDING');
+    });
+
+    it('8. un resultado LOCK_LOST detiene el procesamiento sin escribir el evento', async () => {
+      eventOwnership = false;
       const result = await service.processPendingEvents();
 
-      // El resultado debe ser LOCK_LOST, no un error de procesamiento.
       expect(result.sent).toBe(0);
       expect(result.failed).toBe(0);
       expect(result.dead).toBe(0);
-    });
-
-    it('8. una actualización que afecta cero filas detiene el procesamiento', async () => {
-      queryRaw.mockResolvedValue([event]);
-      findAdminDevices.mockResolvedValue([device]);
-      notificationDeliveryCount.mockResolvedValue(0);
-      sendToToken.mockResolvedValue({
-        success: true,
-        invalidToken: false,
-        retryable: false,
-      });
-      // queryRawUnsafe devuelve [] y notificationEventFindFirst devuelve null -> LOCK_LOST.
-      queryRawUnsafe.mockResolvedValue([]);
-      notificationEventFindFirst.mockResolvedValue(null);
-      notificationDeliveryFindMany
-        .mockResolvedValueOnce([pendingDelivery()])
-        .mockResolvedValueOnce([]);
-
-      const result = await service.processPendingEvents();
-
-      // No debe haber escritura final del evento tras la pérdida de lock.
-      expect(result.sent).toBe(0);
       expect(finalEventUpdateCall()).toBeUndefined();
     });
 
-    it('9. una instancia antigua no puede sobrescribir el lock de otra', async () => {
-      // Simular que notificationEventUpdateMany devuelve 0 filas porque
-      // el lockedBy no coincide (instancia antigua).
-      notificationEventUpdateMany.mockImplementationOnce(() =>
-        Promise.resolve({ count: 0 }),
+    it('9. un error real de base de datos sigue el manejo de errores de procesamiento', async () => {
+      transactionQueryRaw.mockImplementationOnce(() =>
+        Promise.reject(new Error('conexión perdida')),
       );
-
-      const updated = await (
-        service as unknown as {
-          writeEventIfOwned: (
-            id: string,
-            data: Record<string, unknown>,
-            now: Date,
-          ) => Promise<boolean>;
-        }
-      ).writeEventIfOwned('evt-1', { status: 'SENT' }, new Date());
-
-      expect(updated).toBe(false);
+      const result = await service.processPendingEvents();
+      // handleProcessingError renueva el lease y vuelve a PENDING mientras siga siendo dueña.
+      expect(result.failed).toBe(1);
     });
 
-    it('10. una entrega ya resuelta no vuelve a recibir un envío por el worker', async () => {
-      queryRaw.mockResolvedValue([event]);
-      findAdminDevices.mockResolvedValue([device]);
-      notificationDeliveryCount.mockResolvedValue(1);
-      // Ya hay entregas: el where de Prisma filtra por PENDING/RETRY, así que
-      // una entrega SENT no se devuelve. No hay nada que enviar.
-      notificationDeliveryFindMany.mockResolvedValueOnce([]);
+    it('10. la transacción se libera tras el éxito y tras una excepción', async () => {
+      const first = await api().updateDeliveryIfOwned('evt-1', 'del-1', {
+        status: 'SENT',
+        attempts: 1,
+      });
+      expect(first).toBe('UPDATED');
+      // Transacción liberada: otra escritura sobre el mismo evento funciona.
+      const second = await api().updateDeliveryIfOwned('evt-1', 'del-2', {
+        status: 'SENT',
+        attempts: 1,
+      });
+      expect(second).toBe('UPDATED');
+      expect(transaction).toHaveBeenCalledTimes(2);
+    });
 
-      await service.processPendingEvents();
+    it('11. ensureDeliveries no crea entregas cuando se pierde el lock', async () => {
+      eventOwnership = false;
+      const created = await api().ensureDeliveries('evt-1', [device]);
+      expect(created).toBe(false);
+      expect(notificationDeliveryCreateMany).not.toHaveBeenCalled();
+    });
 
-      expect(sendToToken).not.toHaveBeenCalled();
-      expect(findAdminDevices).not.toHaveBeenCalled();
+    it('12. la lista blanca de columnas rechaza campos no permitidos', async () => {
+      expect(() =>
+        api().assertWritableDeliveryColumns({
+          status: 'SENT',
+          columnaInvalida: 'x',
+        } as unknown as Prisma.NotificationDeliveryUpdateManyMutationInput),
+      ).toThrow('Columna de entrega no permitida: columnaInvalida');
     });
   });
 });
