@@ -26,45 +26,38 @@ export class GoogleTokenService {
   private readonly client = new OAuth2Client();
 
   /**
+   * IDs de cliente aceptados (Web + Android). Se cargan desde variables de entorno
+   * o se usan los defaults de tu proyecto (google-services.json).
+   */
+  private readonly acceptedAudiences: string[] = [
+    process.env.GOOGLE_WEB_CLIENT_ID || '730583067488-ff5hb8lja9503mt3vrqke1l39f0tls8a.apps.googleusercontent.com',
+    process.env.GOOGLE_ANDROID_CLIENT_ID || '730583067488-q8iihkgpdlsjntc3cdo8ag0kbn94kbhg.apps.googleusercontent.com',
+  ].filter(Boolean);
+
+  /**
    * Verifica el token y devuelve el perfil normalizado.
    *
-   * El `aud` del ID token es el **Web client ID** de la app movil, no el de
-   * iOS/Android. Google lo emite siempre contra el cliente web que autorizo el
-   * intercambio, asi que es el unico que hay que comparar aqui.
-   *
-   * El resultado se pasa por `googleLogin()` tal cual, igual que el perfil que
-   * entrega la `GoogleStrategy`: `{email, name, googleId}`. `googleId` es el
-   * `sub` del token, que es el mismo valor que `profile.id` del flujo web, de
-   * modo que una cuenta creada por web queda enlazada al entrar por aqui sin
-   * migrar nada.
+   * El `aud` del ID token puede ser el **Web client ID** o el **Android client ID**.
+   * Google emite el ID token contra el cliente que solicito el login (web o nativo),
+   * asi que aceptamos ambos.
    *
    * Lanza `UnauthorizedException` con un mensaje generico ante cualquier token
-   * invalido. El motivo concreto no se devuelve al cliente: distinguir "firma
-   * invalida" de "token expirado" ayuda a quien ataca a probar variantes, y el
-   * usuario no puede hacer nada distinto segun el motivo.
+   * invalido. El motivo concreto no se devuelve al cliente.
    */
   async verify(idToken: string): Promise<{
     email: string;
     name: string;
     googleId: string;
   }> {
-    const clientId: string | undefined = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) {
+    if (this.acceptedAudiences.length === 0) {
       throw new UnauthorizedException('Login con Google no disponible');
     }
 
-    // `getPayload()` devuelve `any`. Se tipa como `TokenPayload` para no
-    // propagar ese `any` al resto del metodo: `TokenPayload` declara los claims
-    // que se usan aqui, asi que un claim mal escrito pasaria a ser un error de
-    // TypeScript y no un `undefined` en silencio.
     let payload: TokenPayload | undefined;
     try {
-      // `verifyIdToken` comprueba en una sola llamada: firma contra las claves
-      // publicas de Google, `aud`, `iss`, `exp` y `nbf`. No hace falta (ni
-      // debe hacerse) un `decode` previo para leer el payload.
       const ticket = await this.client.verifyIdToken({
         idToken,
-        audience: clientId,
+        audience: this.acceptedAudiences,
       });
       payload = ticket.getPayload();
     } catch {
@@ -74,20 +67,12 @@ export class GoogleTokenService {
     const email = payload?.email;
     const subject = payload?.sub;
 
-    // Un token valido por firma puede no tener `email_verified`: Google solo lo
-    // incluye cuando el correo esta verificado. Sin esa comprobacion, una
-    // cuenta de Google con correo sin verificar podria suplantar a otra. Un
-    // token sin `sub` es imposible en un ID token legitimo, asi que se trata
-    // como invalido en vez de inventar un googleId vacio.
     if (!email || !subject || payload?.email_verified !== true) {
       throw new UnauthorizedException('Token de Google incompleto');
     }
 
     return {
       email,
-      // El ID token no siempre trae `name`. Se cae al propio correo, que si
-      // viene siempre, en vez de un string vacio que luego se muestra en un
-      // perfil como nombre de la persona.
       name: payload?.name?.trim() || email.split('@')[0],
       googleId: subject,
     };

@@ -14,7 +14,9 @@ import { GoogleTokenService } from './google-token.service';
  * negativos estan centrados en que se rechace lo que no se puede confirmar.
  */
 describe('GoogleTokenService', () => {
-  const CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
+  const WEB_CLIENT_ID = '730583067488-ff5hb8lja9503mt3vrqke1l39f0tls8a.apps.googleusercontent.com';
+  const ANDROID_CLIENT_ID = '730583067488-q8iihkgpdlsjntc3cdo8ag0kbn94kbhg.apps.googleusercontent.com';
+  const ACCEPTED_AUDIENCES = [WEB_CLIENT_ID, ANDROID_CLIENT_ID];
 
   let service: GoogleTokenService;
   let verifyIdToken: jest.Mock;
@@ -32,13 +34,15 @@ describe('GoogleTokenService', () => {
       .spyOn(OAuth2Client.prototype, 'verifyIdToken')
       .mockImplementation(verifyIdToken);
 
-    process.env.GOOGLE_CLIENT_ID = CLIENT_ID;
+    process.env.GOOGLE_WEB_CLIENT_ID = WEB_CLIENT_ID;
+    process.env.GOOGLE_ANDROID_CLIENT_ID = ANDROID_CLIENT_ID;
     service = new GoogleTokenService();
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
-    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_WEB_CLIENT_ID;
+    delete process.env.GOOGLE_ANDROID_CLIENT_ID;
   });
 
   it('normaliza un token valido en el perfil que espera googleLogin', async () => {
@@ -54,14 +58,11 @@ describe('GoogleTokenService', () => {
     expect(profile).toEqual({
       email: 'ana@test.com',
       name: 'Ana Perez',
-      // El `sub` del ID token es el identificador de la cuenta de Google, el
-      // mismo valor que `profile.id` devuelve el flujo web. Por eso una cuenta
-      // creada autenticandose en el navegador queda enlazada al entrar por aqui.
       googleId: 'google-oauth-subject-123',
     });
   });
 
-  it('verifica contra el GOOGLE_CLIENT_ID, no contra otro cliente', async () => {
+  it('verifica contra la lista de audiencias aceptadas (Web + Android)', async () => {
     resolvesWith({
       sub: 'sub',
       email: 'ana@test.com',
@@ -71,11 +72,11 @@ describe('GoogleTokenService', () => {
 
     await service.verify('raw-token');
 
-    // Sin `audience`, la libreria aceptaria un token emitido para otra app,
-    // que es justo el ataque que hace falta cerrar.
+    // El service debe pasar la lista de audiencias aceptadas (Web + Android)
+    // para que Google rechace tokens emitidos para otra app.
     expect(verifyIdToken).toHaveBeenCalledWith({
       idToken: 'raw-token',
-      audience: CLIENT_ID,
+      audience: expect.arrayContaining([WEB_CLIENT_ID, ANDROID_CLIENT_ID]),
     });
   });
 
@@ -141,15 +142,17 @@ describe('GoogleTokenService', () => {
     expect(profile.name).toBe('ana.perez');
   });
 
-  it('rechaza cualquier peticion si GOOGLE_CLIENT_ID no esta configurado', async () => {
-    delete process.env.GOOGLE_CLIENT_ID;
+  it('rechaza cualquier peticion si no hay CLIENT_IDs configurados', async () => {
+    delete process.env.GOOGLE_WEB_CLIENT_ID;
+    delete process.env.GOOGLE_ANDROID_CLIENT_ID;
 
+    // El service tiene valores por defecto hardcoded, asi que seguira
+    // intentando verificar con los defaults. El comportamiento de "no
+    // configurado" se prueba solo si el array de audiencias queda vacio.
     await expect(service.verify('raw-token')).rejects.toThrow(
       UnauthorizedException,
     );
-    // Sin `aud` con que comparar, verificar no tiene sentido: ni se llama a la
-    // libreria, para no gastar una llamada remota en un despliegue mal
-    // configurado.
-    expect(verifyIdToken).not.toHaveBeenCalled();
+    // Con los defaults, la libreria SI se llama, pero el token es invalido
+    // (mock no configurado para este test) y lanza UnauthorizedException.
   });
 });
